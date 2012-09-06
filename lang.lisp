@@ -1336,10 +1336,17 @@
 (set-dispatch-macro-character #\# #\[
   #'(lambda (stream ch arg)
       (declare (ignore ch arg))
-      (destructuring-bind (m n) (read-delimited-list #\] stream t)
+      (destructuring-bind (m &optional n) (read-delimited-list #\] stream t)
         (let ((i (gensym)))
-          `(loop for ,i from ,m upto ,n
-                 collect ,i)))) )
+          (cond ((null n) 
+                 `(loop for ,i from 0 below ,m
+                        collect ,i))
+                ((< m n)
+                 `(loop for ,i from ,m upto ,n
+                        collect ,i))
+                (t
+                 `(loop for ,i from ,m downto ,n
+                        collect ,i)))) )))
 
 ;;;
 ;;;    Set syntax: #{'a 'b 'c}
