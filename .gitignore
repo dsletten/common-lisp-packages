@@ -1,0 +1,7 @@
+*~
+*.fasl
+*.dfsl
+*.dx32fsl
+*.dx64fsl
+*.lisp.*
+*.fasl.*
