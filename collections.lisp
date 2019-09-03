@@ -28,7 +28,7 @@
 (defpackage collections
   (:use :common-lisp)
   (:export :add-all :add-elt
-           :collectionp :contains
+           :collectionp :contains :copy
            :dequeue :difference
            :elements :emptyp :enqueue
            :front
@@ -66,6 +66,9 @@
 (defgeneric elements (collection)
   (:documentation "Return the elements of the collection as a list."))
 
+(defgeneric copy (collection)
+  (:documentation "Return a copy of the given collection."))
+
 (defmethod make-empty ((h hash-table))
   (clrhash h))
 
@@ -82,6 +85,8 @@
 (defmethod elements ((h hash-table))
   (mapcar #'list (hash-keys h) (hash-values h)))
 
+;(defmethod copy ((h hash-table)))
+
 (defmethod make-empty ((v vector))
  (error "Not implemented."))
 
@@ -96,6 +101,8 @@
 
 (defmethod elements ((v vector))
   (coerce v 'list))
+
+;(defmethod copy ((v vector)))
 
 (defclass queue (collection) ())
 
@@ -185,6 +192,15 @@
     (setf front nil
           rear nil
           size 0)))
+
+(defmethod copy ((q linked-queue))
+  (let ((new-queue (make-linked-queue)))
+    (with-slots ((old-front front) (old-rear rear) (old-size size)) q
+      (with-slots ((new-front front) (new-rear rear) (new-size size)) new-queue
+        (setf new-front old-front
+              new-rear old-rear
+              new-size old-size)))
+    new-queue))
 
 ;;;
 ;;;    Vector-based implementation
@@ -308,6 +324,11 @@
   (let ((result (copy-list l)))
     (setf (cdr (last result)) result)
     result))
+
+;; (defun make-circular-list (l)
+;;   (let ((result (copy-list l)))
+;;     (rplacd (last result) result)
+;;     result))
 
 (defclass circular-queue (queue)
   ((index :accessor index :initform 0)

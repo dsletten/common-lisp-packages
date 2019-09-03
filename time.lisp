@@ -212,6 +212,36 @@
           6)
        7))
 
+;;;
+;;;    Convert date in Gregorian calendar to Julian day number.
+;;;    Collected Algorithms from CACM Vol. I (Algorithm 199)
+;;;    
+(defun julian (day month year)
+  (flet ((julian-aux (m y)
+           (multiple-value-bind (c ya) (floor y 100)
+             (+ (floor (* c 146097) 4)
+                (floor (* ya 1461) 4)
+                (floor (+ (* m 153) 2) 5)
+                day
+                1721119))))
+    (if (> month 2)
+        (julian-aux (- month 3) year)
+        (julian-aux (+ month 9) (1- year)))) )
+
+(defun day-of-year (day month year)
+  (1+ (- (julian day month year)
+         (julian 1 1 year))))
+
+;;;    https://en.wikipedia.org/wiki/Julian_day
+(defun julian2 (day month year)
+  (let ((month- (truncate (- month 14) 12))) ; TRUNCATE not FLOOR!!!!! (- MONTH 14) is negative!!!
+    (+ (floor (* 1461 (+ year 4800 month-)) 4)
+       (floor (* 367 (- month 2 (* 12 month-))) 12)
+       (- (floor (* 3 (floor (+ year 4900 month-) 100)) 4))
+       day
+       -32075)))
+
+
 ;; (defclass month ()
 ;;   ((value :reader value :initarg :value)
 ;;    (name :reader name :initarg :name)

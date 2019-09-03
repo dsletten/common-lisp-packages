@@ -29,8 +29,8 @@
 ;;;;
 ;;;;
 
-(defpackage io
-  (:use common-lisp)
+(defpackage :io
+  (:use :common-lisp)
   (:export :add-column
            :atime
 ;	   "BREAK-LOOP"
@@ -48,7 +48,7 @@
 ;	   "VALID-NUM"
            :write-file))
 
-(in-package io)
+(in-package :io)
 
 #+sbcl (eval-when (:compile-toplevel :load-toplevel :execute)
          (require 'sb-posix))
@@ -58,13 +58,21 @@
 ;;;    Read each line of a file into a list of strings.
 ;;;    Returns nil if file does not exist.
 ;;;    
+;; (defun read-file (file-name)
+;;   (with-open-file (in-stream file-name :if-does-not-exist nil)
+;;     (if in-stream
+;;         (loop for line = (read-line in-stream nil nil)
+;;               while line
+;;               collect line)
+;;         (format *error-output* "Error: File does not exist!~%"))))
+
 (defun read-file (file-name)
   (with-open-file (in-stream file-name :if-does-not-exist nil)
-    (if in-stream
+    (if (null in-stream)
+        (format *error-output* "Error: File does not exist!~%")
         (loop for line = (read-line in-stream nil nil)
-              while line
-              collect line)
-        (format *error-output* "Error: File does not exist!~%"))))
+              until (null line)
+              collect line))))
 
 ;; (defun read-file (file-name)
 ;;   (with-open-file (in-stream file-name :if-does-not-exist nil)
@@ -258,8 +266,8 @@
 (defun valid-num (num test)
   (if (numberp num)
       (if test
-	  (funcall test num)
-	  t)
+          (funcall test num)
+          t)
       nil))
 
 ;;;    The number may be constrained by optional min and max

@@ -26,18 +26,21 @@
 ;;;;   Notes:
 ;;;;
 ;;;;
-(load "/Users/dsletten/lisp/packages/lang.lisp")
 ;(load "/Users/dsletten/lisp/packages/test.lisp")
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  #+ :sbcl (load "/Users/dsletten/lisp/packages/lang" :verbose nil)
+  #- :sbcl (load "/Users/dsletten/lisp/packages/lang.lisp" :verbose nil))
 
 (defpackage :strings
   (:use :common-lisp :lang)
 ;  (:use :common-lisp :lang :test)
-  (:export :center :commify-list
+  (:export :center :commify :commify-list :elide :english-list :get-article
            :irregular-plural :join
            :ljust
            :rjust
            :short-ordinal :space-char-p :split
-           :squeeze :string-split :string-subst))
+           :squeeze :string-split :string-substitute))
 
 (in-package :strings)
 
@@ -229,36 +232,98 @@
   (apply #'format nil (make-comma-control-string ch) items))
 
 (defun make-comma-control-string (comma-char)
-  (concatenate 'string "~#[~;~A~;~A and ~A~:;~@{~#[~;and ~]~A~^" (string comma-char) "~}~]"))
+  (concatenate 'string "~#[~;~A~;~A and ~A~:;~@{~#[~;and ~]~A~^" (string comma-char) " ~}~]"))
 
+;; (english-list 1 2 3) vs. (commify-list "1" "2" "three" "4")!!
+;;
+;;
 ;; (defun commify-list (&rest items)
 ;;   (if (some #'(lambda (s) (find #\, s)) items)
 ;;       (apply #'format nil "~#[~;~A~;~A and ~A~:;~@{~#[~;and ~]~A~^; ~}~]" items)
 ;;       (apply #'format nil "~#[~;~A~;~A and ~A~:;~@{~#[~;and ~]~A~^, ~}~]" items)))
 
-;;;
-;;;    Fix this...
 ;;;    
 ;;;    Replace part(s) of a string with another.
 ;;;
 ;;;    Default requires case-sensitive match.
 ;;;    Use :test #'char-equal for case-insensitive match.
 ;;;
-(defun string-subst (new old string &rest keys &key global (test #'char=))
-  (let ((i (search old string :test test)))
-    (cond ((null i) string)
-          (global (apply #'string-subst new old (splice string i (length old) new) keys))
-          (t (splice string i (length old) new)))) )
+(defun string-substitute (new old string &key (count nil) (start 0) (end nil) (test #'char=))
+  (let ((match (search old string :test test :start2 start :end2 end)))
+    (if (or (null match)
+            (and (numberp count) (zerop count)))
+        string
+        (with-output-to-string (result)
+          (string-replace new old string match result :count count :test test :end end)))) )
 
-;[55]> (string-subst "pung" "foo" "foo bar foo baz")
-;"pung bar foo baz"
-;[56]> (string-subst "pung" "foo" "foo bar foo baz" :global t)
-;"pung bar pung baz"
-; [13]> (string-subst "pung" "foo" "pung in the FOO bar...foo!" :test #'char-equal)
-; "pung in the pung bar...foo!"
-; [14]> (string-subst "pung" "foo" "pung in the FOO bar...foo!" :test #'char-equal :global t)
-; "pung in the pung bar...pung!"
+;;; Not designed to be called independently of STRING-SUBSTITUTE...(e.g., Assumes (not (zerop count)) initially, no need for :START)
+(defun string-replace (new old source match result-stream &key count test end)
+  (labels ((next (count)
+             (if (null count)
+                 count
+                 (1- count)))
+           (completed (count)
+             (if (null count)
+                 nil
+                 (zerop count))))
+    (do* ((length (length old))
+          (count count (next count))
+          (index 0 (+ match length))
+          (match match (search old source :start2 index :test test :end2 end)))
+         ((or (completed count) (null match)) (write-string (subseq source index) result-stream))
+      (write-string (subseq source index match) result-stream)
+      (write-string new result-stream))))
 
+;;
+;;    3 main cases:
+;;    1. OLD not found in STRING => Return STRING as is.
+;;    2. OLD only found once => Replace that single occurrence.
+;;    3. OLD found in multiple locations => Replace all occurrences.
+;;
+;;    The 2nd and 3rd case have multiple variants:
+;;    2a. OLD at beginning of STRING.
+;;    2b. OLD in middle of STRING.
+;;    2c. OLD at end of STRING.
+;;
+;;    3a. One occurrence at start of STRING.
+;;    3b. One occurrence at end of STRING.
+;;
+;;    All 3 cases are impacted by the bounding indices START/END if present.
+;;    
+#|
+(deftest test-string-substitute ()
+  (check
+   (eq (string-substitute "FOO" "zzzz" #1="The pattern is not present in the target string.") #1#)
+   (string= (string-substitute "FOO" "pung" "pung is at the beginning of this string.") "FOO is at the beginning of this string.")
+   (string= (string-substitute "FOO" "pung" "The pattern pung is in the middle of this string.") "The pattern FOO is in the middle of this string.")
+   (string= (string-substitute "FOO" "pung" "This string ends in the pattern pung") "This string ends in the pattern FOO")
+   (string= (string-substitute "FOO" "pung" "pung occurs in lots of pung places in this string pung but not at the end.")
+            "FOO occurs in lots of FOO places in this string FOO but not at the end.")
+   (string= (string-substitute "FOO" "pung" "The pattern pung occurs in lots of pung places in this string pung. Not at the start but at the end. pung")
+            "The pattern FOO occurs in lots of FOO places in this string FOO. Not at the start but at the end. FOO")
+   (string= (string-substitute "FOO" "pung" "pung occurs in lots of pung places in this string pung but not at the end." :count nil :start 0 :end nil)
+            "FOO occurs in lots of FOO places in this string FOO but not at the end.")
+   (string= (string-substitute "FOO" "pung" "The pattern pung occurs in lots of pung places in this string pung. Not at the start but at the end. pung" :count nil :start 0 :end nil)
+            "The pattern FOO occurs in lots of FOO places in this string FOO. Not at the start but at the end. FOO")
+   (eq (string-substitute "FOO" "pung" #2="This string contains the pattern pung. But it is outside the bounded subsequence." :end 10) #2#)
+   (eq (string-substitute "FOO" "pung" #2# :end 34) #2#)
+   (not (eq (string-substitute "FOO" "pung" #2# :end 37) #2#))
+   (string= (string-substitute "FOO" "pung" #2# :end 37) "This string contains the pattern FOO. But it is outside the bounded subsequence.")
+   (eq (string-substitute "FOO" "pung" #3="pung starts this string, but it is outside the bounded subsequence." :start 4) #3#)
+   (string= (string-substitute "FOO" "pung" "pung occurs in lots of pung places in this string pung but the first occurrence of pung is outside the bounded subsequence." :start 4)
+            "pung occurs in lots of FOO places in this string FOO but the first occurrence of FOO is outside the bounded subsequence.")
+   (string= (string-substitute "FOO" "pung" "pung occurs in lots of pung places in this string pung but the first occurrence of pung is outside the bounded subsequence. So is this last pung." :start 4 :end 87)
+            "pung occurs in lots of FOO places in this string FOO but the first occurrence of FOO is outside the bounded subsequence. So is this last pung.")
+   (string= (string-substitute "FOO" "pung" #4="pung foo bar baz pung foo pung" :count 0) #4#)
+   (string= (string-substitute "FOO" "pung" #4# :count 1) "FOO foo bar baz pung foo pung")
+   (string= (string-substitute "FOO" "pung" #4# :count 2) "FOO foo bar baz FOO foo pung")
+   (string= (string-substitute "FOO" "pung" #4# :count 2 :start 4) "pung foo bar baz FOO foo FOO")
+   (string= (string-substitute "FOO" "pung" #4# :count 3 :end (- (length #4#) 4)) "FOO foo bar baz FOO foo pung")
+   (string= (string-substitute "FOO" "PUNG" #5="Is this not pung?") #5#)
+   (string= (string-substitute "FOO" "PUNG" "Is this not pung?" :test #'char-equal) "Is this not FOO?")
+   (string= (string-substitute "FOO" "PUNG" "Is this not Pung?" :test #'char-equal) "Is this not FOO?")
+   (string= (string-substitute "FOO" "PuNg" "Is this not pung?" :test #'char-equal) "Is this not FOO?")))
+|#   
 ;;;
 ;;;    A roundabout way of uppercasing a string:
 ;;;
@@ -275,12 +340,29 @@
 ;;;    
 (defun center (s width)
   (format nil "~V<~;~A~;~>" width s))
+;  (format nil "~V:@<~A~>" width s))
 
 (defun ljust (s width)
-  (format nil "~V<~A~;~>" width s))
+;  (format nil "~V<~A~;~>" width s))
+  (format nil "~VA" width s))
 
 (defun rjust (s width)
-  (format nil "~V<~A~>" width s))
+;  (format nil "~V<~A~>" width s))
+  (format nil "~V@A" width s))
+
+
+;;!!!
+;; (defun center (s width)
+;;   (spacify (list "" s "") width))
+
+;; (defun ljust (s width)
+;;   (spacify (list s "") width))
+
+;; (defun rjust (s width)
+;;   (spacify (list s) width))
+
+;; (defun spacify (args width)
+;;   (apply #'format nil "~V<~A~;~^~A~;~^~A~>" width args))
 
 ;;;
 ;;;    What's going on here?
@@ -301,9 +383,16 @@
             ((= j (length s)) (write-char (char s i) result))
           (unless (char= (char s i) (char s j))
             (write-char (char s i) result)))) ))
-  
+
+; (contains #{#\Space #\Page #\Newline #\Return #\Tab} ch)
+;; (defun space-char-p (ch)
+;;   (find ch #(#\Space #\Page #\Newline #\Return #\Tab)))
+
 (defun space-char-p (ch)
-  (find ch #(#\Space #\Page #\Newline #\Return #\Tab)))
+  (case ch
+    ((#\Space #\Page #\Newline #\Return #\Tab) t)
+    (otherwise nil)))
+
 ;;;
 ;;;    Clozure doesn't like #\Vt...
 ;;;    
@@ -342,6 +431,25 @@
   (let ((ordinal (format nil "~:R" n)))
     (format nil "~D~A" n (subseq ordinal (- (length ordinal) 2)))) )
 
+(defun get-article (phrase)
+  (cond ((symbolp phrase) (get-article (symbol-name phrase)))
+        ((or (special-case-p phrase)
+             (and (starts-with-vowel-p phrase) (not (unicornp phrase)))) "an")
+        (t "a")))
+
+(defun unicornp (phrase)
+  (some #'(lambda (oddball)
+            (search oddball phrase :test #'char-equal))
+        '("unicorn" "uniform" "unique" "union" "united" "unilateral")))
+
+(defun special-case-p (phrase)
+  (some #'(lambda (oddball)
+            (search oddball phrase :test #'char-equal))
+        '("hour" "honor" "herb" "honest" "honorable" "honorary" "hourglass" "hourly" "hors d'oeuvre")))
+
+(defun starts-with-vowel-p (phrase)
+  (find (char phrase 0) "aeiou" :test #'char-equal))
+
 ;;;
 ;;;    Add Ruby-style string interpolation.
 ;;;    (let ((pung 8)) #"Is this not ${pung}?") => "Is this not 8?"
@@ -352,11 +460,12 @@
 ;;;    Fix these:
 ;;;    Fixed 1. #"Is this not ${(concatenate 'string \"pun\" (string \"g\"))}"
 ;;;             Arbitrary expression should be allowed inside ${}. Should not need to escape quotes.
+;;;        Works! #"Is this not ${(concatenate 'string "pun" (string #\g))}" => "Is this not pung"
 ;;;    Still needs fixing:    Recursion allowed? #"Is this not ${#"pu${(coerce '(#\n #\g) 'string)}"}?"
 ;;;    Fixed 2. #"Is this not ${(concatenate 'string \"pun\" (string #\g))}"
 ;;;        #\g not handled properly here: Error: No dispatch function defined for #\g. [file position = 51]
+;;;        Works! #"Is this not ${(concatenate 'string "pun" (string #\g))}" => "Is this not pung"
 ;;;        
-
 (defun read-delimited-string (stream)
   (labels ((read-non-escaped (out)
              (let ((ch (read-char stream nil nil t)))
@@ -433,3 +542,13 @@
       (push (read-from-string s nil nil :start (+ start 2) :end end) result)
       (setf index (1+ end)))) )
 
+(defun elide (s width &optional (ellipsis "..."))
+  (if (> (length s) width)
+      (concatenate 'string (subseq s 0 (- width (length ellipsis))) ellipsis)
+      s))
+
+;;;
+;;;    See utils.rb for handling floats.
+;;;    
+(defun commify (n)
+  (format t "~:D~%" n))

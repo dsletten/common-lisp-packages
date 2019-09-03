@@ -326,13 +326,43 @@
 ;;;
 ;;;    It also builds a completely new list for the REMAINDER.
 ;;;    
-(defun transfer (l i)
-  "Remove the ith element from a list, returning the element and the new list."
-  (loop for elt in l
-        for j from 0
-        unless (= i j) collect elt into remainder
-        when (= i j) collect elt into removed
-        finally (return (values (first removed) remainder))))
+(defun transfer (seq i)
+  "Remove the ith element from a sequence, returning the element and the new sequence."
+  (typecase seq
+    (list (loop for elt in seq
+                for j from 0
+                unless (= i j) collect elt into remainder
+                when (= i j) collect elt into removed
+                finally (return (values (first removed) remainder))))
+    (string (let ((result (make-string (1- (length seq)))))
+              (setf (subseq result 0 i) (subseq seq 0 i)
+                    (subseq result i) (subseq seq (1+ i)))
+              (values (elt seq i) result)))
+    (vector (let ((result (make-array (1- (length seq)))) )
+              (setf (subseq result 0 i) (subseq seq 0 i)
+                    (subseq result i) (subseq seq (1+ i)))
+              (values (elt seq i) result)))) )
+
+;; (defun transfer (seq i)
+;;   "Remove the ith element from a sequence, returning the element and the new sequence."
+;;   (typecase seq
+;;     (list (loop for elt in seq
+;;                 for j from 0
+;;                 unless (= i j) collect elt into remainder
+;;                 when (= i j) collect elt into removed
+;;                 finally (return (values (first removed) remainder))))
+;;     (vector (let ((result (make-sequence (type-of seq) (1- (length seq)))))    ; <---- Doesn't work. Shorter vector is different type...
+;;               (setf (subseq result 0 i) (subseq seq 0 i)
+;;                     (subseq result (1+ i)) (subseq seq (1+ i)))
+;;               (values (elt seq i) result)))) )
+
+;; (defun transfer (l i)
+;;   "Remove the ith element from a list, returning the element and the new list."
+;;   (loop for elt in l
+;;         for j from 0
+;;         unless (= i j) collect elt into remainder
+;;         when (= i j) collect elt into removed
+;;         finally (return (values (first removed) remainder))))
 
 ;; (defun transfer (l i)
 ;;   "Remove the ith element from a list, returning the element and the new list."
@@ -1051,9 +1081,12 @@
                (t (error "Mismatched input types."))))
         ((numberp start)
          (cond ((numberp end)
-                (when (> start end)
-                  (rotatef start end))
-                (loop for i from start to end by step collect i))
+                (if (> start end)
+                    (loop for i from start downto end by step collect i)
+                    (loop for i from start to end by step collect i)))
+;;                 (when (> start end)
+;;                   (rotatef start end))
+;;                 (loop for i from start to end by step collect i))
                ((null end)
                 (loop for i from 0 below start by step collect i))
                (t (error "Mismatched input types.")))) ))
@@ -1140,11 +1173,11 @@
 (defun compose (&rest fns)
   (if fns
       (let ((fn1 (last1 fns))
-	    (fns (butlast fns)))
-	#'(lambda (&rest args)
-	    (reduce #'funcall fns
-		    :from-end t
-		    :initial-value (apply fn1 args))))
+            (fns (butlast fns)))
+        #'(lambda (&rest args)
+            (reduce #'funcall fns
+                    :from-end t
+                    :initial-value (apply fn1 args))))
       #'identity))
 
 ;;;
@@ -1261,12 +1294,14 @@
 ;;     (list (nreverse trues) (nreverse falses))))
 
 (defun firsts-rests (lol)
+  "Traverse a list of lists and collect the first elements of each as well as the tails of each."
   (loop for list in lol
         until (null list)
         collect (first list) into firsts
         collect (rest list) into rests
         finally (return (values firsts rests))))
 
+; (firsts-rests '((a b c) (1 2) (x))) => (A 1 X); ((B C) (2) NIL)
 ;;;
 ;;;    See ~/lisp/programs/mapping.lisp
 ;;;    
@@ -1332,29 +1367,68 @@
 ;;;    Range syntax: #[1 5] => (1 2 3 4 5)
 ;;;                  #[n] => (0 1 2 ... n-1)
 ;;;                  #[5 1] => (5 4 3 2 1)
+;;;    New:
+;;;    #[1 9 2] => (1 3 5 7 9)
+;;;    #[#\a #\z] => (#\a #\b #\c #\d #\e #\f #\g #\h #\i #\j #\k #\l #\m #\n #\o #\p #\q #\r #\s #\t #\u #\v #\w #\x #\y #\z)
+;;;    #[#\a #\z 2] => (#\a #\c #\e #\g #\i #\k #\m #\o #\q #\s #\u #\w #\y)
+;;;
+;;;    In any case, reader returns an expression, which when evaluated yields a list:
+;;;    (macroexpand-1 '#[1 5]) => '(1 2 3 4 5)
+;;;    (macroexpand-1 '#[1 (1+ 4)]) => (LANG:MAKE-RANGE 1 (1+ 4))
 ;;;    
 (set-dispatch-macro-character #\# #\[
   #'(lambda (stream ch arg)
       (declare (ignore ch arg))
-      (destructuring-bind (m &optional n) (read-delimited-list #\] stream t)
-        (let ((i (gensym)))
-          (cond ((null n) 
-                 `(loop for ,i from 0 below ,m
-                        collect ,i))
-                ((< m n)
-                 `(loop for ,i from ,m upto ,n
-                        collect ,i))
-                (t
-                 `(loop for ,i from ,m downto ,n
-                        collect ,i)))) )))
+      (destructuring-bind (m &optional n step) (read-delimited-list #\] stream t)
+        (if step
+            (if (and (numberp step)
+                     (or (and (numberp m) (numberp n))
+                         (and (characterp m) (characterp n))))
+                `',(make-range m n step)
+                `(make-range ,m ,n ,step))
+            (if n
+                (if (or (and (numberp m) (numberp n))
+                        (and (characterp m) (characterp n)))
+                    `',(make-range m n)
+                    `(make-range ,m ,n))
+                (if (or (numberp m) (characterp m))
+                    `',(make-range m)
+                    `(make-range ,m)))) )))
+
+;; (set-dispatch-macro-character #\# #\[
+;;   #'(lambda (stream ch arg)
+;;       (declare (ignore ch arg))
+;;       (destructuring-bind (m &optional n step) (read-delimited-list #\] stream t)
+;;         (cond (step `(make-range ,m ,n ,step))
+;;               (n `(make-range ,m ,n))
+;;               (t `(make-range ,m)))) ))
+
+;; (set-dispatch-macro-character #\# #\[
+;;   #'(lambda (stream ch arg)
+;;       (declare (ignore ch arg))
+;;       (destructuring-bind (m &optional n) (read-delimited-list #\] stream t)
+;;         (let ((i (gensym)))
+;;           (cond ((null n) 
+;;                  `(loop for ,i from 0 below ,m
+;;                         collect ,i))
+;;                 ((< m n)
+;;                  `(loop for ,i from ,m upto ,n
+;;                         collect ,i))
+;;                 (t
+;;                  `(loop for ,i from ,m downto ,n
+;;                         collect ,i)))) )))
 
 ;;;
 ;;;    Set syntax: #{'a 'b 'c}
+;;;    How to allow quoting entire set?
+;;;    '#{1 2 3} => (MAKE-SET :TEST #'EQUALP :ELEMENTS (LIST 1 2 3))
+;;;    '#.#{1 2 3} => #{1 2 3}
+;;;    '#.#{a b c} => debugger invoked on a UNBOUND-VARIABLE: The variable A is unbound.
 ;;;    
 (set-dispatch-macro-character #\# #\{
   #'(lambda (stream ch arg)
       (declare (ignore ch arg))
-      `(make-set :test #'equalp :elements (list ,@(read-delimited-list #\} stream t)))) )
+      `(make-set :test #'equalp :elements (list ,@(read-delimited-list #\} stream t)))) ) ; Should this be EQUALP?
 
 (defmacro class-template (name (&rest superclasses) (&rest slots))
   `'(defclass ,name ,superclasses
@@ -1466,10 +1540,10 @@
 ;;;
 ;;;    Seibel pg. 101
 ;;;
-(defmacro with-gensyms ((&rest names) &body body)
-  `(let ,(loop for n in names
-               collect `(,n (gensym)))
-     ,@body))
+;; (defmacro with-gensyms ((&rest names) &body body)
+;;   `(let ,(loop for n in names
+;;                collect `(,n (gensym)))
+;;      ,@body))
 
 ;;;
 ;;;    Seibel's downloadable code is slightly different:
@@ -1478,3 +1552,59 @@
 ;;   `(let ,(loop for n in names collect `(,n (make-symbol ,(string n))))
 ;;      ,@body))
 
+;; (defmacro with-gensyms ((&rest names) &body body)
+;;   `(let ,(loop for n in names
+;;                collect `(,n (make-symbol ,(symbol-name n))))
+;;      ,@body))
+
+(defmacro with-gensyms ((&rest names) &body body)
+  `(let ,(loop for n in names
+               collect `(,n ',(make-symbol (symbol-name n)))) ; ??
+     ,@body))
+
+;;;
+;;;    http://www.amazon.com/Data-Structures-Algorithms-Made-Easy/dp/1466304162
+;;;    Problem #2: Find the nth node from the end of the list
+;;;    
+(defun nth-from-end (n l)
+  (do ((l1 l (rest l1))
+       (l2 l)
+       (i 0 (1+ i)))
+      ((null l1) (if (>= i n) l2 nil))
+    (when (>= i n)
+      (setf l2 (rest l2)))) )
+
+(defun partition (l)
+  "Partition a list into sublists of the 'odd' and 'even' elements. The corresponding elements will always be grouped together, however, which sublist is considered 'odd' and which 'even' depends on the number of elements
+   in the original list."
+  (labels ((partition-aux (l odds evens)
+             (if (endp l)
+                 (values odds evens)
+                 (partition-aux (rest l) evens (cons (first l) odds)))) )
+    (partition-aux l '() '())))
+
+(defun stable-partition (l)
+  "Partition a list into sublists of the 'odd' and 'even' elements. The 'odd' and 'even' sublists always reflect the elements' positions (odd or even) in the original list."
+  (labels ((partition-odd (l odds evens)
+             (if (endp l)
+                 (values odds evens)
+                 (partition-even (rest l) (cons (first l) odds) evens)))
+           (partition-even (l odds evens)
+             (if (endp l)
+                 (values odds evens)
+                 (partition-odd (rest l) odds (cons (first l) evens)))) )
+    (partition-odd l '() '())))
+
+(defun stable-stream-partition (stream)
+  "Partition elements of a character stream into sublists of 'odd' and 'even' elements."
+  (labels ((partition-odd (odds evens)
+             (let ((ch (read-char stream nil)))
+               (if (null ch)
+                   (values odds evens)
+                   (partition-even (cons ch odds) evens))))
+           (partition-even (odds evens)
+             (let ((ch (read-char stream nil)))
+               (if (null ch)
+                   (values odds evens)
+                   (partition-odd odds (cons ch evens)))) ))
+    (partition-odd '() '())))

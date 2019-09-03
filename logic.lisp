@@ -27,7 +27,7 @@
 
 (defpackage logic
   (:use common-lisp)
-  (:export :=> :<=> :truth-table :xor))
+  (:export :=> :<=> :dual :print-truth-table :truth-table :xor))
 
 (in-package logic)
 
@@ -179,3 +179,26 @@
 (defun \| (&rest args)
   (some #'identity args))
 
+;;;
+;;;    Do we really want a macro here?
+;;;
+;;;    Instead:
+;;;    (dual '(and p (and (not q) (not r))))
+;;;    (dual (dual '(and p (and (not q) (not r)))))
+;;;    
+(defmacro dual (body)
+  (rebuild-dual body))
+
+(defun rebuild-dual (expression)
+  (cond ((atom expression) (replace-dual-atom expression))
+        ((endp (rest expression)) (cons (rebuild-dual (first expression)) '()))
+        (t (cons (rebuild-dual (first expression)) (rebuild-dual (rest expression)))) ))
+
+(defun replace-dual-atom (obj)
+  (case obj
+    (and 'or)
+    (or 'and)
+    ((t) nil)
+    ((nil) t)
+    ((xor => <=>) (error "The dual is only defined in terms of AND, OR, and NOT."))
+    (otherwise obj)))
