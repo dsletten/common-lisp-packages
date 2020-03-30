@@ -63,6 +63,9 @@
    (equal (array-to-lists (seq-to-array (loop for i from 1 to 12 collect i) :rows 6 :direction :by-column)) '((1 7) (2 8) (3 9) (4 10) (5 11) (6 12)))
    (equal (array-to-lists (seq-to-array (loop for i from 1 to 12 collect i) :rows 3)) '((1 2 3 4) (5 6 7 8) (9 10 11 12)))) )
 
+;;;
+;;;    V must not be ragged.
+;;;    
 (defun vectors-to-array (v)
   "Convert an M-element vector of vectors of length N into an M X N array."
   (make-array (list (length v) (length (aref v 0))) :initial-contents v))
@@ -72,6 +75,9 @@
    (equalp (vectors-to-array (array-to-vectors (seq-to-array (loop for i from 1 to 12 collect i) :rows 3))) #2A((1 2 3 4) (5 6 7 8) (9 10 11 12)))
    (equalp (vectors-to-array (array-to-vectors (seq-to-array (loop for i from 1 to 12 collect i) :rows 3 :direction :by-column))) #2A((1 4 7 10) (2 5 8 11) (3 6 9 12)))) )
 
+;;;
+;;;    L must not be ragged.
+;;;    
 (defun lists-to-array (l)
   "Convert an M-element list of lists of length N into an M X N array."
   (make-array (list (length l) (length (first l))) :initial-contents l))

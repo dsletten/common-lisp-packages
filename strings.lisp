@@ -26,16 +26,16 @@
 ;;;;   Notes:
 ;;;;
 ;;;;
-;(load "/Users/dsletten/lisp/packages/test.lisp")
+;(load "/home/slytobias/lisp/packages/test.lisp")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  #+ :sbcl (load "/Users/dsletten/lisp/packages/lang" :verbose nil)
-  #- :sbcl (load "/Users/dsletten/lisp/packages/lang.lisp" :verbose nil))
+  #+ :sbcl (load "/home/slytobias/lisp/packages/lang" :verbose nil)
+  #- :sbcl (load "/home/slytobias/lisp/packages/lang.lisp" :verbose nil))
 
 (defpackage :strings
   (:use :common-lisp :lang)
 ;  (:use :common-lisp :lang :test)
-  (:export :center :commify :commify-list :elide :english-list :get-article
+  (:export :center :commify :commify-list :elide :english-and-list :english-or-list :get-article
            :irregular-plural :join
            :ljust
            :rjust
@@ -211,8 +211,16 @@
 ;;;
 ;;;    See CLHS 22.3.7.2
 ;;;    
-(defun english-list (&rest items)
-  (apply #'format nil "~#[~;~A~;~A and ~A~:;~@{~#[~;and ~]~A~^, ~}~]" items))
+(defun english-and-list (&rest items)
+  (apply #'english-list 'and items))
+
+(defun english-or-list (&rest items)
+  (apply #'english-list 'or items))
+
+(defun english-list (conjunction &rest items)
+  (ecase conjunction  ; Lame! fix this...
+    (and (apply #'format nil "~#[~;~A~;~A and ~A~:;~@{~#[~;and ~]~A~^, ~}~]" items))
+    (or (apply #'format nil "~#[~;~A~;~A or ~A~:;~@{~#[~;or ~]~A~^, ~}~]" items))))
 
 ;;;
 ;;;    Adapted from Perl Cookbook

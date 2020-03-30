@@ -25,8 +25,8 @@
 ;;;;
 ;;;;
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  #+ :sbcl (load "/Users/dsletten/lisp/packages/lang" :verbose nil)
-  #- :sbcl (load "/Users/dsletten/lisp/packages/lang.lisp" :verbose nil))
+  #+ :sbcl (load "/home/slytobias/lisp/packages/lang" :verbose nil)
+  #- :sbcl (load "/home/slytobias/lisp/packages/lang.lisp" :verbose nil))
 
 (defpackage :test
   (:use :common-lisp :lang)

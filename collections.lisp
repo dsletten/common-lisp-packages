@@ -161,12 +161,22 @@
 (defmethod dequeue ((q linked-queue))
   (if (emptyp q)
       (error "Queue is empty.")
-      (with-slots (front rear size) q
+      (with-slots (front size) q
         (decf size)
-        (if (eq front rear)
-            (prog1 (front q)
-              (make-empty q))
-            (pop front)))) )
+        (pop front))))
+(defmethod dequeue :after ((q linked-queue))
+  (when (emptyp q)
+    (setf (slot-value q 'rear) nil)))
+
+;; (defmethod dequeue ((q linked-queue))
+;;   (if (emptyp q)
+;;       (error "Queue is empty.")
+;;       (with-slots (front rear size) q
+;;         (cond ((eq front rear)
+;;                (prog1 (front q)
+;;                  (make-empty q)))
+;;               (t (decf size)
+;;                  (pop front)))) ))
 
 ;; (defmethod dequeue ((q linked-queue))
 ;;   (if (emptyp q)

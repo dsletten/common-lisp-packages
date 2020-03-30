@@ -30,8 +30,8 @@
 ;;;    
 (eval-when (:compile-toplevel :load-toplevel :execute)
 ;  (load "/Users/dsletten/lisp/packages/test.lisp" :verbose nil)
-  #+ :sbcl (load "/Users/dsletten/lisp/packages/collections" :verbose nil)
-  #- :sbcl (load "/Users/dsletten/lisp/packages/collections.lisp" :verbose nil))
+  #+ :sbcl (load "/home/slytobias/lisp/packages/collections" :verbose nil)
+  #- :sbcl (load "/home/slytobias/lisp/packages/collections.lisp" :verbose nil))
 
 (defpackage :lang
   (:shadowing-import-from :collections :intersection :set :subsetp :union)
@@ -40,8 +40,9 @@
            :class-template :compose :conc1 :copy-array :cycle
            :defchain :destructure :dohash :doset :dostring :dotuples :dovector :drop :duplicate
            :ends-with :expand :explode
-           :fif :filter :filter-split :find-some-if :fint :firsts-rests :flatten :fun
+           :fif :filter :filter-split :find-some-if :find-subtree :fint :firsts-rests :flatten :fun
            :get-num :group
+	   :is-integer
            :last1 :list-to-string :longerp
            :macroexpand-all :make-identity-matrix :make-range
            :map-> :map-array :map-array-index :map0-n :map1-n :mapa-b :mapcars :mappend :mapset
@@ -190,11 +191,14 @@
         response
         (apply #'prompt-read prompt keys))))
 
-(defun get-num (prompt &optional test)
-  (let ((num (read-from-string (prompt-read prompt) nil)))
+;(defun get-num (prompt &optional test)
+(defun get-num (prompt &key test (precision 'double-float))
+  (let* ((*read-default-float-format* precision)
+         (*read-eval* nil)
+         (num (read-from-string (prompt-read prompt) nil)))
     (if (valid-num-p num test)
         num
-        (get-num prompt test))))
+        (get-num prompt :test test :precision precision))))
 
 (defun valid-num-p (obj &optional test)
   (if (numberp obj)
@@ -206,10 +210,13 @@
 ;; (defun is-integer (x)
 ;;   (zerop (nth-value 1 (truncate x))))
 
+;; (defun is-integer (x)
+;;   (multiple-value-bind (_ rem) (truncate x)
+;;     (declare (ignore _))
+;;     (zerop rem)))      
+
 (defun is-integer (x)
-  (multiple-value-bind (_ rem) (truncate x)
-    (declare (ignore _))
-    (zerop rem)))      
+  (and (realp x) (zerop (rem x 1))))
 
 ;;;    The number may be constrained by optional min and max
 ;;;    args (which are inclusive).
@@ -521,7 +528,8 @@
   (let ((q (make-linked-queue))
         (list l))
     #'(lambda ()
-        (prog1 (elements q)
+        (prog1 (copy-list (elements q))
+;        (prog1 (elements q)
           (if (endp list)
               (make-empty q)
               (enqueue q (pop list)))) )))
@@ -621,12 +629,13 @@
 
 ;;;
 ;;;    Disallow crosstalk w/ LOOP keywords in BODY?
+;;;    Binding of VARS should be available in RESULT...
 ;;;    
 (defmacro dotuples (((&rest vars) l &optional result) &body body)
   (let ((list (gensym))
         (rest (gensym)))
-    `(do* ((,list ,l))
-          ((endp ,list) ,result)
+    `(do ((,list ,l))
+         ((endp ,list) ,result)
        (destructuring-bind (,@vars . ,rest) ,list
          ,@body
          (setf ,list ,rest)))) )
@@ -960,11 +969,49 @@
 ;;;
 ;;;    What about nil as an element?
 ;;;    
-(defun tree-find-if (fn obj)
+;; (defun tree-find-if (fn obj)
+;;   (cond ((null obj) nil)
+;; 	((atom obj) (and (funcall fn obj) obj))
+;; 	(t (or (tree-find-if fn (first obj))
+;; 	       (tree-find-if fn (rest obj)))) ) )
+
+(defun tree-find-if (fn obj &key (direction :dfs))
+  (ecase direction
+    (:dfs (tree-find-if-dfs fn obj))
+    (:bfs (tree-find-if-bfs fn obj))))
+
+(defun tree-find-if-dfs (fn obj)
   (cond ((null obj) nil)
 	((atom obj) (and (funcall fn obj) obj))
 	(t (or (tree-find-if fn (first obj))
 	       (tree-find-if fn (rest obj)))) ) )
+
+(defun tree-find-if-bfs (fn obj)
+  (let ((nodes (make-linked-queue)))
+    (labels ((traverse-level (l)
+	       (unless (endp l)
+		 (enqueue nodes (first l))
+		 (traverse-level (rest l))))
+	     (process ()
+	       (print nodes)
+	       (cond ((emptyp nodes) nil)
+		     ((atom (front nodes)) (cond ((funcall fn (front nodes)) (front nodes))
+						 (t (dequeue nodes)
+						    (process))))
+		     (t (traverse-level (dequeue nodes))
+			(process)))) )
+      (traverse-level obj)
+      (process))))
+
+;;;
+;;;    Find subtree with OBJ as head. I.e., find the CONS with OBJ as CAR.
+;;;    OBJ itself may be any value. (Specific :test may need to be applied.)
+;;;
+(defun find-subtree (obj tree &key (test #'eql))
+  (cond ((atom tree) nil)
+	((funcall test (car tree) obj) tree)
+	(t (or (find-subtree obj (car tree) :test test)
+	       (find-subtree obj (cdr tree) :test test))) ))
 
 ;;;
 ;;;    Compare TRANSITION:
@@ -1265,6 +1312,8 @@
 ;;         collect (funcall f elt)))
 
 (defun cycle (f n l)
+  "Apply the function F to the elements of the list L repeatedly until N elements have been captured.
+   The resulting list is returned."
   (let* ((vals (coerce l 'vector))
          (length (length vals)))
     (loop for i from 0 below n
@@ -1478,11 +1527,11 @@
 ;;;
 ;;;    Display the packages to which each of the symbols in a form belong.
 ;;;    
-(defun analyze-tree (obj)                                                                                                                                                                                                                 
-  (cond ((null obj) obj)                                                                                                                                                                                                                    
-        ((symbolp obj) (intern (package-name (symbol-package obj))))                                                                                                                                                                        
-        ((atom obj) obj)                                                                                                                                                                                                                    
-        (t (cons (analyze-tree (car obj))                                                                                                                                                                                                   
+(defun analyze-tree (obj)
+  (cond ((null obj) obj)
+        ((symbolp obj) (intern (package-name (symbol-package obj))))
+        ((atom obj) obj)
+        (t (cons (analyze-tree (car obj))
                  (analyze-tree (cdr obj)))) ))      
 
 (defmacro defchain (var vals)
