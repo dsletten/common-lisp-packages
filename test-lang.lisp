@@ -176,3 +176,8 @@
    (multiple-value-bind (before after) (take-drop 7 "Is this not pung?") (and (string= before "Is this")) (string= after " not pung?"))))
 
 
+(deftest test-approximately= ()
+  (check
+   (approximately= 0.001d0 0.0010000002d0)
+   (not (approximately= 0.001d0 0.001000002d0))
+   (approximately= 0.001d0 0.001000002d0 1d-4)))

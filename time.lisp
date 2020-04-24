@@ -28,7 +28,7 @@
 (defpackage :time
   (:use :common-lisp)
   (:export :compare
-           :date :day :day-names :day-of-week
+           :date :day :day-names :day-of-week :day-of-year
            :get-second :get-minute :get-hour :get-day-of-month
            :get-month :get-month-name :get-short-month-name
            :get-year :get-day-of-week :get-day-of-week-name
@@ -231,6 +231,9 @@
 (defun day-of-year (day month year)
   (1+ (- (julian day month year)
          (julian 1 1 year))))
+
+;; (defun day-of-week (day month year)
+;;   (mod (1+ (julian day month year)) 7))
 
 ;;;    https://en.wikipedia.org/wiki/Julian_day
 (defun julian2 (day month year)

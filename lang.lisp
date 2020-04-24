@@ -36,19 +36,19 @@
 (defpackage :lang
   (:shadowing-import-from :collections :intersection :set :subsetp :union)
   (:use :common-lisp :collections)
-  (:export :after :append1 :array-indices :before :best
+  (:export :after :append1 :approximately= :array-indices :before :best
            :class-template :compose :conc1 :copy-array :cycle
            :defchain :destructure :dohash :doset :dostring :dotuples :dovector :drop :duplicate
            :ends-with :expand :explode
            :fif :filter :filter-split :find-some-if :find-subtree :fint :firsts-rests :flatten :fun
-           :get-num :group
+           :get-num :group :horners
 	   :is-integer
            :last1 :list-to-string :longerp
            :macroexpand-all :make-identity-matrix :make-range
            :map-> :map-array :map-array-index :map0-n :map1-n :mapa-b :mapcars :mappend :mapset
            :memoize :mklist :mkstr :most :mostn
            :ppmx :prefixp :print-plist :prompt :prompt-read :prune :prune-if-not
-           :repeat :reread :rmapcar :shift0 :shift1
+           :read-num :repeat :reread :rmapcar :shift0 :shift1
            :show-symbols :shuffle :singlep :sort-symbol-list :splice
            :split-if :starts-with :symb
            :take :take-drop :transfer
@@ -182,23 +182,31 @@
 ;;   Seibel ch. 3
 ;;   
 (defun prompt-read (prompt &rest keys &key (allow-empty t) (trim t))
-  (format *query-io* "~A" prompt)
-  (force-output *query-io*)
-  (let ((response (if trim
-                      (string-trim " " (read-line *query-io*))
-                      (read-line *query-io*))))
-    (if (or (string/= response "") allow-empty)
-        response
-        (apply #'prompt-read prompt keys))))
+  (labels ((validate (response)
+             (if (or (string/= response "") allow-empty)
+                 response
+                 (apply #'prompt-read prompt keys))))
+    (format *query-io* "~A" prompt)
+    (force-output *query-io*)
+    (let ((response (read-line *query-io*)))
+      (if trim
+          (validate (string-trim " " response))
+          (validate response)))) )
 
 ;(defun get-num (prompt &optional test)
 (defun get-num (prompt &key test (precision 'double-float))
+  (let ((num (read-num (prompt-read prompt) :test test :precision precision)))
+    (if (null num)
+        (get-num prompt :test test :precision precision)
+        num)))
+
+(defun read-num (s &key test (precision 'double-float))
   (let* ((*read-default-float-format* precision)
          (*read-eval* nil)
-         (num (read-from-string (prompt-read prompt) nil)))
+         (num (read-from-string s nil)))
     (if (valid-num-p num test)
         num
-        (get-num prompt :test test :precision precision))))
+        nil)))
 
 (defun valid-num-p (obj &optional test)
   (if (numberp obj)
@@ -1657,3 +1665,12 @@
                    (values odds evens)
                    (partition-odd odds (cons ch evens)))) ))
     (partition-odd '() '())))
+
+(defun approximately= (a b &optional (epsilon 1d-6))
+  (<= (abs (- a b)) (* epsilon (abs a))))
+
+;;;
+;;;    See programs/horners.lisp
+;;;    
+(defun horners (x coefficients)
+  (reduce #'(lambda (a b) (+ (* a x) b)) coefficients :initial-value 0))
