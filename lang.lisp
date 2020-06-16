@@ -28,8 +28,8 @@
 ;;;
 ;;;    Need queue for TAKE-DROP
 ;;;    
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
-;  (load "/Users/dsletten/lisp/packages/test.lisp" :verbose nil)
   #+ :sbcl (load "/home/slytobias/lisp/packages/collections" :verbose nil)
   #- :sbcl (load "/home/slytobias/lisp/packages/collections.lisp" :verbose nil))
 
@@ -188,7 +188,8 @@
                  (apply #'prompt-read prompt keys))))
     (format *query-io* "~A" prompt)
     (force-output *query-io*)
-    (let ((response (read-line *query-io*)))
+    (let ((*read-eval* nil)
+          (response (read-line *query-io*)))
       (if trim
           (validate (string-trim " " response))
           (validate response)))) )
