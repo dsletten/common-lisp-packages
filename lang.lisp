@@ -186,7 +186,8 @@
              (if (or (string/= response "") allow-empty)
                  response
                  (apply #'prompt-read prompt keys))))
-    (format *query-io* "~A" prompt)
+    (format *query-io* prompt)
+;    (format *query-io* "~A" prompt)
     (force-output *query-io*)
     (let ((*read-eval* nil)
           (response (read-line *query-io*)))
@@ -202,6 +203,7 @@
         num)))
 
 (defun read-num (s &key test (precision 'double-float))
+  "Attempt to read a number from string S. Apply the TEST validity function if provided. Return NIL if value is not valid."
   (let* ((*read-default-float-format* precision)
          (*read-eval* nil)
          (num (read-from-string s nil)))
@@ -1297,6 +1299,9 @@
 ;;;
 ;;;    Example:
 ;;;    Military clock 0, . . ., 11 -> 1, . . ., 12
+;;;
+;;;    This doesn't really belong here...
+;;;    (format t "~D ~[~:[a.m.~;midnight~]~;~:[p.m.~;noon~]~]~%" (+ (mod (+ hour 11) 12) 1) (truncate hour 12) (zerop (mod hour 12)))
 ;;;    
 (defun shift0 (m n)
   (let ((list (loop for i from 0 to (1- n) collect i)))

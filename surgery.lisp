@@ -296,6 +296,113 @@
    (let ((l (copy-list '(a b c d e)))) (nsnip l 3) (equal l '(a b c e)))
    (let ((l (copy-list '(a b c d e)))) (nsnip l 4) (equal l '(a b c d)))) )
 
+;;;
+;;;    A few functions inspired by King's C ch. 17 linked list exercises (Current and previous pointers...).
+;;;    Remove an object rather than a specific index.
+;;;    
+; :count Delete more than one instance of OBJ??
+(defun delete1 (obj l)
+  "Delete first occurrence of OBJ from L. Return new list with OBJ removed."
+  (do ((curr l (cdr curr))
+       (prev nil curr))
+      ((null curr) l)
+    (when (eql (car curr) obj)
+      (cond ((null prev) (return (cdr l)))
+            (t (setf (cdr prev) (cdr curr)) (return l)))) ))
+
+(defun delete2 (obj l)
+  (labels ((delete-aux (curr prev)
+             (cond ((null curr) l)
+                   ((eql (car curr) obj)
+                    (cond ((null prev) (cdr l))
+                          (t (setf (cdr prev) (cdr curr)) l)))
+                   (t (delete-aux (cdr curr) curr)))) )
+    (delete-aux l nil)))
+
+(deftest test-delete1 ()
+  (check
+   (let ((l (copy-list '(a)))) (equal (delete1 'a l) '()))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete1 'z l) '(a b c d e)))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete1 'a l) '(b c d e)))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete1 'b l) '(a c d e)))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete1 'c l) '(a b d e)))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete1 'd l) '(a b c e)))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete1 'e l) '(a b c d)))) )
+
+(deftest test-delete2 ()
+  (check
+   (let ((l (copy-list '(a)))) (equal (delete2 'a l) '()))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete2 'z l) '(a b c d e)))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete2 'a l) '(b c d e)))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete2 'b l) '(a c d e)))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete2 'c l) '(a b d e)))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete2 'd l) '(a b c e)))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete2 'e l) '(a b c d)))) )
+
+(defun delete-n (obj l &optional (count 1))
+  (assert (typep count '(integer 0)))
+  (labels ((remove-aux (l count)
+             (cond ((null l) '())
+                   ((zerop count) l)
+                   ((eql (first l) obj) (remove-aux (rest l) (1- count)))
+                   (t (delete-aux l l nil count))))
+           (delete-aux (l curr prev count)
+             (cond ((or (null curr) (zerop count)) l)
+                   ((eql (car curr) obj)
+                    (setf (cdr prev) (cdr curr))
+                    (delete-aux l (cdr curr) curr (1- count)))
+                   (t (delete-aux l (cdr curr) curr count)))) )
+    (remove-aux l count)))
+
+(deftest test-delete-n ()
+  (check
+   (let ((l (copy-list '(a)))) (equal (delete-n 'a l) '()))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete-n 'z l) '(a b c d e)))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete-n 'a l) '(b c d e)))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete-n 'b l) '(a c d e)))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete-n 'c l) '(a b d e)))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete-n 'd l) '(a b c e)))
+   (let ((l (copy-list '(a b c d e)))) (equal (delete-n 'e l) '(a b c d)))
+   (equal (delete-n 'a (copy-list '(a b a b c a b c d a)) 0) '(A B A B C A B C D A))
+   (equal (delete-n 'a (copy-list '(a b a b c a b c d a)) 1) '(B A B C A B C D A))
+   (equal (delete-n 'a (copy-list '(a b a b c a b c d a)) 2) '(B B C A B C D A))
+   (equal (delete-n 'a (copy-list '(a b a b c a b c d a)) 3) '(B B C B C D A))
+   (equal (delete-n 'a (copy-list '(a b a b c a b c d a)) 4) '(B B C B C D))
+   (equal (delete-n 'a (copy-list '(a b a b c a b c d a)) 5) '(B B C B C D))))
+
+(defun snip1 (obj l)
+  "Delete first occurrence of OBJ from L. OBJ is removed in place."
+  (do ((curr l (cdr curr))
+       (prev nil curr))
+      ((null curr) nil)
+    (when (eql (car curr) obj)
+      (cond ((null (cdr curr)) (if (null prev)
+                                   (error "Single-element list.")
+                                   (setf (cdr prev) nil)))
+            (t (setf (car curr) (cadr curr)
+                     (cdr curr) (cddr curr)))) 
+      (return))))
+
+;; (defun nsnip (obj l)
+;;   (cond ((null l) (error "Bad index to snip."))
+;;         ((and (= i 1) (null (cddr l))) (setf (rest l) nil))
+;;         ((zerop i) (setf (first l) (second l) ; Copy CAR/CDR of 2nd CONS to this CONS. Thus 1st CONS is copy of 2nd. 2nd CONS becomes redundant (1st CONS circumvents it, points to 3rd CONS.)
+;;                          (rest l) (cddr l)))
+;;         (t (nsnip (rest l) (1- i)))) )
+
+(deftest test-snip1 ()
+  (check
+   (let ((l (copy-list '(a b c d e)))) (snip1 'z l) (equal l '(a b c d e)))
+   (let ((l (copy-list '(a b c d e)))) (snip1 'a l) (equal l '(b c d e)))
+   (let ((l (copy-list '(a b c d e)))) (snip1 'b l) (equal l '(a c d e)))
+   (let ((l (copy-list '(a b c d e)))) (snip1 'c l) (equal l '(a b d e)))
+   (let ((l (copy-list '(a b c d e)))) (snip1 'd l) (equal l '(a b c e)))
+   (let ((l (copy-list '(a b c d e)))) (snip1 'e l) (equal l '(a b c d)))) )
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; 
 ;;;; Trees
 ;;;; Can't consolidate before/after functions?? TARGET specifies location to splice--no way to specifiy target at end of (sub)list??? NIL is same everywhere...

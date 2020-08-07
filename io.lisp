@@ -218,19 +218,23 @@
 	                 until (= n 0)
 	                 do (write-sequence buffer out :end n)))) )))
 
+; CMUCL (unix:unix-stat file)...
 (defun atime (file)
   #+sbcl (sb-posix:stat-atime (sb-posix:stat file))
-  #-(or sbcl)
+  #+clisp (posix:file-stat-atime (posix:file-stat file))
+  #-(or sbcl clisp)
   (error "ATIME not implemented"))
 
 (defun ctime (file)
   #+sbcl (sb-posix:stat-ctime (sb-posix:stat file))
-  #-(or sbcl)
+  #+clisp (posix:file-stat-ctime (posix:file-stat file))
+  #-(or sbcl clisp)
   (error "CTIME not implemented"))
 
 (defun mtime (file)
   #+sbcl (sb-posix:stat-mtime (sb-posix:stat file))
-  #-(or sbcl)
+  #+clisp (file-stat-mtime (file-stat file))
+  #-(or sbcl clisp)
   (error "MTIME not implemented"))
 
 #|
