@@ -112,7 +112,7 @@
 ;;;    
 (defclass deck ()
   ((cards :reader cards)
-   (count :reader count)
+   (count :reader count :documentation "The number of cards in the full deck.")
    (random-state :initform (make-random-state t))))
 
 (defmethod initialize-instance :after ((d deck) &rest initargs)
