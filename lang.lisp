@@ -1325,14 +1325,22 @@
 ;;         for elt in (make-circular-list l)
 ;;         collect (funcall f elt)))
 
+;; (defun cycle (f n l)
+;;   "Apply the function F to the elements of the list L repeatedly until N elements have been captured.
+;;    The resulting list is returned."
+;;   (let* ((vals (coerce l 'vector))
+;;          (length (length vals)))
+;;     (loop for i from 0 below n
+;;           for elt = (aref vals (mod i length))
+;;           collect (funcall f elt))))
+
 (defun cycle (f n l)
   "Apply the function F to the elements of the list L repeatedly until N elements have been captured.
    The resulting list is returned."
-  (let* ((vals (coerce l 'vector))
-         (length (length vals)))
-    (loop for i from 0 below n
-          for elt = (aref vals (mod i length))
-          collect (funcall f elt))))
+  (loop repeat n
+        for l1 = l then (if (endp (rest l1)) l (rest l1))
+        collect (funcall f (first l1))))
+
 
 ;;;
 ;;;    This segregates _elements_ of SEQ not the _values_ of applying F.

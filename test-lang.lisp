@@ -181,3 +181,11 @@
    (approximately= 0.001d0 0.0010000002d0)
    (not (approximately= 0.001d0 0.001000002d0))
    (approximately= 0.001d0 0.001000002d0 1d-4)))
+
+
+
+(deftest test-cycle ()
+  (check
+   (equal (cycle #'1+ 5 '(1 2 3 4 5 6 7)) '(2 3 4 5 6))
+   (equal (cycle #'1+ 8 '(1 2 3 4 5 6 7)) '(2 3 4 5 6 7 8 2))
+   (equal (cycle #'1+ 20 '(1 2 3 4 5 6 7)) '(2 3 4 5 6 7 8 2 3 4 5 6 7 8 2 3 4 5 6 7))))
