@@ -25,6 +25,7 @@
 ;;;;
 ;;;;   Notes: Create WITH- macros: WITH-LIST-ITERATOR, WITH-SET-ITERATOR, WITH-STRING-ITERATOR, WITH-VECTOR-ITERATOR
 ;;;;
+;;;;   Why aren't the MAKE- functions generic???
 ;;;;
 (load "/Users/dsletten/lisp/packages/collections.lisp")
 (load "/Users/dsletten/lisp/packages/test.lisp")
