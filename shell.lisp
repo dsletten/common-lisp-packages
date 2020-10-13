@@ -112,6 +112,7 @@
 (defun default-directory ()
   #+cmu (default-directory)
                                         ;  #+:cmu (ext:default-directory)
+  #+clozure (ccl::current-directory-name)
   #+clisp (ext:default-directory)
   #+excl (excl:current-directory)
   #+(or gcl sbcl) (truename "."))

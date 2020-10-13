@@ -32,7 +32,7 @@
 ;;;;
 ;;;;   Notes: (use-package :sdraw)
 ;;;;
-;;;;
+;;;;  https://www.cs.cmu.edu/~dst/Lisp/sdraw/
 ;;;
 ;;;   Explore circular structure...
 ;;;   (let ((x (list 1))) (sdraw (cons x x)))
