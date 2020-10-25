@@ -203,12 +203,12 @@
 ;;;    
 (defun zeller (n m c y l)
   (mod (+ (- (+ n
-                (cl:floor (1- (* 13 m)) 5)
+                (floor (1- (* 13 m)) 5)
                 y
-                (cl:floor y 4)
-                (cl:floor c 4))
+                (floor y 4)
+                (floor c 4))
              (* 2 c)
-             (* (1+ l) (cl:floor m 11)))
+             (* (1+ l) (floor m 11)))
           6)
        7))
 

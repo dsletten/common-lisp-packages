@@ -175,12 +175,38 @@
    (multiple-value-bind (before after) (take-drop 3 #(1 2 3)) (and (equalp before #(1 2 3)) (equalp after #())))
    (multiple-value-bind (before after) (take-drop 7 "Is this not pung?") (and (string= before "Is this")) (string= after " not pung?"))))
 
-
-(deftest test-approximately= ()
+(deftest test-rotate-list0 ()
   (check
-   (approximately= 0.001d0 0.0010000002d0)
-   (not (approximately= 0.001d0 0.001000002d0))
-   (approximately= 0.001d0 0.001000002d0 1d-4)))
+   (equal (rotate-list0 3 0) '(0 1 2))
+   (equal (rotate-list0 3 1) '(2 0 1))
+   (equal (rotate-list0 3 2) '(1 2 0))) )
+
+(deftest test-rotate-list1 ()
+  (check
+   (equal (rotate-list1 3 0) '(1 2 3))
+   (equal (rotate-list1 3 1) '(3 1 2))
+   (equal (rotate-list1 3 2) '(2 3 1))
+   (equal (rotate-list1 3 3) '(1 2 3))))
+
+(deftest test-shift-list0 ()
+  (check
+   (equal (shift-list0 5 0) '(0 1 2 3 4))
+   (equal (shift-list0 5 1) '(5 1 2 3 4))
+   (equal (shift-list0 5 2) '(5 6 2 3 4))
+   (equal (shift-list0 5 3) '(5 6 7 3 4))
+   (equal (shift-list0 5 4) '(5 6 7 8 4))
+   (equal (shift-list0 5 5) '(5 6 7 8 9))))
+
+(deftest test-shift-list1 ()
+  (check
+   (equal (shift-list1 5 0) '(1 2 3 4 5))
+   (equal (shift-list1 5 1) '(6 2 3 4 5))
+   (equal (shift-list1 5 2) '(6 7 3 4 5))
+   (equal (shift-list1 5 3) '(6 7 8 4 5))
+   (equal (shift-list1 5 4) '(6 7 8 9 5))
+   (equal (shift-list1 5 5) '(6 7 8 9 10))))
+
+
 
 
 
@@ -189,3 +215,13 @@
    (equal (cycle #'1+ 5 '(1 2 3 4 5 6 7)) '(2 3 4 5 6))
    (equal (cycle #'1+ 8 '(1 2 3 4 5 6 7)) '(2 3 4 5 6 7 8 2))
    (equal (cycle #'1+ 20 '(1 2 3 4 5 6 7)) '(2 3 4 5 6 7 8 2 3 4 5 6 7 8 2 3 4 5 6 7))))
+
+
+
+
+(deftest test-approximately= ()
+  (check
+   (approximately= 0.001d0 0.0010000002d0)
+   (not (approximately= 0.001d0 0.001000002d0))
+   (approximately= 0.001d0 0.001000002d0 1d-4)))
+

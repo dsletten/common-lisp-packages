@@ -48,7 +48,9 @@
            :map-> :map-array :map-array-index :map0-n :map1-n :mapa-b :mapcars :mappend :mapset
            :memoize :mklist :mkstr :most :mostn
            :ppmx :prefixp :print-plist :prompt :prompt-read :prune :prune-if-not
-           :read-num :repeat :reread :rmapcar :shift0 :shift1
+           :read-num :repeat :reread :rmapcar 
+           :rotate0 :rotate-list0 :rotate1 :rotate-list1
+           :shift0 :shift-list0 :shift1 :shift-list1
            :show-symbols :shuffle :singlep :sort-symbol-list :splice
            :split-if :starts-with :symb
            :take :take-drop :transfer
@@ -1282,30 +1284,61 @@
   v)
 
 ;;;
-;;;    Given the numbers 1, . . ., n, map the first m elements to n+1, . . ., n+m
-;;;    I.e., 1, . . ., n -> m+1, . . ., n, n+1, . . ., n+m
+;;;    (shift-list0 12 2) => (12 13 2 3 4 5 6 7 8 9 10 11)
+;;;    (shift-list1 12 2) => (13 14 3 4 5 6 7 8 9 10 11 12)
+;;;    (rotate-list0 12 2) => (10 11 0 1 2 3 4 5 6 7 8 9)
+;;;    (rotate-list1 12 2) => (11 12 1 2 3 4 5 6 7 8 9 10)
+;;;    (rotate-list0 12 -2) => (2 3 4 5 6 7 8 9 10 11 0 1)
+;;;    (rotate-list1 12 -2) => (3 4 5 6 7 8 9 10 11 12 1 2)
 ;;;
-;;;    Example: Correct?
-;;;    Zeller's congruence expects January, February to be months 13, 14 of previous year:
-;;;    1, . . ., 12 -> 3, . . ., 12, 13, 14
+;;;    (shift-list0 12 1) => (12 1 2 3 4 5 6 7 8 9 10 11)
+;;;    (rotate-list1 12 1) => (12 1 2 3 4 5 6 7 8 9 10 11)
 ;;;    
-(defun shift1 (m n)
+(defun rotate1 (n m i)
+  (1+ (mod (+ i (- n (1+ m))) n)))
+
+(defun rotate0 (n m i)
+  (mod (+ i (- n m)) n))
+
+(defun rotate-list1 (n m)
   (let ((list (loop for i from 1 to n collect i)))
-    (mapcar #'(lambda (x) (+ (mod (+ x (- n (1+ m))) n) (1+ m))) list)))
+    (mapcar #'(lambda (x) (rotate1 n m x)) list)))
+
+(defun rotate-list0 (n m)
+  (let ((list (loop for i from 0 to (1- n) collect i)))
+    (mapcar #'(lambda (x) (rotate0 n m x)) list)))
+
+(defun shift1 (n m i)
+  (+ (mod (+ i (- n (1+ m))) n) (1+ m)))
+
+(defun shift0 (n m i)
+  (+ (mod (+ i (- n m)) n) m))
+
+;;;
+;;;    Given the numbers 1, . . ., n, map the first m elements to n+1, . . ., n+m
+;;;    I.e., 1, . . ., n -> n+1, . . ., n+m, m+1, . . ., n
+;;;
+;;;    Example:
+;;;    Zeller's congruence expects January, February to be months 13, 14 of previous year:
+;;;    1, . . ., 12 -> 13, 14, 3, . . ., 12
+;;;    
+(defun shift-list1 (n m)
+  (let ((list (loop for i from 1 to n collect i)))
+    (mapcar #'(lambda (x) (shift1 n m x)) list)))
 
 ;;;
 ;;;    Given the numbers 0, . . ., n-1, map the first m elements to n, . . ., n+m-1
-;;;    I.e., 0, . . ., n-1 -> m, . . ., n-1, n, . . ., n+m-1
+;;;    I.e., 0, . . ., n-1 -> n, . . ., n+m-1, m, . . ., n-1
 ;;;
-;;;    Example:
-;;;    Military clock 0, . . ., 11 -> 1, . . ., 12
+;;;    Example: 
+;;;    Military clock 0, . . ., 11 -> 12, . . ., 11
 ;;;
 ;;;    This doesn't really belong here...
-;;;    (format t "~D ~[~:[a.m.~;midnight~]~;~:[p.m.~;noon~]~]~%" (+ (mod (+ hour 11) 12) 1) (truncate hour 12) (zerop (mod hour 12)))
+;;;    (format t "~D ~[~:[a.m.~;midnight~]~;~:[p.m.~;noon~]~]~%" (1+ (mod (+ hour 11) 12)) (truncate hour 12) (zerop (mod hour 12)))
 ;;;    
-(defun shift0 (m n)
+(defun shift-list0 (n m)
   (let ((list (loop for i from 0 to (1- n) collect i)))
-    (mapcar #'(lambda (x) (+ (mod (+ x (- n m)) n) m)) list)))
+    (mapcar #'(lambda (x) (shift0 n m x)) list)))
 
 ;;;
 ;;;    This screws up fractions!
