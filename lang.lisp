@@ -181,9 +181,9 @@
 
 
 ;;
-;;   Seibel ch. 3
+;;   Original Seibel ch. 3
 ;;   
-(defun prompt-read (prompt &rest keys &key (allow-empty t) (trim t))
+(defun prompt-read (prompt &rest keys &key (allow-empty t) (trim t) test)
   (labels ((validate (response)
              (if (or (string/= response "") allow-empty)
                  response
@@ -193,6 +193,24 @@
     (force-output *query-io*)
     (let ((*read-eval* nil)
           (response (read-line *query-io*)))
+      (if trim
+          (validate (string-trim " " response))
+          (validate response)))) )
+
+(defun prompt-read (prompt &rest keys &key (allow-empty t) (trim t) test)
+  (labels ((validate (response)
+             (if (or (string/= response "") allow-empty)
+                 (if test
+                     (if (funcall test response)
+                         response
+                         (fail))
+                     response)
+                 (fail)))
+           (fail ()
+             (apply #'prompt-read prompt keys)))
+    (format *query-io* prompt)
+    (force-output *query-io*)
+    (let ((response (read-line *query-io*)))
       (if trim
           (validate (string-trim " " response))
           (validate response)))) )
@@ -559,12 +577,18 @@
 ;;;
 ;;;    Sequences
 ;;;    
-(defun prefixp (s1 s2)
-  "Is S1 a prefix of S2"
-  (let ((l1 (length s1)))
-    (if (>= (length s2) l1)
-        (search s1 s2 :end2 l1) ; (= (mismatch s1 s2) l1)
-        nil)))
+;; (defun prefixp (s1 s2)
+;;   "Is S1 a prefix of S2"
+;;   (let ((l1 (length s1)))
+;;     (if (>= (length s2) l1)
+;;         (search s1 s2 :end2 l1) ; (= (mismatch s1 s2) l1)
+;;         nil)))
+
+(defun prefixp (seq1 seq2 &key (test #'eql))
+  (let ((match (search seq1 seq2 :test test)))
+    (if (null match)
+        nil
+        (zerop match))))
 
 ;---------------Macros------------------------
 ;; (defmacro while (test &body body)
@@ -861,13 +885,23 @@
         until (null (first take-drop))
         collect (first take-drop)))
 
-(defun flatten (obj)
-  (labels ((flatten-aux (obj results)
-             (cond ((null obj) results)
-                   ((atom obj) (cons obj results))
-                   (t (flatten-aux (car obj)
-                                   (flatten-aux (cdr obj) results)))) ))
-    (flatten-aux obj '()))) 
+(defun flatten (tree)
+  (labels ((flatten-aux (tree result)
+             (cond ((null tree) (nreverse result))
+                   ((null (car tree)) (flatten-aux (cdr tree) result))
+                   ((atom (car tree)) (flatten-aux (cdr tree) (cons (car tree) result)))
+                   (t (flatten-aux (list* (caar tree) (cdar tree) (cdr tree)) result)))) )
+    (if (atom tree)
+        tree
+        (flatten-aux tree '()))) )
+
+;; (defun flatten (obj)
+;;   (labels ((flatten-aux (obj results)
+;;              (cond ((null obj) results)
+;;                    ((atom obj) (cons obj results))
+;;                    (t (flatten-aux (car obj)
+;;                                    (flatten-aux (cdr obj) results)))) ))
+;;     (flatten-aux obj '()))) 
 
 (defun prune (pred obj)
   (labels ((prune-aux (obj acc)

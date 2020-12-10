@@ -175,6 +175,17 @@
    (multiple-value-bind (before after) (take-drop 3 #(1 2 3)) (and (equalp before #(1 2 3)) (equalp after #())))
    (multiple-value-bind (before after) (take-drop 7 "Is this not pung?") (and (string= before "Is this")) (string= after " not pung?"))))
 
+(deftest test-prefixp ()
+  (check
+   (prefixp '() '(g t c a t))
+   (prefixp '(g t c) '(g t c a t))
+   (prefixp #1='(g t c a t) #1#)
+   (not (prefixp '(g t c) '(a g g t c)))
+   (prefixp "Is" "Is this not pung?")
+   (prefixp "IS" "is this not pung?" :test #'char-equal)
+   (prefixp #*101 #*101111)
+   (prefixp #(:a :b :c :d) #(:a :b :c :d :e))))
+
 (deftest test-rotate-list0 ()
   (check
    (equal (rotate-list0 3 0) '(0 1 2))
