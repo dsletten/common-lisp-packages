@@ -179,33 +179,12 @@
 ;;     (ends-with (subseq [1 2 3 4 5] 0 4) [3 4])
 ;;     (ends-with #[1 10] #[8 10])))
 
-
-;;
-;;   Original Seibel ch. 3
-;;   
 (defun prompt-read (prompt &rest keys &key (allow-empty t) (trim t) test)
   (labels ((validate (response)
-             (if (or (string/= response "") allow-empty)
-                 response
-                 (apply #'prompt-read prompt keys))))
-    (format *query-io* prompt)
-;    (format *query-io* "~A" prompt)
-    (force-output *query-io*)
-    (let ((*read-eval* nil)
-          (response (read-line *query-io*)))
-      (if trim
-          (validate (string-trim " " response))
-          (validate response)))) )
-
-(defun prompt-read (prompt &rest keys &key (allow-empty t) (trim t) test)
-  (labels ((validate (response)
-             (if (or (string/= response "") allow-empty)
-                 (if test
-                     (if (funcall test response)
-                         response
-                         (fail))
-                     response)
-                 (fail)))
+             (cond ((and (string= response "") (not allow-empty)) (fail))
+                   ((null test) response)
+                   ((funcall test response) response)
+                   (t (fail))))
            (fail ()
              (apply #'prompt-read prompt keys)))
     (format *query-io* prompt)
