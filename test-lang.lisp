@@ -270,3 +270,12 @@
    (not (longerp [1 2 3] [4 5 6]))
    (not (longerp [1 2 3] [4 5 6 7]))))
 
+(deftest test-group ()
+  (check
+   (equal (group (loop for i from 1 to 10 collect i) 3) '((1 2 3) (4 5 6) (7 8 9) (10)))
+   (equal (group (loop for i from 1 to 10 collect i) 7) '((1 2 3 4 5 6 7) (8 9 10)))
+   (equalp (group (coerce (loop for i from 1 to 10 collect i) 'vector) 3) '(#(1 2 3) #(4 5 6) #(7 8 9) #(10)))
+   (equalp (group (coerce (loop for i from 1 to 10 collect i) 'vector) 7) '(#(1 2 3 4 5 6 7) #(8 9 10)))
+   (equal (group "Is this not pung?" 2) '("Is" " t" "hi" "s " "no" "t " "pu" "ng" "?"))
+   (equal (group "Is this not pung?" 11) '("Is this not" " pung?"))
+   (equal (group "Is this not pung?" 7) '("Is this" " not pu" "ng?"))))

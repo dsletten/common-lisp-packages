@@ -863,11 +863,18 @@
 ;;         (group-aux source '())
 ;;         '())))
 
+;;;
+;;;    See Clojure partition-all
+;;;    
 (defun group (l n)
-  (loop for take-drop = (multiple-value-list (take-drop n l))
-                        then (multiple-value-list (take-drop n (second take-drop)))
-        until (null (first take-drop))
-        collect (first take-drop)))
+  (flet ((emptyp (seq)
+           (typecase seq
+             (list (null seq))
+             (vector (zerop (length seq)))) ))
+    (loop for take-drop =      (multiple-value-list (take-drop n l))
+                          then (multiple-value-list (take-drop n (second take-drop)))
+          until (emptyp (first take-drop))
+          collect (first take-drop))))
 
 (defun flatten (tree)
   (labels ((flatten-aux (tree result)
