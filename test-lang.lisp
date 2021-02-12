@@ -85,7 +85,11 @@
     (ends-with #[1 10] #[8 10])))
 
 ;(defun prompt-read (prompt &rest keys &key (allow-empty t) (trim t))
-
+;; (prompt-read "This is the real deal: " :allow-empty nil :test #'(lambda (s) (member s '("pung" "foo" "bar") :test #'string-equal)))
+;; (prompt-read "Is this not pung? " :test #'(lambda (s) (every #'alpha-char-p s)) :allow-empty nil)
+;; (prompt-read "Is this not pung? " :test #'(lambda (s) (every #'alpha-char-p s)) :trim nil)
+;; (prompt-read "Enter a letter. " :allow-empty nil :test #'(lambda (s) (and (= (length s) 1) (alpha-char-p (char s 0)))) ) 
+        
 ;(defun get-num (prompt &key test (precision 'double-float))
 
 (deftest test-valid-num-p ()
@@ -137,10 +141,12 @@
    (equal (drop 1 '(a b c d)) '(b c d))
    (equal (drop 2 '(a b c d)) '(c d))
    (equal (drop 4 '(a b c d)) '())
+   (equal (drop 5 '(a b c d)) '())
    (equalp (drop 0 #(:a :b :c)) #(:a :b :c))
    (equalp (drop 1 #(:a :b :c)) #(:b :c))
    (equalp (drop 2 #(:a :b :c)) #(:c))
    (equalp (drop 3 #(:a :b :c)) #())
+   (equalp (drop 4 #(:a :b :c)) #())
    (string= (drop 3 "Is this not pung?") "this not pung?")
    (string= (drop 12 "Is this not pung?") "pung?")
    (string= (drop 17 "Is this not pung?") "")))
@@ -151,10 +157,12 @@
    (equal (take 1 '(a b c d)) '(a))
    (equal (take 2 '(a b c d)) '(a b))
    (equal (take 4 '(a b c d)) '(a b c d))
+   (equal (take 5 '(a b c d)) '(a b c d))
    (equalp (take 0 #(:a :b :c)) #())
    (equalp (take 1 #(:a :b :c)) #(:a))
    (equalp (take 2 #(:a :b :c)) #(:a :b))
    (equalp (take 3 #(:a :b :c)) #(:a :b :c))
+   (equalp (take 4 #(:a :b :c)) #(:a :b :c))
    (string= (take 7 "Is this not pung?") "Is this")
    (string= (take 0 "Is this not pung?") "")))
 
@@ -170,9 +178,11 @@
    (multiple-value-bind (before after) (take-drop 0 '(a b c d)) (and (equal before '()) (equal after '(a b c d))))
    (multiple-value-bind (before after) (take-drop 1 '(a b c d)) (and (equal before '(a)) (equal after '(b c d))))
    (multiple-value-bind (before after) (take-drop 2 '(a b c d)) (and (equal before '(a b)) (equal after '(c d))))
+   (multiple-value-bind (before after) (take-drop 5 '(a b c d)) (and (equal before '(a b c d)) (equal after '())))
    (multiple-value-bind (before after) (take-drop 0 #(1 2 3)) (and (equalp before #()) (equalp after #(1 2 3))))
    (multiple-value-bind (before after) (take-drop 1 #(1 2 3)) (and (equalp before #(1)) (equalp after #(2 3))))
    (multiple-value-bind (before after) (take-drop 3 #(1 2 3)) (and (equalp before #(1 2 3)) (equalp after #())))
+   (multiple-value-bind (before after) (take-drop 8 #(1 2 3)) (and (equalp before #(1 2 3)) (equalp after #())))
    (multiple-value-bind (before after) (take-drop 7 "Is this not pung?") (and (string= before "Is this")) (string= after " not pung?"))))
 
 (deftest test-prefixp ()
@@ -235,4 +245,28 @@
    (approximately= 0.001d0 0.0010000002d0)
    (not (approximately= 0.001d0 0.001000002d0))
    (approximately= 0.001d0 0.001000002d0 1d-4)))
+
+(deftest test-find-some-if ()
+  (check
+   (equal (multiple-value-list (find-some-if #'(lambda (elt) (if (numberp elt) (sqrt elt) nil)) '(a "pung" 5 t))) '(5 2.236068))
+   (null (find-some-if #'(lambda (elt) (if (numberp elt) (sqrt elt) nil)) '(a "pung" :j t)))) )
+
+(deftest test-filter ()
+  (check
+   (equal (filter #'(lambda (x) (if (numberp x) (1+ x) nil)) '(a 1 2 b 3 c d 4)) '(2 3 4 5))
+   (equalp (filter #'(lambda (x) (if (numberp x) (1+ x) nil)) ['a 1 2 'b 3 'c 'd 4]) [2 3 4 5])
+   (string= (filter #'(lambda (ch) (and (alpha-char-p ch) (lower-case-p ch) (char-upcase ch))) "Is this not pung?") "STHISNOTPUNG")
+   (equal (filter #'(lambda (ch) (and (alpha-char-p ch) (lower-case-p ch) (char-upcase ch))) (coerce "Is this not pung?" 'list)) '(#\S #\T #\H #\I #\S #\N #\O #\T #\P #\U #\N #\G))))
+
+(deftest test-longerp ()
+  (check
+   (longerp '(a b c) '(d e))
+   (not (longerp '(a b c) '(d e f)))
+   (not (longerp '(a b c) '(d e f g)))
+   (longerp "abc" "de")
+   (not (longerp "abc" "def"))
+   (not (longerp "abc" "defg"))
+   (longerp [1 2 3] [4 5])
+   (not (longerp [1 2 3] [4 5 6]))
+   (not (longerp [1 2 3] [4 5 6 7]))))
 

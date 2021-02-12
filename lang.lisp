@@ -448,12 +448,16 @@
 ;; 	for i from 1
 ;; 	while (<= i n) collect elt))
 
+;;;
+;;;   This version simply returns all elements if n > length.
+;;;   -Trying to avoid calling LENGTH on list...
+;;;   
 (defun take (n seq)
   "Take the first N elements of sequence SEQ."
   (typecase seq
-    (list (loop for i from 0 below n
-                    for elt in seq
-                    collect elt))
+    (list (loop repeat n
+                for elt in seq
+                collect elt))
     (vector (subseq seq 0 (min n (length seq)))) ))
 
 ;; (defun take (l n)
@@ -477,50 +481,49 @@
 ;;   (list (butlast l (- (length l) n))
 ;; 	(nthcdr n l)))
 
+;;;
+;;;    Using queue since LOOP semantics are so goofy!!
+;;;    
 (defun take-drop (n seq)
-  "Split a list at the Nth element. Return the sublists before and after."
+  "Split a sequence at the Nth element. Return the subsequences before and after."
   (assert (typep n `(integer 0))
           (n)
           "N must be a non-negative integer.")
   (typecase seq
-    (list ;(if (zerop n) <-- Unnecessary when using queue explicitly. Only needed with LOOP version?
-          ;    (values '() seq)
-              (do ((q (make-linked-queue))
-                   (tail seq (rest tail))
-                   (i 0 (1+ i)))
-                  ((or (= i n) (endp tail)) (values (elements q) tail))
-                (enqueue q (first tail)))); )
+    (list (do ((q (make-linked-queue))
+               (tail seq (rest tail))
+               (i 0 (1+ i)))
+              ((or (= i n) (endp tail)) (values (elements q) tail))
+            (enqueue q (first tail))))
+    (vector (values (take n seq) (drop n seq)))) ) ; Works for strings too
+
+;;;
+;;;    Why is this so hard to get right?!?
+;;;    - Problem cases: N = 0, N > length
+;;;    (Inconsistency with CLISP???)
+;;;    
+;; (defun take-drop (n seq)
+;;   "Split a sequence at the Nth element. Return the subsequences before and after."
+;;   (assert (typep n `(integer 0))
+;;           (n)
+;;           "N must be a non-negative integer.")
+;;   (typecase seq
+;;     (list (if (zerop n) ;<-- Unnecessary when using queue explicitly. Only needed with LOOP version?
+;;               (values '() seq)
 ;;               (loop for i from 0 below n
 ;;                     for elt in seq
 ;;                     for tail on seq
 ;;                     collect elt into q
 ;;                     do (print (list i elt q tail))
 ;;                     finally (return (values q #- :clisp (rest tail) #+ :clisp tail))) ))
-    (vector (values (take n seq) (drop n seq)))) ) ; Works for strings too
+;;     (vector (values (take n seq) (drop n seq)))) ) ; Works for strings too
 
-;; (defun empty-seq (in)
-;;   (map (type-of in) #'identity in))
-
-;; (defun empty-seq (in)
-;;   (make-sequence (type-of in) 0))
-
-(defun empty-seq (in)
-  (typecase in
-    (list (list))
-    (string (make-string 0))
-    (vector (vector))))
-
-;; (defun take-drop (l n)
-;;   "Split a list at the Nth element. Return the sublists before and after."
-;;   (assert (typep n `(integer 0 ,(length l)))
-;; 	  (n)
-;; 	  "N must be a non-negative integer less than or equal to ~D."
-;; 	  (length l))
-;;   (do ((q (make-linked-queue))
-;;        (tail l (rest tail))
-;;        (i 0 (1+ i)))
-;;       ((= i n) (values (elements q) tail))
-;;     (enqueue q (first tail))))
+;; (defun take-drop (n seq)
+;;   (loop repeat n
+;;         for elt in seq
+;;         for tail on (rest seq)
+;;         collect elt into take
+;;         finally (return (values take tail))))
 
 ;; (defun take-drop (l n)
 ;;   "Split a list at the Nth element. Return the sublists before and after."
@@ -533,6 +536,18 @@
 ;; 		   (t (take-drop-aux (cdr l) (1- n) (cons (car l) take)))) ))
 ;;     (take-drop-aux l n '())))
 
+
+;; (defun empty-seq (in)
+;;   (map (type-of in) #'identity in))
+
+;; (defun empty-seq (in)
+;;   (make-sequence (type-of in) 0))
+
+(defun empty-seq (in)
+  (typecase in
+    (list (list))
+    (string (make-string 0))
+    (vector (vector))))
 
 (defun prefix-generator (l)
   (let ((q (make-linked-queue))
@@ -775,27 +790,6 @@
         (compare seq1 seq2)
         (> (length seq1) (length seq2)))) )
 
-;; (defun longerp (l1 l2)
-;;   (labels ((compare (l1 l2)
-;; 	     (and (consp l1)
-;; 		  (or (null l2)
-;; 		      (compare (cdr l1) (cdr l2)))) ))
-;;     (if (and (listp l1) (listp l2))
-;; 	(compare l1 l2)
-;; 	(> (length l1) (length l2)))) )
-
-;; (deftest test-longerp ()
-;;   (check
-;;    (longerp '(a b c) '(d e))
-;;    (not (longerp '(a b c) '(d e f)))
-;;    (not (longerp '(a b c) '(d e f g)))
-;;    (longerp "abc" "de")
-;;    (not (longerp "abc" "def"))
-;;    (not (longerp "abc" "defg"))
-;;    (longerp [1 2 3] [4 5])
-;;    (not (longerp [1 2 3] [4 5 6]))
-;;    (not (longerp [1 2 3] [4 5 6 7]))))
-
 ;;;
 ;;;    This collects the _values_ of applying the function to elts, not
 ;;;    the elts themselves. Different from REMOVE-IF-NOT!
@@ -808,24 +802,35 @@
     (vector (loop for elt across seq
                   for val = (funcall f elt)
                   when val collect val into result
-                  finally (return (coerce result 'vector)))) ))
+                  finally (return (coerce result (if (stringp seq) 'string 'vector)))) )))
+
+;; (defun filter (f seq)
+;;   (labels ((filter-seq ()
+;;              (let ((result '()))
+;;                (map nil #'(lambda (elt)
+;;                             (let ((val (funcall f elt)))
+;;                               (when val (push val result))))
+;;                     seq)
+;;                (nreverse result))))
+;;     (typecase seq
+;;       (list (filter-seq))
+;;       (string (coerce (filter-seq) 'string))
+;;       (vector (coerce (filter-seq) 'vector)))) )
 
 ;; (defun filter (fn list)
 ;;   (let ((acc '()))
-;;     (dolist (x list)
-;;       (let ((val (funcall fn x)))
-;; 	(when val (push val acc))))
-;;     (nreverse acc)))
+;;     (dolist (elt list (nreverse acc))
+;;       (let ((val (funcall fn elt)))
+;; 	(when val (push val acc)))) ))
 
 ;;;
+;;;    Conventional FILTER below. Not Graham's.
 ;;;    Collect elts that pass test.
 ;;;    
 ;; (defun filter (fn list)
 ;;   (let ((acc '()))
-;;     (dolist (x list)
-;;       (let ((val (funcall fn x)))
-;; 	(when val (push x acc))))
-;;     (nreverse acc)))
+;;     (dolist (elt list (nreverse acc))
+;;       (when (funcall fn elt) (push elt acc)))) )
 
 ;; (defun filter (f seq)
 ;;   (remove-if-not f seq))
@@ -860,7 +865,7 @@
 
 (defun group (l n)
   (loop for take-drop = (multiple-value-list (take-drop n l))
-                   then (multiple-value-list (take-drop n (second take-drop)))
+                        then (multiple-value-list (take-drop n (second take-drop)))
         until (null (first take-drop))
         collect (first take-drop)))
 
@@ -1603,8 +1608,12 @@
                  (analyze-tree (cdr obj)))) ))      
 
 (defmacro defchain (var vals)
-  (let ((chain (mapcar #'list vals (append (rest vals) (list (first vals)))) ))
+  (let ((chain (mapcar #'(lambda (key val) `(,key ',val)) vals (append (rest vals) (list (first vals)))) ))
     `(case ,var ,@chain)))
+
+;; (defmacro defchain (var vals)
+;;   (let ((chain (mapcar #'list vals (append (rest vals) (list (first vals)))) ))
+;;     `(case ,var ,@chain)))
 
 
 (defun array-indices (a row-major-index)
