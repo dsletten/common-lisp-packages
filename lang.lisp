@@ -47,9 +47,10 @@
            :macroexpand-all :make-identity-matrix :make-range
            :map-> :map-array :map-array-index :map0-n :map1-n :mapa-b :mapcars :mappend :mapset
            :memoize :mklist :mkstr :most :mostn
-           :ppmx :prefixp :print-plist :prompt :prompt-read :prune :prune-if-not
+           :ppmx :prefixp :print-plist :prompt :prompt-read :prune-if :prune-if-not
            :read-num :repeat :reread :rmapcar 
            :rotate0 :rotate-list0 :rotate1 :rotate-list1
+           :same-shape-tree-p
            :shift0 :shift-list0 :shift1 :shift-list1
            :show-symbols :shuffle :singlep :sort-symbol-list :splice
            :split-if :starts-with :symb
@@ -894,27 +895,21 @@
 ;;                                    (flatten-aux (cdr obj) results)))) ))
 ;;     (flatten-aux obj '()))) 
 
-(defun prune (pred obj)
-  (labels ((prune-aux (obj acc)
-             (cond ((null obj) (nreverse acc))
-                   ((atom (car obj)) (prune-aux (cdr obj)
-                                                (if (funcall pred (car obj))
+(defun prune-if (pred tree)
+  "Remove all leaves of TREE for which PRED is true. Like REMOVE-IF for trees."
+  (labels ((prune-aux (tree acc)
+             (cond ((null tree) (nreverse acc))
+                   ((atom (car tree)) (prune-aux (cdr tree)
+                                                (if (funcall pred (car tree))
                                                     acc
-                                                    (cons (car obj) acc))))
-                   (t (prune-aux (cdr obj)
-                                 (cons (prune-aux (car obj) '()) acc)))) ))
-    (prune-aux obj '())))
+                                                    (cons (car tree) acc))))
+                   (t (prune-aux (cdr tree)
+                                 (cons (prune-aux (car tree) '()) acc)))) ))
+    (prune-aux tree '())))
 
-(defun prune-if-not (pred obj)
-  (labels ((prune-aux (obj acc)
-             (cond ((null obj) (nreverse acc))
-                   ((atom (car obj)) (prune-aux (cdr obj)
-                                                (if (funcall pred (car obj))
-                                                    (cons (car obj) acc)
-                                                    acc)))
-                   (t (prune-aux (cdr obj)
-                                 (cons (prune-aux (car obj) '()) acc)))) ))
-    (prune-aux obj '())))
+(defun prune-if-not (pred tree)
+  "Remove all leaves of TREE for which PRED is not true. Like REMOVE-IF-NOT for trees."
+  (prune-if (complement pred) tree))
 
 ;;;
 ;;;    Graham describes this (find2) as a combination of FIND-IF and SOME. It returns
@@ -947,19 +942,43 @@
 ;;;    Does X occur before Y in list?
 ;;;    Y need not actually occur in the list! (See AFTER)
 ;;;    
-(defun before (x y list &key (test #'eql))
-  (and list
-       (let ((first (car list)))
-	 (cond ((funcall test y first) nil)
-	       ((funcall test x first) list)
-	       (t (before x y (cdr list) :test test)))) ))
+;; (defun before (x y list &key (test #'eql))
+;;   (and list
+;;        (let ((first (car list)))
+;; 	 (cond ((funcall test y first) nil)
+;; 	       ((funcall test x first) list)
+;; 	       (t (before x y (cdr list) :test test)))) ))
 
-(defun after (x y list &key (test #'eql))
-  (let ((rest (before y x list :test test)))
-    (and rest (member x rest :test test))))
+;;    Do we reach X _before_ we see Y?
+(defun before (x y seq &key (test #'eql))
+  "Does X occur before Y in SEQ? This is true whenever X occurs without Y having yet been encountered, 
+i.e., even if Y is not actually in the sequence. For a positive result, returns the rest of the list or
+the index of the position immediately following X."
+  (typecase seq
+    (null nil)
+    (list (loop for (elt . rest) on seq
+                when (funcall test y elt) return nil
+                when (funcall test x elt) return rest))
+    (vector (loop for elt across seq
+                  for i from 1
+                  when (funcall test y elt) return nil
+                  when (funcall test x elt) return i))))
 
-(defun duplicate (obj list &key (test #'eql))
-  (member obj (cdr (member obj list :test test)) :test test))
+;;    Do we reach X only _after_ we see Y?
+(defun after (x y seq &key (test #'eql))
+  "Does X occur after Y in SEQ? X must explicitly and exclusively be present after Y."
+  (let ((rest (before y x seq :test test)))
+    (typecase seq
+      (list (and rest (member x rest :test test)))
+      (vector (and rest (position x seq :start rest :test test)))) ))
+
+(defun duplicate (obj seq &key (test #'eql))
+  (typecase seq
+    (list (member obj (rest (member obj seq :test test)) :test test))
+    (vector (let ((initial (position-if #'(lambda (elt) (funcall test obj elt)) seq)))
+              (if initial
+                  (position-if #'(lambda (elt) (funcall test obj elt)) seq :start (1+ initial))
+                  nil)))) )
 
 (defun split-if (fn list)
   (let ((acc '()))
@@ -1003,6 +1022,13 @@
                   ((= score max)
                    (push obj result)))))
         (values (nreverse result) max))))
+
+;;;
+;;;    PAIP pg. 76
+;;;    
+(defun same-shape-tree-p (a b)
+  "Do trees A and B have the same structure even if values are different?"
+  (tree-equal a b :test (constantly t)))
 
 ;;;
 ;;;    What about nil as an element?

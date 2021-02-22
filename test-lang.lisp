@@ -279,3 +279,60 @@
    (equal (group "Is this not pung?" 2) '("Is" " t" "hi" "s " "no" "t " "pu" "ng" "?"))
    (equal (group "Is this not pung?" 11) '("Is this not" " pung?"))
    (equal (group "Is this not pung?" 7) '("Is this" " not pu" "ng?"))))
+
+(deftest test-prune-if ()
+  (check
+   (equal (prune-if #'evenp '(1 2 (3 (4 5) 6) 7 8 (9))) '(1 (3 (5)) 7 (9)))
+   (equal (prune-if #'(lambda (elt) (< elt 4)) '(1 2 (3 (4 5) 6) 7 8 (9))) '(((4 5) 6) 7 8 (9)))) )
+
+(deftest test-prune-if-not ()
+  (check
+   (equal (prune-if-not #'evenp '(1 2 (3 (4 5) 6) 7 8 (9))) '(2 ((4) 6) 8 ()))
+   (equal (prune-if-not #'(lambda (elt) (< elt 4)) '(1 2 (3 (4 5) 6) 7 8 (9))) '(1 2 (3 ()) ()))) )
+
+(deftest test-same-shape-tree-p ()
+  (check
+   (same-shape-tree-p '(((a) a (a) (a) ((a (a (a (a a) a)) a) a) a) a a) '(((:a) :a (:a) (:a) ((:a (:a (:a (:a :a) :a)) :a) :a) :a) :a :a))
+   (not (same-shape-tree-p '(((a) a (a) (a) (((a (a (a a) a)) a) a) a) a a) '(((:a) :a (:a) (:a) ((:a (:a (:a (:a :a) :a)) :a) :a) :a) :a :a)))) )
+
+(deftest test-before ()
+  (check
+   (equal (before 'a 'b '(a b c d)) '(B C D))
+   (not (before 'a 'b '()))
+   (not (before 'a 'b '(b a c d)))
+   (equal (before 'a 'b '(a c d)) '(C D))
+   (= (before #\p #\u "Is this not pung?") 13)
+   (not (before #\p #\u "Is this not Pung?"))
+   (= (before #\p #\u "Is this not Pung?" :test #'char-equal) 13)
+   (not (before #\u #\p "Is this not pung?"))
+   (not (before '(a b) '(c d) (vector '(:a) "foo" '(a b) '(c d))))
+   (= (before '(a b) '(c d) (vector '(:a) "foo" '(a b) '(c d)) :test #'equal) 3)))
+
+(deftest test-after ()
+  (check
+   (equal (after 'b 'a '(a b c d)) '(B C D))
+   (equal (after 'd 'a '(a b c d)) '(D))
+   (not (after 'a 'b '(a b c d)))
+   (not (after 'a 'a '(a b c a d)))
+   (= (after 'b 'a '#(a b c d)) 1)
+   (= (after 'd 'a '#(a b c d)) 3)
+   (not (after 'e 'a '#(a b c d)))
+   (not (after 'a 'b '#(a b c d)))
+   (= (after #\u #\p "Is this not pung?") 13)
+   (= (after #\i #\s "Is this not pung?") 5)
+   (not (after #\i #\s "Is this not pung?" :test #'char-equal))
+   (not (after 2 0 #(4 6 8 0 2.0 3 5 7 9)))
+   (after 2 0 #(4 6 8 0 2.0 3 5 7 9) :test #'=)))
+        
+(deftest test-duplicate ()
+  (check
+   (not (duplicate 'a '(a b c d)))
+   (equal (duplicate 'a '(a b c d a e f g)) '(A E F G))
+   (not (duplicate #\a "abcd"))
+   (= (duplicate #\a "abcdaefg") 4)
+   (not (duplicate #\a "abcdAEFG"))
+   (= (duplicate #\a "abcdAEFG" :test #'char-equal) 4)
+   (not (duplicate 2 #(2 4 6 8)))
+   (= (duplicate 2 #(2 4 6 8 0 2 3 5 7 9)) 5)
+   (not (duplicate 2 #(2 4 6 8 0 2.0 3 5 7 9)))
+   (= (duplicate 2 #(2 4 6 8 0 2.0 3 5 7 9) :test #'=) 5)))
