@@ -36,12 +36,12 @@
 (defpackage :lang
   (:shadowing-import-from :collections :intersection :set :subsetp :union)
   (:use :common-lisp :collections)
-  (:export :after :append1 :approximately= :array-indices :before :best
+  (:export :after :append1 :approximately= :array-indices :before :best :best-worst
            :class-template :compose :conc1 :copy-array :cycle
            :defchain :destructure :dohash :doset :dostring :dotuples :dovector :drop :duplicate
            :ends-with :expand :explode
            :fif :filter :filter-split :find-some-if :find-subtree :fint :firsts-rests :flatten :fun
-           :get-num :group :horners
+           :get-num :group :high-low :high-low-n :horners
 	   :is-integer
            :last1 :list-to-string :longerp
            :macroexpand-all :make-identity-matrix :make-range
@@ -146,18 +146,6 @@
 ;;     (and (>= length1 length2)
 ;;          (every test s1 s2))))
   
-;; (deftest test-starts-with ()
-;;   (check   
-;;     (starts-with "Is this not pung?" "Is")
-;;     (starts-with "Is" "Is")
-;;     (starts-with (subseq "Is this not pung?" 12) "pung")
-;;     (not (starts-with "Is this not pung?" "is"))
-;;     (starts-with "Is this not pung?" "is" :test #'equalp)
-;;     (starts-with '(a b c) '(a b))
-;;     (starts-with '(a b) '(a b))
-;;     (starts-with (subseq [1 2 3 4 5] 2) [3 4])
-;;     (starts-with #[1 10] #[1 3])))
-
 ;; (defun ends-with (s1 s2 &key (test #'eql))
 ;;   "Determines whether or not the second sequence arg is the ending subsequence of the first arg."
 ;;   (let ((length1 (length s1))
@@ -169,16 +157,6 @@
 (defun ends-with (s1 s2 &key (test #'eql))
   "Determines whether or not the second sequence arg is the ending subsequence of the first arg."
   (not (mismatch s1 s2 :start1 (max (- (length s1) (length s2)) 0) :test test :from-end t)))
-
-;; (deftest test-ends-with ()
-;;   (check   
-;;     (ends-with "Is this not pung?" "pung?")
-;;     (ends-with (subseq "Is this not pung?" 0 7) "this")
-;;     (not (ends-with "Is this not pung?" "PUNG?"))
-;;     (ends-with "Is this not pung?" "PUNG?" :test #'equalp)
-;;     (ends-with '(a b c) '(b c))
-;;     (ends-with (subseq [1 2 3 4 5] 0 4) [3 4])
-;;     (ends-with #[1 10] #[8 10])))
 
 (defun prompt-read (prompt &rest keys &key (allow-empty t) (trim t) test)
   (labels ((validate (response)
@@ -484,7 +462,7 @@
 
 ;;;
 ;;;    Using queue since LOOP semantics are so goofy!!
-;;;    
+;;;    See SPLIT-IF
 (defun take-drop (n seq)
   "Split a sequence at the Nth element. Return the subsequences before and after."
   (assert (typep n `(integer 0))
@@ -794,6 +772,9 @@
 ;;;
 ;;;    This collects the _values_ of applying the function to elts, not
 ;;;    the elts themselves. Different from REMOVE-IF-NOT!
+;;;
+;;;    More efficient version of: (mapcar #'f (remove-if-not #'f seq))
+;;;    FILTER uses the result of applying F to determine which elements to keep.
 ;;;    
 (defun filter (f seq)
   (typecase seq
@@ -867,26 +848,57 @@
 ;;;
 ;;;    See Clojure partition-all
 ;;;    
-(defun group (l n)
+(defun group (seq n)
   (flet ((emptyp (seq)
            (typecase seq
              (list (null seq))
              (vector (zerop (length seq)))) ))
-    (loop for take-drop =      (multiple-value-list (take-drop n l))
+    (loop for take-drop =      (multiple-value-list (take-drop n seq))
                           then (multiple-value-list (take-drop n (second take-drop)))
           until (emptyp (first take-drop))
           collect (first take-drop))))
 
-(defun flatten (tree)
-  (labels ((flatten-aux (tree result)
-             (cond ((null tree) (nreverse result))
-                   ((null (car tree)) (flatten-aux (cdr tree) result))
-                   ((atom (car tree)) (flatten-aux (cdr tree) (cons (car tree) result)))
-                   (t (flatten-aux (list* (caar tree) (cdar tree) (cdr tree)) result)))) )
-    (if (atom tree)
-        tree
-        (flatten-aux tree '()))) )
+(defun group-until (f seq)
+  "Group elements of SEQ into a subsequence until F returns true for that subsequence, then start next subsequence."
+  (let ((groups (reduce #'(lambda (groups elt)
+                            (destructuring-bind (current . result) groups
+                              (if (funcall f (cons elt current))
+                                  (cons (list elt) (cons (nreverse current) result))
+                                  (cons (cons elt current) result))))
+                        seq
+                        :initial-value (cons '() '()))) )
+    (destructuring-bind (current . result) groups
+      (nreverse (cons (nreverse current) result)))) )
 
+;;;
+;;;    This is not tail-recursive, so it will fail with a large enough (?!) tree.
+;;;    (length (flatten (loop repeat 100000 collect t))) => 100000
+;; INFO: Control stack guard page unprotected
+;; Control stack guard page temporarily disabled: proceed with caution
+
+;; debugger invoked on a SB-KERNEL::CONTROL-STACK-EXHAUSTED in thread
+;; #<THREAD "main thread" RUNNING {10005204C3}>:
+;;   Control stack exhausted (no more space for function call frames).
+;; This is probably due to heavily nested or infinitely recursive function
+;; calls, or a tail call that SBCL cannot or has not optimized away.
+
+;;;
+;;;    Third version:
+;;;    (length (flatten (loop repeat 100000 collect t))) => 100000
+;;;    
+;;;    But it is substantially faster than the third version since that one CONSes a lot more.
+;;;    (Although that one is pretty fast too...)
+;;;    
+;; (defun flatten (l)
+;;   (labels ((flatten-aux (l result)
+;;              (cond ((endp l) result)
+;;                    ((listp (first l)) (flatten-aux (first l) (flatten-aux (rest l) result)))
+;;                    (t (cons (first l) (flatten-aux (rest l) result)))) ))
+;;     (flatten-aux l '())))
+
+;;;
+;;;    Also not tail-recursive. Almost as fast as previous one. (Same as On Lisp version.)
+;;;    
 ;; (defun flatten (obj)
 ;;   (labels ((flatten-aux (obj results)
 ;;              (cond ((null obj) results)
@@ -895,6 +907,28 @@
 ;;                                    (flatten-aux (cdr obj) results)))) ))
 ;;     (flatten-aux obj '()))) 
 
+;; (defun flatten (tree)
+;;   (labels ((flatten-aux (tree result)
+;;              (cond ((null tree) (nreverse result))
+;;                    ((null (car tree)) (flatten-aux (cdr tree) result))
+;;                    ((atom (car tree)) (flatten-aux (cdr tree) (cons (car tree) result)))
+;;                    (t (flatten-aux (list* (caar tree) (cdar tree) (cdr tree)) result)))) )
+;;     (if (atom tree)
+;;         tree
+;;         (flatten-aux tree '()))) )
+
+(defun flatten (tree)
+  (labels ((flatten-aux (tree result)
+             (cond ((null tree) (nreverse result))
+                   ((null (car tree)) (flatten-aux (cdr tree) result))
+                   ((atom (car tree)) (flatten-aux (cdr tree) (cons (car tree) result)))
+                   (t (destructuring-bind ((head . tail1) . tail2) tree
+                        (flatten-aux (list* head tail1 tail2) result)))) ))
+    (if (atom tree)
+        tree
+        (flatten-aux tree '()))) )
+
+;; See prune.lisp
 (defun prune-if (pred tree)
   "Remove all leaves of TREE for which PRED is true. Like REMOVE-IF for trees."
   (labels ((prune-aux (tree acc)
@@ -932,11 +966,16 @@
 ;;     (when val
 ;;       (return (values elt val)))) )
 
-(defun find-some-if (f list)
-  (loop for elt in list
-        for val = (funcall f elt)
-        when val
-        return (values elt val)))
+(defun find-some-if (f seq)
+  (typecase seq
+    (list (loop for elt in seq
+                for val = (funcall f elt)
+                when val
+                return (values elt val)))
+    (vector (loop for elt across seq
+                  for val = (funcall f elt)
+                  when val
+                  return (values elt val)))) )
 
 ;;;
 ;;;    Does X occur before Y in list?
@@ -968,25 +1007,35 @@ the index of the position immediately following X."
 (defun after (x y seq &key (test #'eql))
   "Does X occur after Y in SEQ? X must explicitly and exclusively be present after Y."
   (let ((rest (before y x seq :test test)))
-    (typecase seq
-      (list (and rest (member x rest :test test)))
-      (vector (and rest (position x seq :start rest :test test)))) ))
+    (if (null rest)
+        nil
+        (typecase seq
+          (list (member x rest :test test))
+          (vector (position x seq :start rest :test test)))) ))
 
 (defun duplicate (obj seq &key (test #'eql))
+  "Are there duplicate instances of OBJ in SEQ as determined by TEST? If so return the tail of the list starting with the duplicate or the index in the sequence of the duplicate."
   (typecase seq
     (list (member obj (rest (member obj seq :test test)) :test test))
-    (vector (let ((initial (position-if #'(lambda (elt) (funcall test obj elt)) seq)))
+    (vector (let ((initial (position obj seq :test test)))
               (if initial
-                  (position-if #'(lambda (elt) (funcall test obj elt)) seq :start (1+ initial))
+                  (position obj seq :start (1+ initial) :test test)
                   nil)))) )
 
-(defun split-if (fn list)
-  (let ((acc '()))
-    (do ((src list (cdr src)))
-	((or (null src)
-	     (funcall fn (car src)))
-	 (values (nreverse acc) src))
-      (push (car src) acc))))
+;;;
+;;;    See TAKE-DROP
+;;;    (This is sort of DROP-WHILE/TAKE-WHILE)
+;;;    Or MEMBER-IF that returns both parts of sequence.
+;;;    
+(defun split-if (f seq)
+  "Split a sequence into the initial subsequence of all elements that fail the given test and the remaining subsequence from the first element which passes the test."
+  (typecase seq
+    (list (do ((q (make-linked-queue))
+               (tail seq (rest tail)))
+              ((or (endp tail) (funcall f (first tail))) (values (elements q) tail))
+            (enqueue q (first tail))))
+    (vector (let ((initial (or (position-if f seq) 0)))
+              (values (take initial seq) (drop initial seq)))) ))
 
 (defun most (fn list)
   (if (null list)
@@ -1000,6 +1049,154 @@ the index of the position immediately following X."
 		    max score))))
         (values wins max))))
 
+;;;
+;;;    This works, but it CONSes a lot!
+;;;    
+(defun most (f seq)
+  "Locate the first element in SEQ that yields the highest value when F is applied. The secondary value is the value returned by F for that element."
+  (let ((first (elt seq 0)))
+    (values-list (reduce #'(lambda (winner elt)
+                             (let ((score (funcall f elt)))
+                               (if (> score (second winner))
+                                   (list elt score)
+                                   winner)))
+                         seq
+                         :initial-value (list first (funcall f first)))) ))
+
+;;;
+;;;    Not totally FP!!
+;;;    
+(defun most (f seq)
+  "Locate the first element in SEQ that yields the highest value when F is applied. The secondary value is the value returned by F for that element."
+  (let* ((winner (elt seq 0))
+         (max (reduce #'(lambda (max elt)
+                          (let ((score (funcall f elt)))
+                            (cond ((> score max) (setf winner elt) score)
+                                  (t max))))
+                      seq
+                      :initial-value (funcall f winner))))
+    (values winner max)))
+
+(defun most (f seq)
+  (labels ((most-list (seq winner max)
+             (if (endp seq)
+                 (values winner max)
+                 (let* ((elt (first seq))
+                        (score (funcall f elt)))
+                   (if (> score max)
+                       (most-list (rest seq) elt score)
+                       (most-list (rest seq) winner max)))) )
+           (most-vector (i winner max)
+             (if (= i (length seq))
+                 (values winner max)
+                 (let* ((elt (elt seq i))
+                        (score (funcall f elt)))
+                   (if (> score max)
+                       (most-vector (1+ i) elt score)
+                       (most-vector (1+ i) winner max)))) ))
+    (typecase seq
+      (list (if (null seq)
+                nil
+                (most-list (rest seq) (first seq) (funcall f (first seq)))) )
+      (vector (if (zerop (length seq))
+                  nil
+                  (most-vector 1 (elt seq 0) (funcall f (elt seq 0)))) ))))
+
+(defun most (f seq)
+  "Locate the first element in SEQ that yields the highest value when F is applied. The secondary value is the value returned by F for that element."
+  (typecase seq
+    (list (if (null seq)
+              nil
+              (loop with winner = (first seq)
+                    with max = (funcall f winner)
+                    for elt in (rest seq)
+                    for score = (funcall f elt)
+                    when (> score max) do (setf winner elt max score)
+                    finally (return (values winner max)))) )
+    (vector (if (zerop (length seq))
+                nil
+                (loop with winner = (elt seq 0)
+                      with max = (funcall f winner)
+                      for i from 1 below (length seq)
+                      for elt = (elt seq i)
+                      for score = (funcall f elt)
+                      when (> score max) do (setf winner elt max score)
+                      finally (return (values winner max)))) )))
+
+;;;
+;;;    These are nice but they don't handle capturing the element itself...
+;;;    
+;; (defun most (f seq)
+;;   (reduce #'(lambda (winner elt)
+;;               (let ((score (funcall f elt)))
+;;                 (if (> score winner)
+;;                     score
+;;                     winner)))
+;;           seq
+;;           :initial-value (funcall f (elt seq 0))))
+
+;; (defun most (f seq)
+;;   (typecase seq
+;;     (list (loop for elt in seq maximize (funcall f elt)))
+;;     (vector (loop for elt across seq maximize (funcall f elt)))) )
+
+;;;
+;;; Compare MOST
+;;;
+(defun high-low (f seq)
+  (labels ((high-low-list (seq winner max loser min)
+             (if (endp seq)
+                 (values winner max loser min)
+                 (let* ((elt (first seq))
+                        (score (funcall f elt)))
+                   (cond ((> score max) (high-low-list (rest seq) elt score loser min))
+                         ((< score min) (high-low-list (rest seq) winner max elt score))
+                         (t (high-low-list (rest seq) winner max loser min)))) ))
+           (high-low-vector (i winner max loser min)
+             (if (= i (length seq))
+                 (values winner max loser min)
+                 (let* ((elt (elt seq i))
+                        (score (funcall f elt)))
+                   (cond ((> score max) (high-low-vector (1+ i) elt score loser min))
+                         ((< score min) (high-low-vector (1+ i) winner max elt score))
+                         (t (high-low-vector (1+ i) winner max loser min)))) )))
+    (typecase seq
+      (list (if (null seq)
+                nil
+                (let ((starter (funcall f (first seq))))
+                  (high-low-list (rest seq) (first seq) starter (first seq) starter))))
+      (vector (if (zerop (length seq))
+                  nil
+                  (let ((starter (funcall f (elt seq 0))))
+                    (high-low-vector 1 (elt seq 0) starter (elt seq 0) starter)))) )))
+
+(defun high-low (f seq)
+  "Locate the first elements in SEQ that yield the highest/lowest value when F is applied. The values returned by F for those elements are also returned."
+  (typecase seq
+    (list (if (null seq)
+              nil
+              (loop with winner = (first seq)
+                    with loser = winner
+                    with max = (funcall f winner)
+                    with min = max
+                    for elt in (rest seq)
+                    for score = (funcall f elt)
+                    when (> score max) do (setf winner elt max score)
+                    else when (< score min) do (setf loser elt min score)
+                    finally (return (values winner max loser min)))) )
+    (vector (if (zerop (length seq))
+                nil
+                (loop with winner = (elt seq 0)
+                      with loser = winner
+                      with max = (funcall f winner)
+                      with min = max
+                      for i from 1 below (length seq)
+                      for elt = (elt seq i)
+                      for score = (funcall f elt)
+                      when (> score max) do (setf winner elt max score)
+                      else when (< score min) do (setf loser elt min score)
+                      finally (return (values winner max loser min)))) )))
+
 (defun best (fn list)
   (if (null list)
       nil
@@ -1008,6 +1205,66 @@ the index of the position immediately following X."
           (when (funcall fn obj wins)
 	    (setq wins obj)))
         wins)))
+
+(defun best (f seq)
+  ""
+  (typecase seq
+    (list (if (null seq)
+              nil
+              (loop with winner = (first seq)
+                    for elt in (rest seq)
+                    when (funcall f elt winner) do (setf winner elt)
+                    finally (return winner))))
+    (vector (if (zerop (length seq))
+                nil
+                (loop with winner = (elt seq 0)
+                      for i from 1 below (length seq)
+                      for elt = (elt seq i)
+                      when (funcall f elt winner) do (setf winner elt)
+                      finally (return winner)))) ))
+
+(defun best (f seq)
+  "Return the first element as if the elements of SEQ were sorted by means of F."
+  (reduce #'(lambda (winner elt)
+              (if (funcall f elt winner)
+                  elt
+                  winner))
+          seq))
+
+;;;
+;;;    CONSes!
+;;;    
+(defun best-worst (f seq)
+  "Return the first and last elements as if the elements of SEQ were sorted by means of F."
+  (let ((first (elt seq 0))) ; Assumes not empty?!
+    (values-list (reduce #'(lambda (winner elt)
+                             (destructuring-bind (max min) winner
+                               (cond ((funcall f elt max) (list elt min))
+                                     ((funcall f min elt) (list max elt))
+                                     (t winner))))
+                         seq
+                         :initial-value (list first first)))) )
+
+(defun best-worst (f seq)
+  "Return the first and last elements as if the elements of SEQ were sorted by means of F."
+  (typecase seq
+    (list (if (null seq)
+              nil
+              (loop with winner = (first seq)
+                    with loser = winner
+                    for elt in (rest seq)
+                    when (funcall f elt winner) do (setf winner elt)
+                    else when (funcall f loser elt) do (setf loser elt)
+                    finally (return (values winner loser)))) )
+    (vector (if (zerop (length seq))
+                nil
+                (loop with winner = (elt seq 0)
+                      with loser = winner
+                      for i from 1 below (length seq)
+                      for elt = (elt seq i)
+                      when (funcall f elt winner) do (setf winner elt)
+                      else when (funcall f loser elt) do (setf loser elt)
+                      finally (return (values winner loser)))) )))
 
 (defun mostn (fn list)
   (if (null list)
@@ -1022,6 +1279,98 @@ the index of the position immediately following X."
                   ((= score max)
                    (push obj result)))))
         (values (nreverse result) max))))
+
+(defun mostn (f seq)
+  (let* ((first (elt seq 0))
+         (results (reduce #'(lambda (winner elt)
+                              (let ((score (funcall f elt)))
+                                (destructuring-bind (winners high-score) winner
+                                  (cond ((> score high-score) (list (list elt) score))
+                                        ((= score high-score) (list (cons elt winners) high-score))
+                                        (t winner)))) )
+                          seq
+                          :initial-value (list '() (funcall f first)))) )
+    (values (nreverse (first results)) (second results))))
+
+(defun mostn (f seq)
+  "Locate all elements in SEQ that yield the highest value when F is applied. The secondary value is the value returned by F for those elements."
+  (typecase seq
+    (list (if (null seq)
+              nil
+              (loop with winners = (make-linked-queue)
+                    with max = (funcall f (first seq))
+                    for elt in seq
+                    for score = (funcall f elt)
+                    if (= score max)
+                      do (enqueue winners elt)
+                    else if (> score max)
+                      do (make-empty winners)
+                         (enqueue winners elt)
+                         (setf max score)
+                    end
+                    finally (return (values (elements winners) max)))) )
+    (vector (if (zerop (length seq))
+                nil
+                (loop with winners = (make-linked-queue)
+                      with max = (funcall f (elt seq 0))
+                      for elt across seq
+                      for score = (funcall f elt)
+                      if (= score max)
+                        do (enqueue winners elt)
+                      else if (> score max)
+                        do (make-empty winners)
+                           (enqueue winners elt)
+                           (setf max score)
+                      end
+                      finally (return (values (elements winners) max)))) )))
+
+(defun high-low-n (f seq)
+  "Locate all elements in SEQ that yield the highest/lowest value when F is applied. The values returned by F for those elements are also returned."
+  (typecase seq
+    (list (if (null seq)
+              nil
+              (loop with winners = (make-linked-queue)
+                    with losers = (make-linked-queue)
+                    with max = (funcall f (first seq))
+                    with min = max
+                    for elt in seq
+                    for score = (funcall f elt)
+                    if (= score max)
+                      do (enqueue winners elt)
+                    else if (> score max)
+                      do (make-empty winners)
+                         (enqueue winners elt)
+                         (setf max score)
+                    else if (= score min)
+                      do (enqueue losers elt)
+                    else if (< score min)
+                      do (make-empty losers)
+                         (enqueue losers elt)
+                         (setf min score)
+                    end
+                    finally (return (values (elements winners) max (elements losers) min)))) )
+    (vector (if (zerop (length seq))
+                nil
+                (loop with winners = (make-linked-queue)
+                      with losers = (make-linked-queue)
+                      with max = (funcall f (elt seq 0))
+                      with min = max
+                      for elt across seq
+                      for score = (funcall f elt)
+                      if (= score max)
+                        do (enqueue winners elt)
+                      else if (> score max)
+                        do (make-empty winners)
+                           (enqueue winners elt)
+                           (setf max score)
+                      else if (= score min)
+                        do (enqueue losers elt)
+                      else if (< score min)
+                        do (make-empty losers)
+                           (enqueue losers elt)
+                           (setf min score)
+                      end
+                      finally (return (values (elements winners) max (elements losers) min)))) )))
 
 ;;;
 ;;;    PAIP pg. 76
@@ -1168,9 +1517,20 @@ the index of the position immediately following X."
 ;;       ((> i b) (nreverse result))
 ;;     (push (funcall fn i) result)))
 
+;; (defun mapa-b (f a b &optional (step 1))
+;;   (loop for i from a to b by step
+;;         collect (funcall f i)))
+
+;; (defun mapa-b (f a b &optional (step 1))
+;;   (if (plusp step)
+;;       (loop for i from a to b by step collect (funcall f i))
+;;       (loop for i from a downto b by (abs step) collect (funcall f i))))
+
 (defun mapa-b (f a b &optional (step 1))
-  (loop for i from a to b by step
-        collect (funcall f i)))
+  (assert (plusp step) () "Step increment must be positive.")
+  (if (<= a b)
+      (loop for i from a to b by step collect (funcall f i))
+      (loop for i from a downto b by step collect (funcall f i))))
 
 (defun map0-n (fn n)
   (mapa-b fn 0 n))
@@ -1178,29 +1538,44 @@ the index of the position immediately following X."
 (defun map1-n (fn n)
   (mapa-b fn 1 n))
 
+;;;
+;;;
+;; (defun make-range (start &optional end (step 1))
+;;   (cond ((characterp start)
+;;          (cond ((characterp end)
+;;                 (mapcar #'code-char (make-range (char-code start)
+;;                                                 (char-code end)
+;;                                                 step)))
+;;                ;;
+;;                ;;    Does it make sense for 1-arg with character?
+;;                ((null end) (mapcar #'code-char (make-range 0
+;;                                                            (1- (char-code start))
+;;                                                            step)))
+;;                (t (error "Mismatched input types."))))
+;;         ((numberp start)
+;;          (cond ((numberp end)
+;;                 (if (> start end)
+;;                     (loop for i from start downto end by step collect i)
+;;                     (loop for i from start to end by step collect i)))
+;;                ((null end)
+;;                 (loop for i from 0 below start by step collect i))
+;;                (t (error "Mismatched input types.")))) ))
+
 (defun make-range (start &optional end (step 1))
-  (cond ((characterp start)
-         (cond ((characterp end)
-                (mapcar #'code-char (make-range (char-code start)
-                                                (char-code end)
-                                                step)))
-               ;;
-               ;;    Does it make sense for 1-arg with character?
-               ((null end) (mapcar #'code-char (make-range 0
-                                                           (1- (char-code start))
-                                                           step)))
-               (t (error "Mismatched input types."))))
-        ((numberp start)
-         (cond ((numberp end)
-                (if (> start end)
-                    (loop for i from start downto end by step collect i)
-                    (loop for i from start to end by step collect i)))
-;;                 (when (> start end)
-;;                   (rotatef start end))
-;;                 (loop for i from start to end by step collect i))
-               ((null end)
-                (loop for i from 0 below start by step collect i))
-               (t (error "Mismatched input types.")))) ))
+  (etypecase start
+    (character (typecase end
+                 (character
+                   (if (char> start end)
+                       (loop for i from (char-code start) downto (char-code end) by step collect (code-char i))
+                       (loop for i from (char-code start) to (char-code end) by step collect (code-char i))))
+                 (null (loop for i from 0 below (char-code start) by step collect (code-char i)))
+                 (otherwise (error "Mismatched input types."))))
+    (number (typecase end
+              (number (if (> start end)
+                          (loop for i from start downto end by step collect i)
+                          (loop for i from start to end by step collect i)))
+              (null (loop for i from 0 below start by step collect i))
+              (otherwise (error "Mismatched input types.")))) ))
 
 ;; (defun make-range (start end &optional (step 1))
 ;;   (cond ((characterp start)
@@ -1222,6 +1597,21 @@ the index of the position immediately following X."
       ((funcall test-fn i) (nreverse result))
     (push (funcall fn i) result)))
 
+(defun map-> (f start test step)
+  "Collect repeated application of the function F to START as it is transformed by the STEP function until TEST returns true."
+  (loop for obj = start then (funcall step obj)
+        until (funcall test obj)
+        collect (funcall f obj)))
+
+;;;
+;;;    See Clojure iterate.
+;;;    start, (f start), (f (f start)), ...
+;;;    
+(defun iterate (f start)
+  #'(lambda ()
+      (prog1 start
+        (setf start (funcall f start)))) )
+
 (defun mappend (fn &rest lsts)
   (apply #'append (apply #'mapcar fn lsts)))
 
@@ -1232,12 +1622,141 @@ the index of the position immediately following X."
 	(push (funcall fn obj) result)))
     (nreverse result)))
 
+(defun mapcars (f &rest lists)
+  "Map the function F over each element of each list argument provided."
+  (loop with result = (make-linked-queue)
+        for list in lists
+        do (loop for elt in list
+                 do (enqueue result (funcall f elt)))
+        finally (return (elements result))))
+
 (defun rmapcar (fn &rest args)
   (if (some #'atom args)
       (apply fn args)
       (apply #'mapcar #'(lambda (&rest args)
 			  (apply #'rmapcar fn args))
 	     args)))
+
+(defun rmapcar (fn &rest args)
+  (if (some #'atom args)
+      (apply fn args)
+      (apply #'mapcar #'(lambda (&rest car-args)
+			  (apply #'rmapcar fn car-args))
+	     args)))
+
+;;;    MAPCAR all args are same length...or terminate when shortest is consumed. Analog for trees?
+
+;;;
+;;;    Graham describes RMAPCAR as "a version of MAPCAR for trees". The name
+;;;    is short for "recursive MAPCAR". What MAPCAR does on flat lists, it does on trees.
+;;;
+;;;    The simplest idea would be to map a function F over a single TREE. The mapping
+;;;    function would traverse deeper into TREE until it reached the leaves and then
+;;;    apply F to the values of the leaves. But what are "the leaves"? In this simple
+;;;    case it's just a case of recursively calling the mapping function with objects
+;;;    that are not themselves CONSes, i.e., atoms.
+;;;
+;;;    But we still have to potentially deal with dotted pairs of non-NULL atoms. There
+;;;    are 2 choices here:
+;;;    1. Have the mapping function deal with NULL as a special terminator and only apply
+;;;       F to other non-NULL atoms.
+;;;
+;; (defun tree-map (f tree)
+;;   (cond ((null tree) tree)
+;;         ((atom tree) (funcall f tree))
+;;         (t (cons (tree-map f (car tree))
+;;                  (tree-map f (cdr tree)))) ))
+
+;; (tree-map  #'1+ '(1 2 (3 4 (5) 6) 7 (8 9))) => (2 3 (4 5 (6) 7) 8 (9 10))
+;; (tree-map  #'oddp '(1 2 (3 4 (5) 6) 7 (8 9))) => (T NIL (T NIL (T) NIL) T (NIL T))
+;; (tree-map  #'1+ '(1 2 (3 4 (5 . 4.2) 6 . -1) 7 (8 9 . 12))) => (2 3 (4 5 (6 . 5.2) 7 . 0) 8 (9 10 . 13))
+;; (tree-map #'string-upcase '("is" ("this" (("not") "pung?")))) => ("IS" ("THIS" (("NOT") "PUNG?")))
+;; (tree-map #'length '("is" ("this" (("not") "pung?")))) => (2 (4 ((3) 5)))
+;;;
+;;;    2. A less obvious choice would be to call F for any atoms encountered. F could
+;;;       decide what to do with NIL.
+;; (defun tree-map (f tree)
+;;   (if (atom tree)
+;;       (funcall f tree)
+;;       (cons (tree-map f (car tree))
+;;             (tree-map f (cdr tree)))) )
+
+;; (tree-map  #'(lambda (elt) (if (null elt) elt (1+ elt))) '(1 2 (3 4 (5) 6) 7 (8 9))) => (2 3 (4 5 (6) 7) 8 (9 10))
+;; (tree-map  #'(lambda (elt) (if (null elt) elt (oddp elt))) '(1 2 (3 4 (5) 6) 7 (8 9))) => (T NIL (T NIL (T) NIL) T (NIL T))
+;; (tree-map #'(lambda (elt) (if (null elt) elt (string-upcase elt))) '("is" ("this" (("not") "pung?")))) => ("IS" ("THIS" (("NOT") "PUNG?")))
+;; (tree-map #'(lambda (elt) (if (null elt) elt (length elt))) '("is" ("this" (("not") "pung?")))) => (2 (4 ((3) 5)))
+;;;
+;;;    It seems like this 2nd approach is not as useful...
+;;;    
+;;;    But to truly make this function like MAPCAR, it must be able to traverse 1+ trees simultaneously.
+;;;    When provided a single tree, it should behave as above. With multiple trees, the simplest case is
+;;;    where both trees have identical shapes and the leaves of each provide one of N args to F.
+;; (defun tree-map (f &rest trees)
+;;   (multiple-value-bind (cars cdrs) (strip-trees trees)
+;;     (cond ((every #'null cars) '())
+;;           ((every #'atom cars) (cons (apply f cars) (apply #'tree-map f cdrs)))
+;;           (t (cons (apply #'tree-map f cars)
+;;                    (apply #'tree-map f cdrs)))) ))
+
+(defun tree-map-a (f &rest trees)
+  (cond ((every #'null trees) '())
+        ((every #'atom trees) (apply f trees)) ; Too strict to allow different depths.
+;        (t (multiple-value-bind (cars cdrs) (strip-trees trees)
+        (t (multiple-value-bind (cars cdrs) (firsts-rests trees)
+             (cons (apply #'tree-map-a f cars)
+                   (apply #'tree-map-a f cdrs)))) ))
+
+;;;
+;;;    This version is adequate to handle multiple trees of identical structure. The mapped function F may
+;;;    have to be modified depending on the number of trees...
+;;;    
+(defun tree-map-b (f &rest trees)
+  (cond ((every #'null trees) '())
+        ((some #'atom trees) (apply f trees))
+;        (t (multiple-value-bind (cars cdrs) (strip-trees trees)
+        (t (multiple-value-bind (cars cdrs) (firsts-rests trees)
+             (cons (apply #'tree-map-b f cars)
+                   (apply #'tree-map-b f cdrs)))) ))
+
+;; (tree-map #'1+ '(1 2 (3 4 (5) 6) 7 (8 9))) => (2 3 (4 5 (6) 7) 8 (9 10))
+;; (tree-map #'(lambda (s1 s2) (concatenate 'string s1 s2)) '("Is" ("this" ("not" ("pung?")))) '("Ça" ("plane" ("pour" ("moi"))))) => ("IsÇa" ("thisplane" ("notpour" ("pung?moi"))))
+;; (tree-map #'(lambda (&rest strings) (apply #'concatenate 'string strings)) '("Is" ("this" ("not" ("pung?")))) '("Ça" ("plane" ("pour" ("moi")))) '("a" ("b" ("c" ("d"))))) => ("IsÇaa" ("thisplaneb" ("notpourc" ("pung?moid"))))
+
+;;;
+;;;    It is similar in behavior to Graham's RMAPCAR when the trees are compatible. This appears to mean that depths can vary, but
+;;;    lengths at a given depth must be consistent. (Graham gets around this via MAPCAR, which simply stops with shortest sublist...)
+;;;
+;; (tree-map #'cons '(a b c) '((d e) (f g) (h i))) => ((A D E) (B F G) (C H I))
+;; (tree-map #'cons '((a) (b) (c)) '((d e) (f g) (h i))) => (((A . D) NIL E) ((B . F) NIL G) ((C . H) NIL I))  ; This one is weird
+;; (tree-map #'cons '(a (b c)) '((d e) ((f g) (h i)))) => ((A D E) ((B F G) (C H I)))
+;; (tree-map #'cons '(a b c) '((1) (2 3) (4 5 6))) => ((A 1) (B 2 3) (C 4 5 6))
+
+;;;
+;;;    The behavior is wrong, however, when the lengths don't match up:
+;;;
+;; (tree-map #'(lambda (s1 s2) (concatenate 'string s1 s2)) '("Is" ("this" ("not" ("pung?")))) '("Ça" ("plane" ("pour" ("moi" "Plastic" "Bertrand")))))
+
+;; debugger invoked on a TYPE-ERROR in thread
+;; #<THREAD "main thread" RUNNING {10005204C3}>:
+;;   The value
+;;     "Plastic"
+;;   is not of type
+;;     CHARACTER
+;;   when setting an element of (ARRAY CHARACTER)
+
+;;;
+;;;    Same as Graham???
+;;;    
+;(defun tree-map-c (f &rest trees)
+(defun tree-map (f &rest trees)
+  (cond ((null trees) '()) ; Pathological initial case: (tree-map-c f). Also recursive case where trees are not same size.
+        ((some #'null trees) '())
+        ((some #'atom trees) (apply f trees))
+;        (t (multiple-value-bind (cars cdrs) (strip-trees trees)
+        (t (multiple-value-bind (cars cdrs) (firsts-rests trees)
+             (cons (apply #'tree-map f cars)
+                   (apply #'tree-map f cdrs)))) ))
+
 
 ;(defun readlist (&rest args)
 (defun read-list (&rest args)
@@ -1448,15 +1967,55 @@ the index of the position immediately following X."
 ;;     (map nil #'(lambda (elt) (if (funcall f elt) (push elt trues) (push elt falses))) seq)
 ;;     (list (nreverse trues) (nreverse falses))))
 
-(defun firsts-rests (lol)
-  "Traverse a list of lists and collect the first elements of each as well as the tails of each."
-  (loop for list in lol
-        until (null list)
-        collect (first list) into firsts
-        collect (rest list) into rests
-        finally (return (values firsts rests))))
+;;;
+;;;    I wrote these without realizing I already had FIRSTS-RESTS...
+;; (defun strip-trees (trees)
+;;   (labels ((strip (trees cars cdrs)
+;;              (if (endp trees)
+;;                  (values (nreverse cars) (nreverse cdrs))
+;;                  (strip (rest trees) (cons (first (first trees)) cars) (cons (rest (first trees)) cdrs)))) )
+;;     (strip trees '() '())))
 
-; (firsts-rests '((a b c) (1 2) (x))) => (A 1 X); ((B C) (2) NIL)
+(defun strip-trees (trees)
+  (loop for cons in trees ; Not necessarily CONS! If unequal lengths...
+        collect (car cons) into cars
+        collect (cdr cons) into cdrs
+        finally (return (values cars cdrs))))
+
+
+;; (defun firsts-rests (lol)
+;;   "Traverse a list of lists and collect the first elements of each as well as the tails of each."
+;;   (loop for list in lol
+;;         until (null list)
+;;         collect (first list) into firsts
+;;         collect (rest list) into rests
+;;         finally (return (values firsts rests))))
+
+;;;
+;;;    Behavior is similar to MAPCAR. Stops collecting tails as soon as any sublist is exhausted.
+;;;    
+(defun firsts-rests (lol)
+  "Traverse LOL, a list of lists, and collect the first elements of each as well as the tails of each."
+  (labels ((collect-heads-tails (lol heads tails)
+             (cond ((null lol) (values (elements heads) (elements tails)))
+                   (t (destructuring-bind (first . rest) lol
+                        (cond ((atom first) (values '() '())) ; No CAR/CDR for this sublist. Results are meaningless. Abort.
+                              (t (destructuring-bind (head . tail) first
+                                   (enqueue heads head)
+                                   (cond ((null tail) (collect-heads rest heads)) ; Encountering a single-elt list anywhere means all tails are discarded.
+                                         (t (enqueue tails tail)
+                                            (collect-heads-tails rest heads tails)))) )))) ))
+           (collect-heads (lol heads)
+;             (cond ((null lol) (values (elements heads) (list '())))
+             (cond ((null lol) (values (elements heads) '()))
+                   (t (destructuring-bind (first . rest) lol
+                        (cond ((atom first) (values '() '())) ; No CAR/CDR for this sublist. Results are meaningless. Abort.
+                              (t (destructuring-bind (head . tail) first
+                                   (declare (ignore tail))
+                                   (enqueue heads head)
+                                   (collect-heads rest heads)))) )))) )
+    (collect-heads-tails lol (make-linked-queue) (make-linked-queue))))
+
 ;;;
 ;;;    See ~/lisp/programs/mapping.lisp
 ;;;    

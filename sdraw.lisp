@@ -465,7 +465,8 @@
           textline-lengths (make-array num-lines :initial-element 0))
     (dotimes (i (length textline-array))
       (setf (aref textline-array i) 
-            (make-string display-width)))) )
+            (make-string display-width :initial-element #\space)))) )
+;            (make-string display-width)))) )
 
 (defmethod draw-structure ((tty tty) directions) 
   (when *sdraw-leading-arrow* (draw-leading-arrow tty))
@@ -507,7 +508,7 @@
         (do ((i h-arrow-start (1+ i)))
             ((>= i h-arrowhead-col))
           (setf (aref line i) *cons-h-arrowshaft-char*))
-        (setf (aref line h-arrowhead-col) *cons-h-arrowhead-char*)
+        (setf (aref line h-arrowhead-col) *cons-h-arrowhead-char*) ; char-blt !!
         (setf (aref textline-lengths row) (1+ h-arrowhead-col)) 
         (char-blt tty (+ row 1) (+ col 1) *cons-v-line*)
         (char-blt tty (+ row 2) (+ col 1) *cons-v-arrowhead*)
@@ -527,6 +528,10 @@
                      0))
               string)))
 
+;;;
+;;;    https://en.wikipedia.org/wiki/Bit_blit
+;;;    Char "block transfer"???
+;;;    
 (defun char-blt (tty row start-col string)
   "Clear out the existing text in ROW up to position START-COL."
   (with-slots (textline-array textline-lengths) tty

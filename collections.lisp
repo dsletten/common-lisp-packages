@@ -332,8 +332,12 @@
 
 (defun make-circular-list (l)
   (let ((result (copy-list l)))
-    (setf (cdr (last result)) result)
-    result))
+    (nconc result result)))
+
+;; (defun make-circular-list (l)
+;;   (let ((result (copy-list l)))
+;;     (setf (cdr (last result)) result)
+;;     result))
 
 ;; (defun make-circular-list (l)
 ;;   (let ((result (copy-list l)))

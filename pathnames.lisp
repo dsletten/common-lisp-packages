@@ -1,5 +1,5 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (load "/Users/dsletten/lisp/packages/lang.lisp"))
+  (load "/home/slytobias/lisp/packages/lang.lisp"))
 
 (defpackage :pathnames
   (:use :common-lisp :lang)
