@@ -55,7 +55,7 @@
            :show-symbols :shuffle :singlep :sort-symbol-list :splice
            :split-if :starts-with :symb
            :take :take-drop :transfer
-           :transition :transition-1 :transition-n :translate :traverse :tree-find-if
+           :transition :transition-1 :transition-n :translate :traverse :tree-find-if :tree-map
            :until :valid-num-p :while :with-gensyms)  
   (:shadow :while :until :prefixp :dovector :macroexpand-all))
 
@@ -1698,25 +1698,25 @@ the index of the position immediately following X."
 ;;           (t (cons (apply #'tree-map f cars)
 ;;                    (apply #'tree-map f cdrs)))) ))
 
-(defun tree-map-a (f &rest trees)
-  (cond ((every #'null trees) '())
-        ((every #'atom trees) (apply f trees)) ; Too strict to allow different depths.
-;        (t (multiple-value-bind (cars cdrs) (strip-trees trees)
-        (t (multiple-value-bind (cars cdrs) (firsts-rests trees)
-             (cons (apply #'tree-map-a f cars)
-                   (apply #'tree-map-a f cdrs)))) ))
+;; (defun tree-map-a (f &rest trees)
+;;   (cond ((every #'null trees) '())
+;;         ((every #'atom trees) (apply f trees)) ; Too strict to allow different depths.
+;; ;        (t (multiple-value-bind (cars cdrs) (strip-trees trees)
+;;         (t (multiple-value-bind (cars cdrs) (firsts-rests trees)
+;;              (cons (apply #'tree-map-a f cars)
+;;                    (apply #'tree-map-a f cdrs)))) ))
 
 ;;;
 ;;;    This version is adequate to handle multiple trees of identical structure. The mapped function F may
 ;;;    have to be modified depending on the number of trees...
 ;;;    
-(defun tree-map-b (f &rest trees)
-  (cond ((every #'null trees) '())
-        ((some #'atom trees) (apply f trees))
-;        (t (multiple-value-bind (cars cdrs) (strip-trees trees)
-        (t (multiple-value-bind (cars cdrs) (firsts-rests trees)
-             (cons (apply #'tree-map-b f cars)
-                   (apply #'tree-map-b f cdrs)))) ))
+;; (defun tree-map-b (f &rest trees)
+;;   (cond ((every #'null trees) '())
+;;         ((some #'atom trees) (apply f trees))
+;; ;        (t (multiple-value-bind (cars cdrs) (strip-trees trees)
+;;         (t (multiple-value-bind (cars cdrs) (firsts-rests trees)
+;;              (cons (apply #'tree-map-b f cars)
+;;                    (apply #'tree-map-b f cdrs)))) ))
 
 ;; (tree-map #'1+ '(1 2 (3 4 (5) 6) 7 (8 9))) => (2 3 (4 5 (6) 7) 8 (9 10))
 ;; (tree-map #'(lambda (s1 s2) (concatenate 'string s1 s2)) '("Is" ("this" ("not" ("pung?")))) '("Ça" ("plane" ("pour" ("moi"))))) => ("IsÇa" ("thisplane" ("notpour" ("pung?moi"))))
