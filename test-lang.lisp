@@ -247,6 +247,29 @@
       (cons (make-random-tree generator)
             (make-random-tree generator))))
 
+(defun make-random-tree (n)
+  (let ((rs (make-random-state t)))
+    (labels ((make ()
+               (loop for i from 1 to n
+                     if (< (random 1d0 rs) 0.7)
+                       collect i
+                     else
+                       collect (make)
+                  end)))
+      (make))))
+
+(defun make-big-tree (n)
+  (labels ((make (m)
+             (if (zerop m)
+                 (list (random 1d0))
+                 (loop for i from 1 to m collect (make (1- m)))) ))
+    (make n)))
+
+(defun tree-size (tree)
+  (cond ((null tree) 0)
+        ((atom tree) 1)
+        (t (+ (tree-size (car tree))
+              (tree-size (cdr tree))))))
 ;; (let ((i 0)) (make-random-tree #'(lambda () (prog1 i (incf i)))))
 ;; (let ((i 0)) (make-random-tree #'(lambda () (prog1 (code-char (+ i (char-code #\A))) (incf i)))))  
 ;; (defvar *tree* (let ((i 0)) (make-random-tree #'(lambda () (prog1 i (incf i))))))
@@ -341,22 +364,30 @@
 
 (deftest test-before ()
   (check
-   (equal (before 'a 'b '(a b c d)) '(B C D))
+   (equal (before 'a 'b '(a b c d)) '(A B C D))
    (not (before 'a 'b '()))
    (not (before 'a 'b '(b a c d)))
-   (equal (before 'a 'b '(a c d)) '(C D))
-   (= (before #\p #\u "Is this not pung?") 13)
+   (equal (before 'a 'b '(a c d)) '(A C D))
+   (not (before 2 3 '(0 1 2.0d0 3 2)))
+   (equal (before 2 3 '(0 1 2.0d0 3 2) :test #'=) '(2.0d0 3 2))
+   (= (before #\p #\u "Is this not pung?") 12)
    (not (before #\p #\u "Is this not Pung?"))
-   (= (before #\p #\u "Is this not Pung?" :test #'char-equal) 13)
+   (= (before #\p #\u "Is this not Pung?" :test #'char-equal) 12)
    (not (before #\u #\p "Is this not pung?"))
    (not (before '(a b) '(c d) (vector '(:a) "foo" '(a b) '(c d))))
-   (= (before '(a b) '(c d) (vector '(:a) "foo" '(a b) '(c d)) :test #'equal) 3)))
+   (= (before '(a b) '(c d) (vector '(:a) "foo" '(a b) '(c d)) :test #'equal) 2)
+   (equal (before :a :b '((:d 7) (:c 12) (:a 9) (:e 5) (:b -6)) :test #'(lambda (x elt) (eq x (first elt))))
+          '((:A 9) (:E 5) (:B -6)))
+   (= (before :a :b #((:d 7) (:c 12) (:a 9) (:e 5) (:b -6)) :test #'(lambda (x elt) (eq x (first elt)))) 2)
+   (equal (before 3 5 '(4 8 12 15 18 20) :test #'(lambda (x elt) (zerop (mod elt x)))) '(12 15 18 20)) ; Is an element divisible by 3 before any divisible by 5?
+   (not (before 5 3 '(4 8 12 15 18 20) :test #'(lambda (x elt) (zerop (mod elt x)))) )))
 
 (deftest test-after ()
   (check
    (equal (after 'b 'a '(a b c d)) '(B C D))
    (equal (after 'd 'a '(a b c d)) '(D))
    (not (after 'a 'b '(a b c d)))
+   (not (after 'a 'b '(a b c a d)))
    (not (after 'a 'a '(a b c a d)))
    (= (after 'b 'a '#(a b c d)) 1)
    (= (after 'd 'a '#(a b c d)) 3)
@@ -366,7 +397,8 @@
    (= (after #\i #\s "Is this not pung?") 5)
    (not (after #\i #\s "Is this not pung?" :test #'char-equal))
    (not (after 2 0 #(4 6 8 0 2.0 3 5 7 9)))
-   (= (after 2 0 #(4 6 8 0 2.0 3 5 7 9) :test #'=) 4)))
+   (= (after 2 0 #(4 6 8 0 2.0 3 5 7 9) :test #'=) 4)
+   (equal (after 5 3 '(4 8 12 15 18 20) :test #'(lambda (x elt) (zerop (mod elt x)))) '(15 18 20))))
         
 (deftest test-duplicate ()
   (check
@@ -477,86 +509,6 @@
   (check
    (equal (rmapcar #'1+ '(1 2 (3 4 (5) 6) 7 (8 9))) '(2 3 (4 5 (6) 7) 8 (9 10)))
    (equal (rmapcar #'(lambda (s1 s2) (concatenate 'string s1 s2)) '("Is" ("this" ("not" ("pung?")))) '("Ça" ("plane" ("pour" ("moi" "Plastic" "Bertrand")))) ) '("IsÇa" ("thisplane" ("notpour" ("pung?moi")))) )))
-
-;; (rmapcar #'length "is")
-;; 2
-;; * (rmapcar #'< 1 2)
-;; T
-
-;; * (rmapcar #'+ '(1 2) '(3 4))
-;; (4 6)
-
-;; * (rmapcar #'+ '((1 2) (3 4)))
-;; ((1 2) (3 4))
-;; * (rmapcar #'1+ '((1 2) (3 4)))
-;; ((2 3) (4 5))
-
-;; (rmapcar #'cons '(a b c) '((d e) (f g) (h i)))
-
-;; ((A D E) (B F G) (C H I))
-
-;; (rmapcar #'cons '((a) (b) (c)) '((d e) (f g) (h i)))
-
-;; (((A . D)) ((B . F)) ((C . H)))
-
-;; * (rmapcar #'cons '(a (b c)) '((d e) ((f g) (h i))))
-
-;; ((A D E) ((B F G) (C H I)))
-;; * (rmapcar #'cons '(a b) '((d e) (f g) (h i)))
-
-;; ((A D E) (B F G))
-;; * (rmapcar #'cons '(a b c) '((d e) (f g)))
-
-;; ((A D E) (B F G))
-;; * (rmapcar #'cons '(a b c) '((1) (2 3) (4 5 6)))
-
-;; ((A 1) (B 2 3) (C 4 5 6))
-;; * (mapcar #'cons '(a b c) '((1) (2 3) (4 5 6)))
-
-;; ((A 1) (B 2 3) (C 4 5 6))
-;; * (mapcar #'cons '(a (b c)) '((d e) ((f g) (h i))))
-
-;; ((A D E) ((B C) (F G) (H I)))
-;; * 
-
-
-;; Graham does not handle arbitrary trees
-
-;; (rmapcar #'1+ '((1 . 2) (3 . 4) (5 . 6)))
-
-;; *** - MAPCAR: A proper list must not end with 2
-;; The following restarts are available:
-;; ABORT          :R1      Abort main loop
-;; Break 1 LANG[135]> :a
-;; LANG[136]> (tree-map-c #'1+ '((1 . 2) (3 . 4) (5 . 6)))
-;; ((2 . 3) (4 . 5) (6 7))
-
-;; (tree-map #'1+ '((1 . 2) (3 . 4) (5 . 6)))
-;; ((2 . 3) (4 . 5) (6 . 7))
-
-;; LANG[148]> (tree-map-c #'+ '((1 . 2) (3 . 4) (5 . 6)) '((9 . 9) (9 . 9) (9 . 9)))
-;; ((10 . 11) (12 . 13) (14 . 15))
-
-;; LANG[149]> (tree-map-c #'+ '((1 . 2) (3 . 4) (5 . 6)) '((9 . 9) (9 . 9)))
-;; ((10 . 11) (12 . 13))
-
-;; LANG[150]> (tree-map-c #'+ '((1 2) (3 4) (5 6)) '((9 9) (9 9) (9 9)))
-;; ((10 11) (12 13) (14 15))
-
-;; LANG[153]> (rmapcar #'+ '((1 2) (3 4) (5 6)) '((9 9) (9 9) (9 9)))
-;; ((10 11) (12 13) (14 15))
-
-;; LANG[154]> (tree-map-c #'+ '((1 . 2) (3 . 4) (5 . 6) . 7) '((9 . 9) (9 . 9) (9 . 9) . 9))
-;; ((10 . 11) (12 . 13) (14 . 15) . 16)
-
-;; LANG[155]> (tree-map-c #'+ '((1 2) (3 4) (5)) '((9 9) (9) (9 9)))
-;; ((10 11) (12) (14))
-
-;; LANG[156]> (tree-map-c #'+ '((1 2) (3 4) (5) (6 7)) '((9 9) (9) (9 9) (9 9)) '((0.5) (0.5 0.5) (0.5 0.5) (0.5 0.5)))
-;; ((10.5) (12.5) (14.5) (15.5 16.5))
-
-;; LANG[185]> (tree-map-c #'+ '((1 2) (3 4) (5) (6 7)) '((9 9) (9) (9 9) (9 9)) '((0.5) (0.5 0.5) (0.5 0.5) (0.5 0.5) (0.5 0.5)))
-;; ((10.5) (12.5) (14.5) (15.5 16.5))
 
 (deftest test-tree-map ()
   (check

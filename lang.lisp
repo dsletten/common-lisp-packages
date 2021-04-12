@@ -761,6 +761,7 @@
 ;;;    simply tests whether SEQ1 is longer than SEQ2.
 ;;;    
 (defun longerp (seq1 seq2)
+  "Is SEQ1 strictly longer than SEQ2?"
   (labels ((compare (seq1 seq2)
              (cond ((endp seq1) nil)
                    ((endp seq2) t)
@@ -929,20 +930,33 @@
         (flatten-aux tree '()))) )
 
 ;; See prune.lisp
+;; (defun prune-if (pred tree)
+;;   "Remove all leaves of TREE for which PRED is true. Like REMOVE-IF for trees."
+;;   (labels ((prune-aux (tree acc)
+;;              (cond ((null tree) (nreverse acc))
+;;                    ((atom (car tree)) (prune-aux (cdr tree)
+;;                                                  (if (funcall pred (car tree))
+;;                                                      acc
+;;                                                      (cons (car tree) acc))))
+;;                    (t (prune-aux (cdr tree)
+;;                                  (cons (prune-aux (car tree) '()) acc)))) ))
+;;     (prune-aux tree '())))
+
 (defun prune-if (pred tree)
-  "Remove all leaves of TREE for which PRED is true. Like REMOVE-IF for trees."
-  (labels ((prune-aux (tree acc)
-             (cond ((null tree) (nreverse acc))
-                   ((atom (car tree)) (prune-aux (cdr tree)
-                                                (if (funcall pred (car tree))
-                                                    acc
-                                                    (cons (car tree) acc))))
-                   (t (prune-aux (cdr tree)
-                                 (cons (prune-aux (car tree) '()) acc)))) ))
+  "Remove all leaves of TREE for which PRED is true."
+  (labels ((prune-aux (tree result)
+	     (cond ((null tree) (nreverse result))
+                   (t (destructuring-bind (car . cdr) tree
+                        (cond ((and (atom car) (funcall pred car)) (prune-aux cdr result))
+                              ((atom car) (prune-aux cdr (cons car result)))
+                              (t (prune-aux cdr (cons (prune-aux car '()) result)))) )))) )
     (prune-aux tree '())))
 
+;;;
+;;;    Like REMOVE-IF-NOT for trees.
+;;;    
 (defun prune-if-not (pred tree)
-  "Remove all leaves of TREE for which PRED is not true. Like REMOVE-IF-NOT for trees."
+  "Remove all leaves of TREE for which PRED is not true."
   (prune-if (complement pred) tree))
 
 ;;;
@@ -989,17 +1003,34 @@
 ;; 	       (t (before x y (cdr list) :test test)))) ))
 
 ;;    Do we reach X _before_ we see Y?
+;;    :TEST is presumably some flavor of equality.
+;;    What about other types of predicates?
+;;    
+;; (defun before (x y seq &key (test #'eql))
+;;   "Does X occur before Y in SEQ? This is true whenever X occurs without Y having yet been encountered, 
+;; i.e., even if Y is not actually in the sequence. For a positive result, returns the rest of the list or
+;; the index of the position immediately following X."
+;;   (typecase seq
+;;     (null nil)
+;;     (list (loop for (elt . rest) on seq
+;;                 when (funcall test y elt) return nil
+;;                 when (funcall test x elt) return rest))
+;;     (vector (loop for elt across seq
+;;                   for i from 1
+;;                   when (funcall test y elt) return nil
+;;                   when (funcall test x elt) return i))))
 (defun before (x y seq &key (test #'eql))
   "Does X occur before Y in SEQ? This is true whenever X occurs without Y having yet been encountered, 
-i.e., even if Y is not actually in the sequence. For a positive result, returns the rest of the list or
-the index of the position immediately following X."
+i.e., even if Y is not actually in the sequence. For a positive result, returns the tail of the list
+starting with X or the index of the position of X in the sequence."
   (typecase seq
     (null nil)
-    (list (loop for (elt . rest) on seq
+    (list (loop for cons on seq
+                for elt = (first cons)
                 when (funcall test y elt) return nil
-                when (funcall test x elt) return rest))
+                when (funcall test x elt) return cons))
     (vector (loop for elt across seq
-                  for i from 1
+                  for i from 0
                   when (funcall test y elt) return nil
                   when (funcall test x elt) return i))))
 
@@ -1014,7 +1045,8 @@ the index of the position immediately following X."
           (vector (position x seq :start rest :test test)))) ))
 
 (defun duplicate (obj seq &key (test #'eql))
-  "Are there duplicate instances of OBJ in SEQ as determined by TEST? If so return the tail of the list starting with the duplicate or the index in the sequence of the duplicate."
+  "Are there duplicate instances of OBJ in SEQ as determined by TEST?
+If so return the tail of the list starting with the duplicate or the index in the sequence of the duplicate."
   (typecase seq
     (list (member obj (rest (member obj seq :test test)) :test test))
     (vector (let ((initial (position obj seq :test test)))
@@ -1028,7 +1060,8 @@ the index of the position immediately following X."
 ;;;    Or MEMBER-IF that returns both parts of sequence.
 ;;;    
 (defun split-if (f seq)
-  "Split a sequence into the initial subsequence of all elements that fail the given test and the remaining subsequence from the first element which passes the test."
+  "Split a sequence into the initial subsequence of all elements that fail the given test
+and the remaining subsequence from the first element which passes the test."
   (typecase seq
     (list (do ((q (make-linked-queue))
                (tail seq (rest tail)))
@@ -1612,9 +1645,15 @@ the index of the position immediately following X."
       (prog1 start
         (setf start (funcall f start)))) )
 
+;;;
+;;;    Non-destructive alternative to MAPCAN.
+;;;    
 (defun mappend (fn &rest lsts)
   (apply #'append (apply #'mapcar fn lsts)))
 
+;;;
+;;;    Map over multiple lists in sequence, accumulating all results.
+;;;    
 (defun mapcars (fn &rest lsts)
   (let ((result '()))
     (dolist (l lsts)
@@ -1630,6 +1669,8 @@ the index of the position immediately following X."
                  do (enqueue result (funcall f elt)))
         finally (return (elements result))))
 
+;; Graham does not handle arbitrary trees
+;; (rmapcar #'1+ '((1 . 2) (3 . 4) (5 . 6)))
 (defun rmapcar (fn &rest args)
   (if (some #'atom args)
       (apply fn args)
@@ -1786,10 +1827,13 @@ the index of the position immediately following X."
 (defun reread (&rest args)
   (values (read-from-string (apply #'mkstr args))))
 
+;; (defun explode (sym)
+;;   (map 'list #'(lambda (c)
+;; 		 (intern (make-string 1 :initial-element c)))
+;;        (symbol-name sym)))
+
 (defun explode (sym)
-  (map 'list #'(lambda (c)
-		 (intern (make-string 1 :initial-element c)))
-       (symbol-name sym)))
+  (map 'list (compose #'intern #'string) (symbol-name sym)))
 
 (defun memoize (fn)
   (let ((cache (make-hash-table :test #'equal)))
@@ -1883,6 +1927,18 @@ the index of the position immediately following X."
 
 (defun shift0 (n m i)
   (+ (mod (+ i (- n m)) n) m))
+
+;; (shift0 3 1 (mod 1 3))
+;; ;;;
+;; ;;;    Convert 1-based index to column number:
+;; ;;;    1 -> 1
+;; ;;;    2 -> 2
+;; ;;;    3 -> 3
+;; ;;;    4 -> 1
+;; ;;;    ...
+;; (defun bin-column (bin)
+;;   (assert (< 0 bin (1- roulette-bins)))
+;;   (+ (mod (+ bin 2) 3) 1))
 
 ;;;
 ;;;    Given the numbers 1, . . ., n, map the first m elements to n+1, . . ., n+m
@@ -2157,15 +2213,6 @@ the index of the position immediately following X."
           ((atom expanded) expanded)
           (t (cons (first expanded)
                    (mapcar #'(lambda (expr) (macroexpand-all expr env)) (rest expanded)))) )))
-
-;; (defun merge (l1 l2)
-;;   (cond ((endp l1) l2)
-;;         ((endp l2) l1)
-;;         (t (destructure ((h1 . t1) l1
-;;                          (h2 . t2) l2)
-;;              (if (inorderp h1 h2)
-;;                  (cons h1 (merge t1 l2))
-;;                  (cons h2 (merge l1 t2)))) )))
 
 (defmacro destructure ((&rest bindings) &body body)
   (cond ((null bindings) `(progn ,@body))
