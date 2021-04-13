@@ -38,13 +38,13 @@
   (:use :common-lisp :collections)
   (:export :after :append1 :approximately= :array-indices :before :best :best-worst
            :class-template :compose :conc1 :copy-array :cycle
-           :defchain :destructure :dohash :doset :dostring :dotuples :dovector :drop :duplicate
+           :defchain :destructure :dohash :doset :dostring :dotuples :dovector :drop :drop-while :duplicatep
            :ends-with :expand :explode
            :fif :filter :filter-split :find-some-if :find-subtree :fint :firsts-rests :flatten :fun
            :get-num :group :high-low :high-low-n :horners
 	   :is-integer
            :last1 :list-to-string :longerp
-           :macroexpand-all :make-identity-matrix :make-range
+           :macroexpand-all :make-empty-seq :make-identity-matrix :make-range
            :map-> :map-array :map-array-index :map0-n :map1-n :mapa-b :mapcars :mappend :mapset
            :memoize :mklist :mkstr :most :mostn
            :ppmx :prefixp :print-plist :prompt :prompt-read :prune-if :prune-if-not
@@ -53,9 +53,10 @@
            :same-shape-tree-p
            :shift0 :shift-list0 :shift1 :shift-list1
            :show-symbols :shuffle :singlep :sort-symbol-list :splice
-           :split-if :starts-with :symb
-           :take :take-drop :transfer
-           :transition :transition-1 :transition-n :translate :traverse :tree-find-if :tree-map
+;           :split-if
+           :starts-with :symb
+           :take :take-drop :take-while :transfer
+           :transition :transition-1 :transition-n :transition-stream :translate :traverse :tree-find-if :tree-map
            :until :valid-num-p :while :with-gensyms)  
   (:shadow :while :until :prefixp :dovector :macroexpand-all))
 
@@ -515,6 +516,56 @@
 ;; 		   (t (take-drop-aux (cdr l) (1- n) (cons (car l) take)))) ))
 ;;     (take-drop-aux l n '())))
 
+;; (defun take-while (pred seq)
+;;   "Take elements of sequence SEQ until PRED evaluates to false. Return remainder of sequence as secondary value."
+;;   (typecase seq
+;;     (list (loop for tail on seq
+;;                 for elt = (first tail)
+;;                 while (funcall pred elt)
+;;                 collect elt into result
+;;                 finally (return (values result tail))))
+;;     (vector (let ((i (loop for i from 0 below (length seq)
+;;                            for elt across seq
+;;                            while (funcall pred elt)
+;;                            finally (return i))))
+;;               (values (subseq seq 0 i) (subseq seq i)))) ))
+
+(defun take-while (pred seq)
+  "Take elements of sequence SEQ until PRED evaluates to false. Return remainder of sequence as secondary value."
+  (typecase seq
+    (list (loop for tail on seq
+                for elt = (first tail)
+                while (funcall pred elt)
+                collect elt into result
+                finally (return (values result tail))))
+    (vector (take-drop (or (position-if-not pred seq) (length seq)) seq))))
+
+(defun take-until (pred seq)
+  (take-while (complement pred) seq))
+
+;; (defun drop-while (pred seq)
+;;   "Drop elements of sequence SEQ until PRED evaluates to false."
+;;   (typecase seq
+;;     (list (loop for tail on seq
+;;                 for elt = (first tail)
+;;                 while (funcall pred elt)
+;;                 finally (return tail)))
+;;     (vector (subseq seq (loop for i from 0 below (length seq)
+;;                               for elt across seq
+;;                               while (funcall pred elt)
+;;                               finally (return i)))) ))
+
+(defun drop-while (pred seq)
+  "Drop elements of sequence SEQ until PRED evaluates to false."
+  (typecase seq
+    (list (loop for tail on seq
+                for elt = (first tail)
+                while (funcall pred elt)
+                finally (return tail)))
+    (vector (drop (or (position-if-not pred seq) (length seq)) seq))))
+
+(defun drop-until (pred seq)
+  (drop-while (complement pred) seq))
 
 ;; (defun empty-seq (in)
 ;;   (map (type-of in) #'identity in))
@@ -522,7 +573,7 @@
 ;; (defun empty-seq (in)
 ;;   (make-sequence (type-of in) 0))
 
-(defun empty-seq (in)
+(defun make-empty-seq (in)
   (typecase in
     (list (list))
     (string (make-string 0))
@@ -1014,7 +1065,7 @@
 ;;     (null nil)
 ;;     (list (loop for (elt . rest) on seq
 ;;                 when (funcall test y elt) return nil
-;;                 when (funcall test x elt) return rest))
+;;                 when (funcall test x elt) return rest))  <------ ?!??!?!?
 ;;     (vector (loop for elt across seq
 ;;                   for i from 1
 ;;                   when (funcall test y elt) return nil
@@ -1044,7 +1095,7 @@ starting with X or the index of the position of X in the sequence."
           (list (member x rest :test test))
           (vector (position x seq :start rest :test test)))) ))
 
-(defun duplicate (obj seq &key (test #'eql))
+(defun duplicatep (obj seq &key (test #'eql))
   "Are there duplicate instances of OBJ in SEQ as determined by TEST?
 If so return the tail of the list starting with the duplicate or the index in the sequence of the duplicate."
   (typecase seq
@@ -1055,20 +1106,19 @@ If so return the tail of the list starting with the duplicate or the index in th
                   nil)))) )
 
 ;;;
-;;;    See TAKE-DROP
-;;;    (This is sort of DROP-WHILE/TAKE-WHILE)
+;;;    (This is sort of TAKE-UNTIL)
 ;;;    Or MEMBER-IF that returns both parts of sequence.
 ;;;    
-(defun split-if (f seq)
-  "Split a sequence into the initial subsequence of all elements that fail the given test
-and the remaining subsequence from the first element which passes the test."
-  (typecase seq
-    (list (do ((q (make-linked-queue))
-               (tail seq (rest tail)))
-              ((or (endp tail) (funcall f (first tail))) (values (elements q) tail))
-            (enqueue q (first tail))))
-    (vector (let ((initial (or (position-if f seq) 0)))
-              (values (take initial seq) (drop initial seq)))) ))
+;; (defun split-if (f seq)
+;;   "Split a sequence into the initial subsequence of all elements that fail the given test
+;; and the remaining subsequence from the first element which passes the test."
+;;   (typecase seq
+;;     (list (do ((q (make-linked-queue))
+;;                (tail seq (rest tail)))
+;;               ((or (endp tail) (funcall f (first tail))) (values (elements q) tail))
+;;             (enqueue q (first tail))))
+;;     (vector (let ((initial (or (position-if f seq) 0)))
+;;               (values (take initial seq) (drop initial seq)))) ))
 
 (defun most (fn list)
   (if (null list)
@@ -1526,6 +1576,15 @@ and the remaining subsequence from the first element which passes the test."
         (t (cons (list (build-prefix l tail) tail)
                  (transition-aux l (rest tail)))) ))
 
+(defun transition (l)
+  (do ((result (make-linked-queue))
+       (head (make-linked-queue))
+       (tail l (rest tail)))
+      ((endp tail) (enqueue result (list (elements head) tail))
+       (elements result))
+    (enqueue result (list (elements head) tail))
+    (enqueue head (first tail))))
+
 ;; (defun transition (l)
 ;;   (loop for tail on l
 ;;         collect (list (build-prefix l tail) tail)
@@ -1543,6 +1602,25 @@ and the remaining subsequence from the first element which passes the test."
   (cond ((endp sentinel) (cons (list (build-prefix l tail) tail) '()))
         (t (cons (list (build-prefix l tail) tail)
                  (transition-n-aux l (rest tail) (rest sentinel)))) ))
+
+;;;
+;;;    Create a stream of the heads/tails of the given list.
+;;;    (defvar *stream* (transition-stream '(a b c)))
+;;;    (funcall *stream*) => (NIL (A B C))
+;;;    (funcall *stream*) => ((A) (B C))
+;;;    (funcall *stream*) => ((A B) (C))
+;;;    (funcall *stream*) => ((A B C) NIL)
+;;;    (funcall *stream*) => NIL
+;;;    
+(defun transition-stream (l)
+  (let ((head (make-linked-queue))
+        (tail l))
+    #'(lambda ()
+        (cond ((null head) nil)
+              (t (prog1 (list (elements head) tail)
+                   (cond ((endp tail) (setf head nil))
+                         (t (enqueue head (first tail))
+                            (setf tail (rest tail)))) )))) ))
 
 ;; (defun mapa-b (fn a b &optional (step 1))
 ;;   (do ((i a (+ i step))

@@ -192,7 +192,7 @@
       (first (slot-value q 'front))))
 
 (defmethod elements ((q linked-queue))
-  (slot-value q 'front))
+  (copy-list (slot-value q 'front)))
 
 ;; (defmethod size ((q linked-queue))
 ;;   (linked-queue-size q))

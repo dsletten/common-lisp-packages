@@ -188,6 +188,52 @@
    (multiple-value-bind (before after) (take-drop 8 #(1 2 3)) (and (equalp before #(1 2 3)) (equalp after #())))
    (multiple-value-bind (before after) (take-drop 7 "Is this not pung?") (and (string= before "Is this")) (string= after " not pung?"))))
 
+(deftest test-take-while ()
+  (check
+   (multiple-value-bind (before after) (take-while #'(lambda (sym) (string< (symbol-name sym) "A")) '(a b c d)) (and (equal before '()) (equal after '(a b c d))))
+   (multiple-value-bind (before after) (take-while #'(lambda (sym) (string< (symbol-name sym) "B")) '(a b c d)) (and (equal before '(A)) (equal after '(b c d))))
+   (multiple-value-bind (before after) (take-while #'(lambda (sym) (string< (symbol-name sym) "D")) '(a b c d)) (and (equal before '(A B C)) (equal after '(d))))
+   (multiple-value-bind (before after) (take-while #'(lambda (sym) (string< (symbol-name sym) "Z")) '(a b c d)) (and (equal before '(A B C D)) (equal after '())))
+   (multiple-value-bind (before after) (take-while #'(lambda (sym) (string< (symbol-name sym) "A")) #(:a :b :c)) (and (equalp before #()) (equalp after #(:a :b :c))))
+   (multiple-value-bind (before after) (take-while #'(lambda (sym) (string< (symbol-name sym) "B")) #(:a :b :c)) (and (equalp before #(:a)) (equalp after #(:b :c))))
+   (multiple-value-bind (before after) (take-while #'(lambda (sym) (string< (symbol-name sym) "C")) #(:a :b :c)) (and (equalp before #(:a :b)) (equalp after #(:c))))
+   (multiple-value-bind (before after) (take-while #'(lambda (sym) (string< (symbol-name sym) "Z")) #(:a :b :c)) (and (equalp before #(:a :b :c)) (equalp after #())))
+   (multiple-value-bind (before after) (take-while #'(lambda (ch) (char/= ch #\n)) "Is this not pung?") (and (equal before "Is this ") (equal after "not pung?")))
+   (multiple-value-bind (before after) (take-while #'digit-char-p "Is this not pung?") (and (equal before "") (equal after "Is this not pung?")))
+   (multiple-value-bind (before after) (let ((sum 0)) (take-while #'(lambda (elt) (incf sum elt) (< sum 20)) '(2.3 9 0.7 8.4 6 4 3))) (and (equal before '(2.3 9 0.7)) (equal after '(8.4 6 4 3)))) ))
+
+(deftest test-take-until ()
+  (check
+   (equal (multiple-value-list (take-until #'(lambda (x) (> x 4)) (loop for i from 1 to 10 collect i))) '((1 2 3 4) (5 6 7 8 9 10)))
+   (equal (multiple-value-list (take-until #'(lambda (x) (> x 14)) (loop for i from 1 to 10 collect i))) '((1 2 3 4 5 6 7 8 9 10) ()))
+   (equal (multiple-value-list (take-until #'(lambda (x) (> x 0)) (loop for i from 1 to 10 collect i))) '(() (1 2 3 4 5 6 7 8 9 10)))
+   (equalp (multiple-value-list (take-until #'(lambda (x) (> x 4)) (apply #'vector #[1 10]))) '(#(1 2 3 4) #(5 6 7 8 9 10)))
+   (equal (multiple-value-list (take-until #'oddp '(0 2 4 5 7 2 9))) '((0 2 4) (5 7 2 9)))
+   (equalp (multiple-value-list (take-until #'oddp [0 2 4 5 7 2 9])) '(#(0 2 4) #(5 7 2 9)))))
+
+(deftest test-drop-until ()
+  (check
+   (equal (drop-until #'(lambda (x) (> x 4)) (loop for i from 1 to 10 collect i)) '(5 6 7 8 9 10))
+   (equal (drop-until #'(lambda (x) (> x 14)) (loop for i from 1 to 10 collect i)) '())
+   (equal (drop-until #'(lambda (x) (> x 0)) (loop for i from 1 to 10 collect i)) '(1 2 3 4 5 6 7 8 9 10))
+   (equalp (drop-until #'(lambda (x) (> x 4)) (apply #'vector #[1 10])) #(5 6 7 8 9 10))
+   (equal (drop-until #'oddp '(0 2 4 5 7 2 9)) '(5 7 2 9))
+   (equalp (drop-until #'oddp [0 2 4 5 7 2 9]) #(5 7 2 9))))
+
+(deftest test-drop-while ()
+  (check
+   (equal (drop-while #'(lambda (sym) (string< (symbol-name sym) "A")) '(a b c d)) '(a b c d))
+   (equal (drop-while #'(lambda (sym) (string< (symbol-name sym) "B")) '(a b c d)) '(b c d))
+   (equal (drop-while #'(lambda (sym) (string< (symbol-name sym) "D")) '(a b c d)) '(d))
+   (equal (drop-while #'(lambda (sym) (string< (symbol-name sym) "Z")) '(a b c d)) '())
+   (equalp (drop-while #'(lambda (sym) (string< (symbol-name sym) "A")) #(:a :b :c)) #(:a :b :c))
+   (equalp (drop-while #'(lambda (sym) (string< (symbol-name sym) "B")) #(:a :b :c)) #(:b :c))
+   (equalp (drop-while #'(lambda (sym) (string< (symbol-name sym) "C")) #(:a :b :c)) #(:c))
+   (equalp (drop-while #'(lambda (sym) (string< (symbol-name sym) "Z")) #(:a :b :c)) #())
+   (equal (drop-while #'(lambda (ch) (char/= ch #\n)) "Is this not pung?") "not pung?")
+   (equal (drop-while #'digit-char-p "Is this not pung?") "Is this not pung?")
+   (equal (let ((sum 0)) (drop-while #'(lambda (elt) (incf sum elt) (< sum 20)) '(2.3 9 0.7 8.4 6 4 3))) '(8.4 6 4 3))))
+
 (deftest test-prefixp ()
   (check
    (prefixp '() '(g t c a t))
@@ -400,18 +446,18 @@
    (= (after 2 0 #(4 6 8 0 2.0 3 5 7 9) :test #'=) 4)
    (equal (after 5 3 '(4 8 12 15 18 20) :test #'(lambda (x elt) (zerop (mod elt x)))) '(15 18 20))))
         
-(deftest test-duplicate ()
+(deftest test-duplicatep ()
   (check
-   (not (duplicate 'a '(a b c d)))
-   (equal (duplicate 'a '(a b c d a e f g)) '(A E F G))
-   (not (duplicate #\a "abcd"))
-   (= (duplicate #\a "abcdaefg") 4)
-   (not (duplicate #\a "abcdAEFG"))
-   (= (duplicate #\a "abcdAEFG" :test #'char-equal) 4)
-   (not (duplicate 2 #(2 4 6 8)))
-   (= (duplicate 2 #(2 4 6 8 0 2 3 5 7 9)) 5)
-   (not (duplicate 2 #(2 4 6 8 0 2.0 3 5 7 9)))
-   (= (duplicate 2 #(2 4 6 8 0 2.0 3 5 7 9) :test #'=) 5)))
+   (not (duplicatep 'a '(a b c d)))
+   (equal (duplicatep 'a '(a b c d a e f g)) '(A E F G))
+   (not (duplicatep #\a "abcd"))
+   (= (duplicatep #\a "abcdaefg") 4)
+   (not (duplicatep #\a "abcdAEFG"))
+   (= (duplicatep #\a "abcdAEFG" :test #'char-equal) 4)
+   (not (duplicatep 2 #(2 4 6 8)))
+   (= (duplicatep 2 #(2 4 6 8 0 2 3 5 7 9)) 5)
+   (not (duplicatep 2 #(2 4 6 8 0 2.0 3 5 7 9)))
+   (= (duplicatep 2 #(2 4 6 8 0 2.0 3 5 7 9) :test #'=) 5)))
 
 (deftest test-split-if ()
   (check
@@ -576,3 +622,17 @@
    (equal (multiple-value-list (firsts-rests '((a b) (1 2) (:x)))) '((a 1 :x) ())) ; Not (a 1 :x); ((b) (2) ())
    (equal (multiple-value-list (firsts-rests (nth-value 1 (firsts-rests '((a b c) (1 2) (:x :y :z)))) )) '((b 2 :y) ()))
    (equal (multiple-value-list (firsts-rests (nth-value 1 (firsts-rests '((a b) (1 2) (:x)))) )) '(() ()))) )
+
+(deftest test-transition ()
+  (check
+   (equal (transition '(a b c)) '((NIL (A B C)) ((A) (B C)) ((A B) (C)) ((A B C) NIL)))) )
+
+(deftest test-transition-1 ()
+  (check
+   (equal (transition-1 '(a b c)) '((NIL (A B C)) ((A) (B C)) ((A B) (C)))) ))
+
+(deftest test-transition-n ()
+  (check
+   (equal (transition-n #1='(a b c) 0) (transition #1#))
+   (equal (transition-n #2='(a b c) 1) (transition-1 #2#))))
+
