@@ -211,15 +211,6 @@
    (equal (multiple-value-list (take-until #'oddp '(0 2 4 5 7 2 9))) '((0 2 4) (5 7 2 9)))
    (equalp (multiple-value-list (take-until #'oddp [0 2 4 5 7 2 9])) '(#(0 2 4) #(5 7 2 9)))))
 
-(deftest test-drop-until ()
-  (check
-   (equal (drop-until #'(lambda (x) (> x 4)) (loop for i from 1 to 10 collect i)) '(5 6 7 8 9 10))
-   (equal (drop-until #'(lambda (x) (> x 14)) (loop for i from 1 to 10 collect i)) '())
-   (equal (drop-until #'(lambda (x) (> x 0)) (loop for i from 1 to 10 collect i)) '(1 2 3 4 5 6 7 8 9 10))
-   (equalp (drop-until #'(lambda (x) (> x 4)) (apply #'vector #[1 10])) #(5 6 7 8 9 10))
-   (equal (drop-until #'oddp '(0 2 4 5 7 2 9)) '(5 7 2 9))
-   (equalp (drop-until #'oddp [0 2 4 5 7 2 9]) #(5 7 2 9))))
-
 (deftest test-drop-while ()
   (check
    (equal (drop-while #'(lambda (sym) (string< (symbol-name sym) "A")) '(a b c d)) '(a b c d))
@@ -233,6 +224,15 @@
    (equal (drop-while #'(lambda (ch) (char/= ch #\n)) "Is this not pung?") "not pung?")
    (equal (drop-while #'digit-char-p "Is this not pung?") "Is this not pung?")
    (equal (let ((sum 0)) (drop-while #'(lambda (elt) (incf sum elt) (< sum 20)) '(2.3 9 0.7 8.4 6 4 3))) '(8.4 6 4 3))))
+
+(deftest test-drop-until ()
+  (check
+   (equal (drop-until #'(lambda (x) (> x 4)) (loop for i from 1 to 10 collect i)) '(5 6 7 8 9 10))
+   (equal (drop-until #'(lambda (x) (> x 14)) (loop for i from 1 to 10 collect i)) '())
+   (equal (drop-until #'(lambda (x) (> x 0)) (loop for i from 1 to 10 collect i)) '(1 2 3 4 5 6 7 8 9 10))
+   (equalp (drop-until #'(lambda (x) (> x 4)) (apply #'vector #[1 10])) #(5 6 7 8 9 10))
+   (equal (drop-until #'oddp '(0 2 4 5 7 2 9)) '(5 7 2 9))
+   (equalp (drop-until #'oddp [0 2 4 5 7 2 9]) #(5 7 2 9))))
 
 (deftest test-prefixp ()
   (check
@@ -459,19 +459,22 @@
    (not (duplicatep 2 #(2 4 6 8 0 2.0 3 5 7 9)))
    (= (duplicatep 2 #(2 4 6 8 0 2.0 3 5 7 9) :test #'=) 5)))
 
-(deftest test-split-if ()
-  (check
-   (equal (multiple-value-list (split-if #'(lambda (x) (> x 4)) (loop for i from 1 to 10 collect i))) '((1 2 3 4) (5 6 7 8 9 10)))
-   (equal (multiple-value-list (split-if #'(lambda (x) (> x 14)) (loop for i from 1 to 10 collect i))) '((1 2 3 4 5 6 7 8 9 10) ()))
-   (equal (multiple-value-list (split-if #'(lambda (x) (> x 0)) (loop for i from 1 to 10 collect i))) '(() (1 2 3 4 5 6 7 8 9 10)))
-   (equalp (multiple-value-list (split-if #'(lambda (x) (> x 4)) (apply #'vector #[1 10]))) '(#(1 2 3 4) #(5 6 7 8 9 10)))
-   (equal (multiple-value-list (split-if #'oddp '(0 2 4 5 7 2 9))) '((0 2 4) (5 7 2 9)))
-   (equalp (multiple-value-list (split-if #'oddp [0 2 4 5 7 2 9])) '(#(0 2 4) #(5 7 2 9)))))
+;;;
+;;;    See TAKE-UNTIL
+;;;    
+;; (deftest test-split-if ()
+;;   (check
+;;    (equal (multiple-value-list (split-if #'(lambda (x) (> x 4)) (loop for i from 1 to 10 collect i))) '((1 2 3 4) (5 6 7 8 9 10)))
+;;    (equal (multiple-value-list (split-if #'(lambda (x) (> x 14)) (loop for i from 1 to 10 collect i))) '((1 2 3 4 5 6 7 8 9 10) ()))
+;;    (equal (multiple-value-list (split-if #'(lambda (x) (> x 0)) (loop for i from 1 to 10 collect i))) '(() (1 2 3 4 5 6 7 8 9 10)))
+;;    (equalp (multiple-value-list (split-if #'(lambda (x) (> x 4)) (apply #'vector #[1 10]))) '(#(1 2 3 4) #(5 6 7 8 9 10)))
+;;    (equal (multiple-value-list (split-if #'oddp '(0 2 4 5 7 2 9))) '((0 2 4) (5 7 2 9)))
+;;    (equalp (multiple-value-list (split-if #'oddp [0 2 4 5 7 2 9])) '(#(0 2 4) #(5 7 2 9)))))
 
 (deftest test-most ()
   (check
    (equal (multiple-value-list (most #'length '((a b) (a b c) (a) (e f g)))) '((A B C) 3))
-   (null (most #'length '()))
+   (equal (multiple-value-list (most #'length '())) '(() ()))
    (equal (multiple-value-list (most #'length '((a b)))) '((A B) 2))
    (equal (multiple-value-list (most #'length #("ab" "abc" "a" "efg"))) '("abc" 3))
    (equal (multiple-value-list (most #'char-code "Is this not pung?")) '(#\u 117))

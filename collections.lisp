@@ -191,8 +191,13 @@
       (error "Queue is empty.")
       (first (slot-value q 'front))))
 
+;;;
+;;;    The internal list that is holding the elements of the queue is returned "as is".
+;;;    Client should make a copy of this to avoid side effects.
+;;;    (Too much overhead for this method to always call COPY-LIST instead???)
+;;;    
 (defmethod elements ((q linked-queue))
-  (copy-list (slot-value q 'front)))
+  (slot-value q 'front))
 
 ;; (defmethod size ((q linked-queue))
 ;;   (linked-queue-size q))
