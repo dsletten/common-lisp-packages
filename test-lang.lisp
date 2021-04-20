@@ -539,7 +539,13 @@
 
 (deftest test-map-> ()
   (check
+   ;; (mapa-b #'1+ -2 0 0.5)
    (equal (map-> #'1+ -2 #'(lambda (x) (> x 0)) #'(lambda (x) (+ x 0.5))) '(-1 -0.5 0.0 0.5 1.0))
+   ;; (mapcar #'length '("Is" "this" "not" "pung?"))
+   (equal (map-> #'(lambda (l) (length (first l))) '("Is" "this" "not" "pung?") #'null #'rest) '(2 4 3 5))
+   (equal (map-> (compose #'length #'first) '("Is" "this" "not" "pung?") #'null #'rest) '(2 4 3 5))
+   ;; (maplist #'reverse '(1 2 3 4))
+   (equal (map-> #'reverse '(1 2 3 4) #'null #'rest) '((4 3 2 1) (4 3 2) (4 3) (4)))
    (equal (map-> #'(lambda (i) (list (code-char i) i)) (char-code #\p) #'(lambda (i) (> i (char-code #\z))) #'(lambda (x) (+ x 2))) '((#\p 112) (#\r 114) (#\t 116) (#\v 118) (#\x 120) (#\z 122)))
    (equal (map-> #'(lambda (l) (string-upcase (first l))) #1='("Is" "this" "not" "pung?") #'null #'cdr) (mapcar #'string-upcase #1#))
    (equal (map-> #'(lambda (x) (log x 2)) 1 #'(lambda (x) (> x 1024)) #'(lambda (x) (* 2 x))) '(0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0))))

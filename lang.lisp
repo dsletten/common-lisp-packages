@@ -1048,7 +1048,18 @@
 ;;;
 ;;;    Does X occur before Y in list?
 ;;;    Y need not actually occur in the list! (See AFTER)
+;;;
+;;;    Touretzky pg. 171 has a looser version:
+;;;
+;; (defun beforep (x y l)
+;;   (member y (member x l)))
+
+;;;    (beforep 'a 'b '(b a b u s h k a)) => (B U S H K A)
+;;;    (before 'a 'b '(b a b u s h k a)) => NIL
+;;;    (beforep 'a 'u '(b a b u s h k a)) => (U S H K A)
+;;;    (before 'a 'u '(b a b u s h k a)) => (A B U S H K A)
 ;;;    
+
 ;; (defun before (x y list &key (test #'eql))
 ;;   (and list
 ;;        (let ((first (car list)))
@@ -1887,7 +1898,6 @@ If so return the tail of the list starting with the duplicate or the index in th
              (cons (apply #'tree-map f cars)
                    (apply #'tree-map f cdrs)))) ))
 
-
 ;(defun readlist (&rest args)
 (defun read-list (&rest args)
   (values (read-from-string
@@ -1913,6 +1923,12 @@ If so return the tail of the list starting with the duplicate or the index in th
 (defun symb (&rest args)
   (values (intern (apply #'mkstr args))))
 
+;;;
+;;;    Alternative to backquote???
+;;;    (defmacro foo (x) (reread (format nil "(+ 2 ~A)" x)))
+;;;    vs.
+;;;    (defmacro bar (x) `(+ 2 ,x))
+;;;    
 (defun reread (&rest args)
   (values (read-from-string (apply #'mkstr args))))
 
@@ -1922,6 +1938,7 @@ If so return the tail of the list starting with the duplicate or the index in th
 ;;        (symbol-name sym)))
 
 (defun explode (sym)
+  "Return a list of single-letter symbols from the characters in the symbol name of SYM."
   (map 'list (compose #'intern #'string) (symbol-name sym)))
 
 (defun memoize (fn)
