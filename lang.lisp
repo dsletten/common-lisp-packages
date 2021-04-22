@@ -1336,6 +1336,36 @@ If so return the tail of the list starting with the duplicate or the index in th
                   winner))
           seq))
 
+(defun bestn (f seq)
+  "Return all elements with the highest score as if the elements of SEQ were sorted by means of F."
+  (typecase seq
+    (list (if (null seq)
+              nil
+              (loop with winners = (make-linked-queue)
+                    with winner = (first seq)
+                    for elt in seq
+                    if (funcall f elt winner)
+                      do (make-empty winners)
+                         (enqueue winners elt)
+                         (setf winner elt)
+                    else if (not (funcall f winner elt))
+                      do (enqueue winners elt)
+                    end
+                    finally (return (elements winners)))) )
+    (vector (if (zerop (length seq))
+                nil
+                (loop with winners = (make-linked-queue)
+                      with winner = (elt seq 0)
+                      for elt across seq
+                      if (funcall f elt winner)
+                        do (make-empty winners)
+                           (enqueue winners elt)
+                           (setf winner elt)
+                      else if (not (funcall f winner elt))
+                        do (enqueue winners elt)
+                      end
+                      finally (return (elements winners)))) )))
+
 ;;;
 ;;;    CONSes!
 ;;;    
@@ -1950,6 +1980,12 @@ If so return the tail of the list starting with the duplicate or the index in th
 	      (setf (gethash args cache)
 		    (apply fn args)))) )))
 
+
+;;;    Multiple value compose???
+
+;;;
+;;;    This executes REDUCE every time the composed function is called.
+;;;    
 (defun compose (&rest fns)
   (if fns
       (let ((fn1 (last1 fns))
@@ -1959,6 +1995,38 @@ If so return the tail of the list starting with the duplicate or the index in th
                     :from-end t
                     :initial-value (apply fn1 args))))
       #'identity))
+
+
+;;;
+;;;    Same here for > 2 functions...
+;;;    
+(defun compose (&rest fs)
+  (if (null fs)
+      #'identity
+      (destructuring-bind (f . more) fs
+        (if (null more)
+            f
+            (destructuring-bind (g . more) more
+              (if (null more)
+                  #'(lambda (&rest args) (funcall f (apply g args)))
+                  (destructuring-bind (f* . fs*) (reverse fs)
+                    #'(lambda (&rest args)
+                        (reduce #'(lambda (x f) (funcall f x)) fs* :initial-value (apply f* args)))) )))) ))
+
+;;;
+;;;    Clojure-style
+;;;    Composed function is constructed entirely prior to invocation.
+;;;    
+(defun compose (&rest fs)
+  (if (null fs)
+      #'identity
+      (destructuring-bind (f . more) fs
+        (if (null more)
+            f
+            (destructuring-bind (g . more) more
+              (if (null more)
+                  #'(lambda (&rest args) (funcall f (apply g args)))
+                  (reduce #'compose fs)))) )))
 
 ;;;
 ;;;    Slightly modified from Graham.

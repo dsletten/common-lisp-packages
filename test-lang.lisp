@@ -616,6 +616,17 @@
    (equal (tree-map #'(lambda (x) (+ x 3)) '(1 2 (3 (4 (5) 6) (7)) 8 (9))) '(4 5 (6 (7 (8) 9) (10)) 11 (12)))
    (equal (tree-map #'(lambda (x) (+ x 5)) '(((( (1) )))) ) '(((( (6) )))) )))
 
+(deftest test-compose ()
+  (check
+   (equal (funcall (compose #'first #'rest #'rest #'rest #'rest) #1='(a b c d e f)) (fifth #1#))
+   (equal (mapcar (compose #'1+ #'1+) #2=(loop for i from 1 to 10 collect i)) (mapcar #'(lambda (x) (+ x 2)) #2#))
+   (equal (mapcar (compose #'list #'(lambda (x) (* x 2))) #3=(loop for i from 1 to 5 collect i)) (mapcar #'(lambda (x) (list (* x 2))) #3#))
+   ;; COUNT-IF
+   (equal (funcall (compose #'length #'remove-if-not) #'evenp #4=(loop for i from 1 to 10 collect i)) (length (remove-if-not #'evenp #4#)))
+   (equal (funcall (compose #'1+ #'find-if) #'oddp '(2 3 4)) 4)
+   (equal (mapcar (compose #'length #'cons) '(a b c d) '((1 2) (3) () (4 5 6))) '(3 2 1 4))
+   (equal (mapcar (compose #'not #'evenp) #5=(loop for i from 1 to 10 collect i)) (mapcar (complement #'evenp) #5#))))
+
 (deftest test-firsts-rests ()
   (check
    (equal (multiple-value-list (firsts-rests '())) '(() ()))
