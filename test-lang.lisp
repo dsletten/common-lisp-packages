@@ -338,10 +338,12 @@
 (deftest test-find-some-if ()
   (check
    (equal (multiple-value-list (find-some-if #'(lambda (elt) (if (numberp elt) (sqrt elt) nil)) '(a "pung" 5 t))) '(5 2.236068))
+   (equal (multiple-value-list (find-some-if (iffn #'numberp #'sqrt) '(a "pung" 5 t))) '(5 2.236068))
    (null (find-some-if #'(lambda (elt) (if (numberp elt) (sqrt elt) nil)) '(a "pung" :j t)))
    (equal (multiple-value-list (find-some-if #'(lambda (elt) (if (numberp elt) (sqrt elt) nil)) #('a "pung" 5 t))) '(5 2.236068))
    (null (find-some-if #'(lambda (elt) (if (numberp elt) (sqrt elt) nil)) #('a "pung" :j t)))
    (equal (multiple-value-list (find-some-if #'(lambda (ch) (if (member ch '(#\a #\e #\i #\o #\u)) (char-upcase ch) nil)) "Is this not pung?")) '(#\i #\I))
+   (equal (multiple-value-list (find-some-if (iffn #'(lambda (ch) (member ch '(#\a #\e #\i #\o #\u))) #'char-upcase) "Is this not pung?")) '(#\i #\I))
    (equal (multiple-value-list (find-some-if #'(lambda (s) (if (= (length s) 4) (string-upcase s) nil)) #("Yoshimi" "Battles" "The" "Pink" "Robots"))) '("Pink" "PINK"))))
    
 
@@ -353,9 +355,12 @@
 (deftest test-filter ()
   (check
    (equal (filter #'(lambda (x) (if (numberp x) (1+ x) nil)) '(a 1 2 b 3 c d 4)) '(2 3 4 5))
+   (equal (filter (iffn #'numberp #'1+) '(a 1 2 b 3 c d 4)) '(2 3 4 5))
    (equalp (filter #'(lambda (x) (if (numberp x) (1+ x) nil)) ['a 1 2 'b 3 'c 'd 4]) [2 3 4 5])
    (string= (filter #'(lambda (ch) (and (alpha-char-p ch) (lower-case-p ch) (char-upcase ch))) "Is this not pung?") "STHISNOTPUNG")
-   (equal (filter #'(lambda (ch) (and (alpha-char-p ch) (lower-case-p ch) (char-upcase ch))) (coerce "Is this not pung?" 'list)) '(#\S #\T #\H #\I #\S #\N #\O #\T #\P #\U #\N #\G))))
+   (string= (filter (every-pred #'alpha-char-p #'lower-case-p #'char-upcase) "Is this not pung?") "STHISNOTPUNG")
+   (equal (filter #'(lambda (ch) (and (alpha-char-p ch) (lower-case-p ch) (char-upcase ch))) (coerce "Is this not pung?" 'list)) '(#\S #\T #\H #\I #\S #\N #\O #\T #\P #\U #\N #\G))
+   (equal (filter (every-pred #'alpha-char-p #'lower-case-p #'char-upcase) (coerce "Is this not pung?" 'list)) '(#\S #\T #\H #\I #\S #\N #\O #\T #\P #\U #\N #\G))))
 
 (deftest test-longerp ()
   (check
@@ -548,6 +553,7 @@
    (equal (map-> #'reverse '(1 2 3 4) #'null #'rest) '((4 3 2 1) (4 3 2) (4 3) (4)))
    (equal (map-> #'(lambda (i) (list (code-char i) i)) (char-code #\p) #'(lambda (i) (> i (char-code #\z))) #'(lambda (x) (+ x 2))) '((#\p 112) (#\r 114) (#\t 116) (#\v 118) (#\x 120) (#\z 122)))
    (equal (map-> #'(lambda (l) (string-upcase (first l))) #1='("Is" "this" "not" "pung?") #'null #'cdr) (mapcar #'string-upcase #1#))
+   (equal (map-> (compose #'string-upcase #'first) #2='("Is" "this" "not" "pung?") #'null #'cdr) (mapcar #'string-upcase #2#))
    (equal (map-> #'(lambda (x) (log x 2)) 1 #'(lambda (x) (> x 1024)) #'(lambda (x) (* 2 x))) '(0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0))))
 
 (deftest test-mapcars ()
@@ -625,7 +631,40 @@
    (equal (funcall (compose #'length #'remove-if-not) #'evenp #4=(loop for i from 1 to 10 collect i)) (length (remove-if-not #'evenp #4#)))
    (equal (funcall (compose #'1+ #'find-if) #'oddp '(2 3 4)) 4)
    (equal (mapcar (compose #'length #'cons) '(a b c d) '((1 2) (3) () (4 5 6))) '(3 2 1 4))
+   ;; COMPLEMENT
    (equal (mapcar (compose #'not #'evenp) #5=(loop for i from 1 to 10 collect i)) (mapcar (complement #'evenp) #5#))))
+
+;;;
+;;;    Look for examples in other tests.
+;;;    
+(deftest test-iffn ()
+  (check
+   (equal (mapcar (iffn #'oddp #'1+ #'1-) (loop for i from 1 to 6 collect i)) (mapcar #'(lambda (n) (if (oddp n) (1+ n) (1- n))) (loop for i from 1 to 6 collect i)))
+   (equal (mapcar (iffn #'oddp #'1+ #'identity) (loop for i from 1 to 6 collect i)) (mapcar #'(lambda (n) (if (oddp n) (1+ n) n)) (loop for i from 1 to 6 collect i)))
+   (equal (mapcar (iffn #'integerp #'oddp) '(1 2 3 c)) '(t nil t nil)) ; Defect? No way to distinguish between missing 'else' function and function that returns NIL?
+   (equal (mapcar (iffn #'evenp #'1-) (loop for i from 1 to 6 collect i)) (mapcar #'(lambda (n) (if (evenp n) (1- n))) (loop for i from 1 to 6 collect i)))) )
+
+;;;
+;;;    Look for examples in other tests. Good for FILTER!!
+;;;    
+(deftest test-every-pred ()
+  (check
+   (funcall (every-pred #'integerp #'oddp #'plusp) 3)
+   (not (funcall (every-pred #'integerp #'oddp #'plusp) 3.0))
+   (not (funcall (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) 3))
+   (funcall (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) 7)
+   (every (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(7))
+   (every (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(7 21 35))
+   (every (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '())
+   (let* ((f #'integerp) (g #'oddp) (h #'plusp) (i #'(lambda (x) (zerop (mod x 7)))) (preds (list f g h i)))
+     (every (apply #'every-pred preds) '(7 21 35)))) )
+
+(deftest test-some-pred ()   
+  (check
+   (funcall (some-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) -3)
+   (some (some-pred #'integerp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(9.0 7.0 -21.0))
+   (some (some-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(9 7 -22 35))
+   (not (some (some-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '()))) )
 
 (deftest test-firsts-rests ()
   (check

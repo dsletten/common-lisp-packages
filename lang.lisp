@@ -39,10 +39,10 @@
   (:export :after :append1 :approximately= :array-indices :before :best :best-worst
            :class-template :compose :conc1 :copy-array :cycle
            :defchain :destructure :dohash :doset :dostring :dotuples :dovector :drop :drop-while :duplicatep
-           :ends-with :expand :explode
-           :fif :filter :filter-split :find-some-if :find-subtree :fint :firsts-rests :flatten :fun
+           :ends-with :every-pred :expand :explode
+           :filter :filter-split :find-some-if :find-subtree :firsts-rests :flatten
            :get-num :group :high-low :high-low-n :horners
-	   :is-integer
+	   :iffn :is-integer
            :last1 :list-to-string :longerp
            :macroexpand-all :make-empty-seq :make-identity-matrix :make-range
            :map-> :map-array :map-array-index :map0-n :map1-n :mapa-b :mapcars :mappend :mapset
@@ -52,7 +52,7 @@
            :rotate0 :rotate-list0 :rotate1 :rotate-list1
            :same-shape-tree-p
            :shift0 :shift-list0 :shift1 :shift-list1
-           :show-symbols :shuffle :singlep :sort-symbol-list :splice
+           :show-symbols :shuffle :singlep :some-pred :sort-symbol-list :splice
 ;           :split-if
            :starts-with :symb
            :take :take-drop :take-while :transfer
@@ -1401,6 +1401,12 @@ If so return the tail of the list starting with the duplicate or the index in th
                       else when (funcall f loser elt) do (setf loser elt)
                       finally (return (values winner loser)))) )))
 
+
+;;;
+;;;    BEST-WORST-N <-------------------------------------------------------------------------------------------------------
+;;;    
+
+
 ;; (defun mostn (fn list)
 ;;   (if (null list)
 ;;       (values nil nil)
@@ -1999,6 +2005,7 @@ If so return the tail of the list starting with the duplicate or the index in th
 
 ;;;
 ;;;    Same here for > 2 functions...
+;;;    Same logic for multiple functions.
 ;;;    
 (defun compose (&rest fs)
   (if (null fs)
@@ -2031,7 +2038,8 @@ If so return the tail of the list starting with the duplicate or the index in th
 ;;;
 ;;;    Slightly modified from Graham.
 ;;;    
-(defun fif (if then &optional else)
+;(defun fif (if then &optional else)
+(defun iffn (if then &optional else)
   (if else
       #'(lambda (x)
 	  (if (funcall if x)
@@ -2039,21 +2047,67 @@ If so return the tail of the list starting with the duplicate or the index in th
 	      (funcall else x)))
       #'(lambda (x)
 	  (if (funcall if x)
-	      (funcall then x)))) )
+	      (funcall then x)
+              nil))))
 
-(defun fint (fn &rest fns)
-  (if (null fns)
-      fn
-      (let ((chain (apply #'fint fns)))
-	#'(lambda (x)
-	    (and (funcall fn x) (funcall chain x)))) ))
+(defun iffn (if then &optional (else (constantly nil)))
+  #'(lambda (x)
+      (if (funcall if x)
+	  (funcall then x)
+	  (funcall else x))))
 
-(defun fun (fn &rest fns)
-  (if (null fns)
-      fn
-      (let ((chain (apply #'fun fns)))
-	#'(lambda (x)
-	    (or (funcall fn x) (funcall chain x)))) ))
+;;; Multiple args to pred??
+;; (defun fint (fn &rest fns)
+;;   (if (null fns)
+;;       fn
+;;       (let ((chain (apply #'fint fns)))
+;; 	#'(lambda (x)
+;; 	    (and (funcall fn x) (funcall chain x)))) ))
+
+;;;    COMPOSE no required args
+;;;    EVERY-PRED at least 1
+(defun every-pred (p &rest ps)
+  (if (null ps)
+      p
+      (reduce #'(lambda (result f)
+                  #'(lambda (x)
+                      (and (funcall result x) (funcall f x))))
+;                      (and (funcall f x) (funcall result x))))
+              ps
+;              :from-end t
+              :initial-value p)))
+
+;;;
+;;;    Same approach as COMPOSE...
+;;;    
+(defun every-pred (p &rest ps)
+  (if (null ps)
+      p
+      (destructuring-bind (p1 . more) ps
+        (if (null more)
+            #'(lambda (x) (and (funcall p x) (funcall p1 x)))
+            (reduce #'every-pred ps :initial-value p)))) )
+
+;;;
+;;;    Clojure's version takes potentially multiple predicates and applies them all to 0+ args.
+;;;    That's easy enough to replicate with Graham's simpler version which only directly handles 1 arg:
+;;;    (every (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(7 21 35))
+;;;    
+
+;; (defun fun (fn &rest fns)
+;;   (if (null fns)
+;;       fn
+;;       (let ((chain (apply #'fun fns)))
+;; 	#'(lambda (x)
+;; 	    (or (funcall fn x) (funcall chain x)))) ))
+
+(defun some-pred (p &rest ps)
+  (if (null ps)
+      p
+      (destructuring-bind (p1 . more) ps
+        (if (null more)
+            #'(lambda (x) (or (funcall p x) (funcall p1 x)))
+            (reduce #'some-pred ps :initial-value p)))) )
 
 (defmacro for ((var start stop) &body body)
   (let ((gstop (gensym)))
