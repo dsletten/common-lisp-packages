@@ -2098,6 +2098,30 @@ If so return the tail of the list starting with the duplicate or the index in th
         #'(lambda (x) (and (funcall p x) (funcall chain x)))) ))
 
 ;;;
+;;;    Graham's does appear to be slightly faster:
+;;;
+;; * (time (dotimes (i 1000000) (filter (every-pred #'alpha-char-p #'lower-case-p #'char-upcase) "Is this not pung?")))
+;; Evaluation took:
+;;   0.588 seconds of real time
+;;   0.588153 seconds of total run time (0.588153 user, 0.000000 system)
+;;   [ Run times consist of 0.011 seconds GC time, and 0.578 seconds non-GC time. ]
+;;   100.00% CPU
+;;   2,117,341,076 processor cycles
+;;   352,011,040 bytes consed
+
+;;;
+;;;    vs. REDUCE (The COMPOSE way)
+;;;
+;; * (time (dotimes (i 1000000) (filter (every-pred #'alpha-char-p #'lower-case-p #'char-upcase) "Is this not pung?")))
+;; Evaluation took:
+;;   0.640 seconds of real time
+;;   0.640302 seconds of total run time (0.640287 user, 0.000015 system)
+;;   [ Run times consist of 0.014 seconds GC time, and 0.627 seconds non-GC time. ]
+;;   100.00% CPU
+;;   2,305,244,700 processor cycles
+;;   415,988,880 bytes consed
+
+;;;
 ;;;    Clojure's version takes potentially multiple predicates and applies them all to 0+ args.
 ;;;    That's easy enough to replicate with Graham's simpler version which only directly handles 1 arg:
 ;;;    (every (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(7 21 35))
