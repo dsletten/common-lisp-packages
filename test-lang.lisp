@@ -656,6 +656,7 @@
    (every (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(7))
    (every (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(7 21 35))
    (every (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '())
+   (some (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(8 21 200))
    (let* ((f #'integerp) (g #'oddp) (h #'plusp) (i #'(lambda (x) (zerop (mod x 7)))) (preds (list f g h i)))
      (every (apply #'every-pred preds) '(7 21 35)))) )
 
@@ -664,6 +665,7 @@
    (funcall (some-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) -3)
    (some (some-pred #'integerp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(9.0 7.0 -21.0))
    (some (some-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(9 7 -22 35))
+   (every (some-pred (every-pred #'integerp #'oddp) #'plusp #'(lambda (x) (zerop (mod x 7)))) '(9 7.0 22 -42))
    (not (some (some-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '()))) )
 
 (deftest test-firsts-rests ()

@@ -2089,6 +2089,15 @@ If so return the tail of the list starting with the duplicate or the index in th
             (reduce #'every-pred ps :initial-value p)))) )
 
 ;;;
+;;;    Back to Graham's way.
+;;;    
+(defun every-pred (p &rest ps)
+  (if (null ps)
+      p
+      (let ((chain (apply #'every-pred ps)))
+        #'(lambda (x) (and (funcall p x) (funcall chain x)))) ))
+
+;;;
 ;;;    Clojure's version takes potentially multiple predicates and applies them all to 0+ args.
 ;;;    That's easy enough to replicate with Graham's simpler version which only directly handles 1 arg:
 ;;;    (every (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(7 21 35))
@@ -2108,6 +2117,12 @@ If so return the tail of the list starting with the duplicate or the index in th
         (if (null more)
             #'(lambda (x) (or (funcall p x) (funcall p1 x)))
             (reduce #'some-pred ps :initial-value p)))) )
+
+(defun some-pred (p &rest ps)
+  (if (null ps)
+      p
+      (let ((chain (apply #'some-pred ps)))
+        #'(lambda (x) (or (funcall p x) (funcall chain x)))) ))
 
 (defmacro for ((var start stop) &body body)
   (let ((gstop (gensym)))
