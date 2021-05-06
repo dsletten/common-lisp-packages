@@ -668,6 +668,17 @@
    (every (some-pred (every-pred #'integerp #'oddp) #'plusp #'(lambda (x) (zerop (mod x 7)))) '(9 7.0 22 -42))
    (not (some (some-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '()))) )
 
+
+
+
+
+
+(setf (symbol-function 'my-length) (lrec #'(lambda (x f) (declare (ignore x)) (1+ (funcall f))) 0))
+(setf (symbol-function 'every-oddp) (lrec #'(lambda (x f) (and (oddp x) (funcall f))) t))
+(setf (symbol-function 'my-copy-list) (lrec #'(lambda (x f) (cons x (funcall f)))))
+(setf (symbol-function 'my-remove-duplicates) (lrec #'(lambda (x f) (adjoin x (funcall f)))))
+(setf (symbol-function 'find-if-odd) (lrec #'(lambda (x f) (if (oddp x) x (funcall f)))))
+
 (deftest test-firsts-rests ()
   (check
    (equal (multiple-value-list (firsts-rests '())) '(() ()))

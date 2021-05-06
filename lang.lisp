@@ -2148,6 +2148,29 @@ If so return the tail of the list starting with the duplicate or the index in th
       (let ((chain (apply #'some-pred ps)))
         #'(lambda (x) (or (funcall p x) (funcall chain x)))) ))
 
+;;;
+;;;    Not sold on this one...Seems like forced refactoring.
+;;;    Refactor simply because there is a pattern.
+;;;    -Produces inherently non tail recursive functions.
+;;;    -A lot of boilerplate!
+;;;    -Functions such as EVERY already exist!
+;;;    
+;; (defun lrec (f &optional (base nil base-provided-p))
+;;   (labels ((no-base (l)
+;;              (unless (null l)
+;;                (funcall f (first l) #'(lambda () (no-base (rest l)))) ))
+;;            (value-base (l)
+;;              (if (null l)
+;;                  base
+;;                  (funcall f (first l) #'(lambda () (value-base (rest l)))) ))
+;;            (function-base (l)
+;;              (if (null l)
+;;                  (funcall base)
+;;                  (funcall f (first l) #'(lambda () (function-base (rest l)))) )))
+;;     (cond ((not base-provided-p) #'no-base)
+;;           ((functionp base) #'function-base)
+;;           (t #'value-base))))
+
 (defmacro for ((var start stop) &body body)
   (let ((gstop (gensym)))
     `(do ((,var ,start (1+ ,var))
