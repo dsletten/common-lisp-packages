@@ -35,10 +35,11 @@
            :hash-keys :hash-keys-values :hash-values
            :intersection
            :linked-queue
-           :make-circular-list :make-empty :make-linked-queue :make-ring-buffer :make-set :make-vector-queue
+           :make-circular-list :make-empty :make-linked-queue :make-persistent-queue :make-ring-buffer :make-rollback-queue :make-set :make-vector-queue
            :next
+           :persistent-queue
            :queue :queuep
-           :remove-elt
+           :remove-elt :rollback :rollback-queue
            :set :set-equal-p :setp :size :subsetp :symmetric-difference
            :union
            :vector-queue)
@@ -208,14 +209,121 @@
           rear nil
           size 0)))
 
+;;;
+;;;    This shares the same storage!
+;;;    
+;; (defmethod copy ((q linked-queue))
+;;   (let ((new-queue (make-linked-queue)))
+;;     (with-slots ((old-front front) (old-rear rear) (old-size size)) q
+;;       (with-slots ((new-front front) (new-rear rear) (new-size size)) new-queue
+;;         (setf new-front old-front
+;;               new-rear old-rear
+;;               new-size old-size)))
+;;     new-queue))
+
 (defmethod copy ((q linked-queue))
   (let ((new-queue (make-linked-queue)))
-    (with-slots ((old-front front) (old-rear rear) (old-size size)) q
-      (with-slots ((new-front front) (new-rear rear) (new-size size)) new-queue
-        (setf new-front old-front
-              new-rear old-rear
-              new-size old-size)))
-    new-queue))
+    (dolist (elt (elements q) new-queue)
+      (enqueue new-queue elt))))
+
+;;;
+;;;    Rollback queue
+;;;    - Latest enqueue operation can be undone.
+;;;    
+(defclass rollback-queue (linked-queue)
+  ((undo :initform nil)))
+
+(defun make-rollback-queue ()
+  (make-instance 'rollback-queue))
+
+(defmethod enqueue :before ((q rollback-queue) obj)
+  (declare (ignore obj))
+  (with-slots (undo rear) q
+    (setf undo rear)))
+
+(defgeneric rollback (queue)
+  (:documentation "Undo the previous enqueue operation on a rollback queue."))
+;; (defmethod rollback :around ((q rollback-queue))
+;;   (with-slots (undo) q
+;;     (cond ((emptyp q) (error "Queue is empty"))
+;;           ((null undo) nil) ; Nothing to roll back
+;;           (t (call-next-method)))) )
+(defmethod rollback :around ((q rollback-queue))
+  (with-slots (undo) q
+    (if (emptyp q)
+        (error "Queue is empty")
+        (call-next-method))))
+;; (defmethod rollback ((q rollback-queue))
+;;   (with-slots (front rear undo size) q
+;;     (setf rear undo
+;;           undo nil
+;;           (rest rear) nil)
+;;     (when (null rear)
+;;       (setf front rear))
+;;     (decf size)))
+(defmethod rollback ((q rollback-queue))
+  (with-slots (front rear undo size) q
+    (flet ((nothing-to-rollback-p ()
+             (and (null undo)
+                  (not (eq front rear)))) ) ; Relies on :AROUND method detecting empty queue.
+      (cond ((nothing-to-rollback-p) nil)
+            (t (setf rear undo
+                     undo nil)
+               (if (null rear)
+                   (setf front rear)
+                   (setf (rest rear) nil))
+               (decf size)))) ))
+
+(defmethod make-empty :after ((q rollback-queue))
+  (with-slots (undo) q
+    (setf undo nil)))
+
+;;;
+;;;    Persistent queue (See Fox Concise DS&A)
+;;;    
+(defclass persistent-queue (queue)
+  ((front :initform '() :initarg :front)
+   (rear :initform '() :initarg :rear)
+   (count :initform 0 :initarg :count)))
+
+(defun make-persistent-queue ()
+  (make-instance 'persistent-queue))
+
+(defmethod size ((q persistent-queue))
+  (with-slots (count) q
+    count))
+
+(defmethod emptyp ((q persistent-queue))
+  (zerop (size q)))
+
+(defmethod make-empty ((q persistent-queue))
+  (make-persistent-queue))
+
+(defmethod enqueue ((q persistent-queue) obj)
+  (with-slots (front rear count) q
+    (if (emptyp q)
+        (make-instance 'persistent-queue :front (list obj) :count 1)
+        (make-instance 'persistent-queue :front front :rear (cons obj rear) :count (1+ count)))) )
+
+(defmethod dequeue ((q persistent-queue))
+  (with-slots (front rear count) q
+    (if (null (rest front))
+        (values (make-instance 'persistent-queue :front (reverse rear) :rear '() :count (1- count)) (front q))
+        (values (make-instance 'persistent-queue :front (rest front) :rear rear :count (1- count)) (front q)))) )
+
+(defmethod front ((q persistent-queue))
+  (with-slots (front) q
+    (first front)))
+
+;;;
+;;;    ????
+;;;    
+(defmethod copy ((q persistent-queue))
+  q)
+
+(defmethod elements ((q persistent-queue))
+  (with-slots (front rear) q
+    (append front (reverse rear)))) ; Good enough??
 
 ;;;
 ;;;    Vector-based implementation

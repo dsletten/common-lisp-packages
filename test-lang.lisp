@@ -34,6 +34,16 @@
 (use-package :test)
 
 ;;;
+;;;    No test
+;;;
+;print-plist
+
+;;;
+;;;    Missing
+;;;
+;dotuples
+
+;;;
 ;;;    Fix the list implementation!!
 ;;;    
 (deftest test-splice ()
@@ -389,6 +399,12 @@
 (defun count-consonants (s)
   (count-if #'(lambda (ch) (member ch (coerce "bcdfghjklmnpqrstvwxyz" 'list))) s :key #'char-downcase))
 
+;;;
+;;;    This typically does not make sense for an equality test!
+;;;    (group-until #'(lambda (l) (= (reduce #'+ l) 2)) '(1 2 1 2)) => ((1 2 1 2))
+;;;    (group-until #'(lambda (l) (= (reduce #'+ l) 3)) '(1 2 1 2)) => ((1) (2) (1) (2))
+;;;    (group-until #'(lambda (l) (> (reduce #'+ l) 3)) '(1 2 1 2)) => ((1 2) (1 2))
+;;;    
 (deftest test-group-until ()
   (check
    (equal (group-until #'(lambda (l) (> (reduce #'+ l) 20)) '(4 19 4 9 5 12 5 3 4 1 1 9 5 18)) '((4) (19) (4 9 5) (12 5 3) (4 1 1 9 5) (18)))
@@ -561,6 +577,25 @@
    (equal (mapcars #'abs '(2 5 6) '(99 -23 -8)) '(2 5 6 99 23 8))
    (equal (mapcars #'sqrt (make-range 2 7) (make-range 9 4)) '(1.4142135 1.7320508 2.0 2.236068 2.4494898 2.6457512 3.0 2.828427 2.6457512 2.4494898 2.236068 2.0))))
 
+;;;
+;;;    See PAIP ch.1 (pg. 19)
+;;;
+(defun number-and-negation (obj)
+  (if (numberp obj)
+      (list obj (- obj))
+      nil))
+
+(deftest test-mappend ()
+  (check
+   (equal (mappend #'number-and-negation '(testing 1 2 3 test))
+          (mapcan #'number-and-negation '(testing 1 2 3 test)))
+   (equal (mappend #'list '(a b c d) '(1 2 3 4))
+          (mapcan #'list '(a b c d) '(1 2 3 4)))
+   (equal (mappend #'list '(a b c d) '(1 2 3))
+          (mapcan #'list '(a b c d) '(1 2 3)))
+   (equal (mappend #'list '(a b c) '(1 2 3 4))
+          (mapcan #'list '(a b c) '(1 2 3 4)))) )
+  
 (deftest test-iterate ()
   (check
    (let ((iterator (iterate #'1+ 0)))
@@ -634,6 +669,26 @@
    ;; COMPLEMENT
    (equal (mapcar (compose #'not #'evenp) #5=(loop for i from 1 to 10 collect i)) (mapcar (complement #'evenp) #5#))))
 
+(deftest test-juxtapose ()
+  (check
+   (equal (multiple-value-list (funcall (juxtapose #'truncate #'floor #'ceiling #'round) 23 10)) '((2 3) (2 3) (3 -7) (2 3)))
+   (equal (multiple-value-list (funcall (juxtapose #'truncate #'floor #'ceiling #'round) 2.3)) '((2 0.29999995) (2 0.29999995) (3 -0.70000005) (2 0.29999995)))
+   (equal (multiple-value-list (funcall (juxtapose #'string-upcase #'string-downcase #'string-capitalize) "Is this not pung?")) '(("IS THIS NOT PUNG?") ("is this not pung?") ("Is This Not Pung?")))) )
+
+(deftest test-partial ()
+  (check
+   (= (funcall (partial #'reduce #'+) '(1 2 3)) 6)
+   (funcall (partial #'> (funcall (partial #'reduce #'+) '(1 2 3))) 3)
+   (= (funcall (partial #'+ 1) 8) (1+ 8))
+   (equal (funcall (compose (partial #'apply #'nconc) #'mapcar) #'rest '((a b c) (1 2) (x y z))) '(B C 2 Y Z)))) ; MAPCAN
+
+(deftest test-partial* ()
+  (check
+   (funcall (partial* #'typep 'atom) 'a) ; ATOM
+   (not (funcall (partial* #'typep 'atom) '(1 2)))
+   (= (funcall (partial* #'- 1) 8) (1- 8))))
+
+
 ;;;
 ;;;    Look for examples in other tests.
 ;;;    
@@ -649,6 +704,7 @@
 ;;;    
 (deftest test-every-pred ()
   (check
+   (equal (mapcar (every-pred #'integerp #'oddp) '(a "a" 2 3)) '(nil nil nil t))
    (funcall (every-pred #'integerp #'oddp #'plusp) 3)
    (not (funcall (every-pred #'integerp #'oddp #'plusp) 3.0))
    (not (funcall (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) 3))
@@ -662,22 +718,297 @@
 
 (deftest test-some-pred ()   
   (check
+   (equal (mapcar (some-pred #'integerp #'symbolp) '(a "a" 2 3)) '(t nil t t))
    (funcall (some-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) -3)
    (some (some-pred #'integerp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(9.0 7.0 -21.0))
    (some (some-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(9 7 -22 35))
    (every (some-pred (every-pred #'integerp #'oddp) #'plusp #'(lambda (x) (zerop (mod x 7)))) '(9 7.0 22 -42))
    (not (some (some-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '()))) )
 
+;;;
+;;;    This one is weird...
+;;;    
+(deftest test-partition ()
+  (check
+   (equal (multiple-value-list (partition '())) '(() ()))
+   (equal (multiple-value-list (partition '(a))) '(() (a)))
+   (equal (multiple-value-list (partition '(a b))) '((a) (b)))
+   (equal (multiple-value-list (partition '(a b c))) '((b) (a c)))
+   (equal (multiple-value-list (partition '(a b c d))) '((a c) (b d)))) )
+
+(deftest test-stable-partition ()
+  (check
+   (equal (multiple-value-list (stable-partition '())) '(() ()))
+   (equal (multiple-value-list (stable-partition '(a))) '((a) ()))
+   (equal (multiple-value-list (stable-partition '(a b))) '((a) (b)))
+   (equal (multiple-value-list (stable-partition '(a b c))) '((a c) (b)))
+   (equal (multiple-value-list (stable-partition '(a b c d))) '((a c) (b d)))) )
+
+(deftest test-stable-stream-partition ()
+  (check
+   (equal (multiple-value-list (stable-stream-partition (make-string-input-stream ""))) '(() ()))
+   (equal (multiple-value-list (stable-stream-partition (make-string-input-stream "p"))) '((#\p) ()))
+   (equal (multiple-value-list (stable-stream-partition (make-string-input-stream "pu"))) '((#\p) (#\u)))
+   (equal (multiple-value-list (stable-stream-partition (make-string-input-stream "pun"))) '((#\p #\n) (#\u)))
+   (equal (multiple-value-list (stable-stream-partition (make-string-input-stream "pung"))) '((#\p #\n) (#\u #\g)))) )
+
+(deftest test-prefix-generator ()
+  (check
+   (equal (loop with l = '() with generator = (prefix-generator l) repeat (1+ (length l)) collect (funcall generator))
+          '(()))
+   (equal (loop with l = '(a b c d) with generator = (prefix-generator l) repeat (1+ (length l)) collect (funcall generator))
+          '(() (A) (A B) (A B C) (A B C D)))) )
+
+(deftest test-build-prefix ()
+  (check
+   (let ((l '(a b c d)))
+     (dotimes (i (1+ (length l)) t)
+       (unless (equal (build-prefix l (nthcdr i l)) (take i l))
+         (return nil)))) ))
+
+(deftest test-destructure ()
+  (check
+   (let ((l1 '(a b c))
+         (l2 '(1 2 3 4 5 6)))
+     (equal (destructure ((x y z &optional zz) l1
+                          (i j k . nums) l2)
+              (list (list x y z zz) (list i j k nums)))
+            '((a b c nil) (1 2 3 (4 5 6)))) )))
+
+;macroexpand-all
+
+;;;
+;;;    TREE-MAP doesn't handle NIL properly here?
+;;;
+;; (let ((tree '(LET ((L '(A B C D)))
+;;                                   (DOTIMES (I (1+ (LENGTH L)) T)
+;;                                     (UNLESS
+;;                                         (EQUAL (BUILD-PREFIX L (NTHCDR I L))
+;;                                                (TAKE I L))
+;;                                       (RETURN NIL)))))) (tree-map #'cons (analyze-tree tree) tree))
+
+;; ((COMMON-LISP . LET)
+;;  (((LANG . L)
+;;    ((COMMON-LISP . QUOTE) ((LANG . A) (LANG . B) (LANG . C) (LANG . D)))))
+;;  ((COMMON-LISP . DOTIMES)
+;;   ((LANG . I) ((COMMON-LISP . 1+) ((COMMON-LISP . LENGTH) (LANG . L)))
+;;    (COMMON-LISP . T))
+;;   ((COMMON-LISP . UNLESS)
+;;    ((COMMON-LISP . EQUAL)
+;;     ((LANG . BUILD-PREFIX) (LANG . L)
+;;      ((COMMON-LISP . NTHCDR) (LANG . I) (LANG . L)))
+;;     ((LANG . TAKE) (LANG . I) (LANG . L)))
+;;    ((COMMON-LISP . RETURN) NIL)))) ; <---------------------- 
 
 
+(deftest test-analyze-tree ()
+  (check
+   (equal (analyze-tree nil) 'COMMON-LISP)
+   (equal (analyze-tree '(a b c)) '(LANG LANG LANG))
+   (equal (analyze-tree '(if (and p q) r s)) '(COMMON-LISP (COMMON-LISP LANG LANG) LANG LANG))
+   (equal (analyze-tree '(LET ((L '(A B C D)))
+                          (DOTIMES (I (1+ (LENGTH L)) T)
+                            (UNLESS
+                                (EQUAL (BUILD-PREFIX L (NTHCDR I L))
+                                       (TAKE I L))
+                              (RETURN NIL)))))
+          '(COMMON-LISP ((LANG (COMMON-LISP (LANG LANG LANG LANG))))
+            (COMMON-LISP (LANG (COMMON-LISP (COMMON-LISP LANG)) COMMON-LISP)
+             (COMMON-LISP
+              (COMMON-LISP (LANG LANG (COMMON-LISP LANG LANG)) (LANG LANG LANG))
+              (COMMON-LISP COMMON-LISP)))) )))
 
 
+(deftest test-for ()
+  (check
+   (let ((sum 0))
+     (for (i 1 19)
+       (incf sum i))
+     (= sum 190))
+   (let ((l '()))
+     (for (i 2 5)
+       (push i l))
+     (equal l '(5 4 3 2)))) )
 
-(setf (symbol-function 'my-length) (lrec #'(lambda (x f) (declare (ignore x)) (1+ (funcall f))) 0))
-(setf (symbol-function 'every-oddp) (lrec #'(lambda (x f) (and (oddp x) (funcall f))) t))
-(setf (symbol-function 'my-copy-list) (lrec #'(lambda (x f) (cons x (funcall f)))))
-(setf (symbol-function 'my-remove-duplicates) (lrec #'(lambda (x f) (adjoin x (funcall f)))))
-(setf (symbol-function 'find-if-odd) (lrec #'(lambda (x f) (if (oddp x) x (funcall f)))))
+(deftest test-if-let ()
+  (check
+   (equal (if-let (p (evenp 9))
+            (cons p '(b))
+            :duh)
+          :duh)
+   (= (if-let (ns (rest '(1 2 3)))
+        (apply #'+ ns)
+        0)
+      5)))
+
+(deftest test-when-let ()
+  (check
+   (let ((i 0))
+     (when-let (p (find 7 '(2 4 6 8)))
+       (incf i))
+     (zerop i))
+   (let ((i 0))
+     (when-let (p (find 7 '(2 4 6 8 7)))
+       (incf i))
+     (= i 1))))
+
+(deftest test-when-let* ()
+  (check
+   (= (when-let* ((x (find-if #'consp '(a (1 2) b)))
+                  (y (find-if #'oddp x)))
+        (+ y 10))
+      11)
+   (= (when-let* ((x (find-if #'consp '(a (1 2) b)))
+                  (y (find-if #'evenp x)))
+        (+ y 10))
+      12)
+   (null (when-let* ((x (find-if #'consp '(a (1 2) b)))
+                     (y (find-if #'zerop x)))
+           (+ y 10)))) )
+
+(deftest test-cond-let ()
+  (labels ((foo (n)
+             (cond-let (((zerop n) (x :pung) (y "Too small"))
+                        ((oddp n) (x :foo) (y "Too odd"))
+                        (t (x :bar) (y "Ahh...nice")))
+                       (list x y))))
+    (check
+     (equal (cond-let (((= 1 2) (x (princ 'a)) (y (princ 'b)))
+                       ((= 1 1) (y (princ 'c)) (x (princ 'd)))
+                       (t (x (princ 'e)) y (z (princ 'f))))
+                      (list x y z))
+            '(d c nil))
+     (equal (cond-let (((= 1 2) (x (princ 'a)) (y (princ 'b)))
+                       ((= 1 3) (y (princ 'c)) (x (princ 'd)))
+                       ((= 1 1)) ; Degenerate case...Still functions
+                       (t (x (princ 'e))  (z (princ 'f))))
+                      (list x y z))
+            '(nil nil nil))
+     (equal (foo 0) '(:PUNG "Too small"))
+     (equal (foo 9) '(:FOO "Too odd"))
+     (equal (foo 4) '(:BAR "Ahh...nice")))) )
+
+(deftest test-if3 ()
+  (check
+   (eql (if3 (< 2 3) :foo :bar :baz) :foo)
+   (eql (if3 (> 2 3) :foo :bar :baz) :bar)
+   (eql (if3 '? :foo :bar :baz) :baz)
+   (eql (if3 '#:? :foo :bar :baz) :baz))) ; Any symbol with name "?" should be uncertain.
+
+(deftest test-nif ()
+  (check
+   (equal (mapcar #'(lambda (x) (nif x 'p 'z 'n)) '(0.0 1d0 -1)) '(z p n))))
+
+(deftest test-in ()
+  (check
+   (in (mod 11 4) (3 (+ 2 2) (/ 2 0)))
+   (in (mod 11 7) (3 (+ 2 2) (/ 2 0)))
+   (handler-case (in (mod 11 1) (3 (+ 2 2) (/ 2 0)))
+     (error (e)
+       (declare (ignore e))
+       t)
+     (:no-error (obj)
+       (declare (ignore obj))
+       nil))
+   (let ((operator '+))
+     (in operator ('+ '- '* '/)))
+   (not (let ((operator '%))
+          (in operator ('+ '- '* '/)))) ))
+
+(deftest test-inq ()
+  (check
+   (let ((operator '+))
+     (inq operator (+ - * /)))
+   (let ((operator '%))
+     (not (inq operator (+ - * /)))) ))
+
+(deftest test-in-if ()
+  (check
+   (in-if #'oddp (2 (/ 6 2) (/ 2 0)))
+   (handler-case (in-if #'zerop (2 (/ 6 2) (/ 2 0)))
+     (error (e)
+       (declare (ignore e))
+       t)
+     (:no-error (obj)
+       (declare (ignore obj))
+       nil))))
+
+(deftest test->case ()
+  (check
+   (eq (>case 9
+         (((+ 8 1) (* 3 3)) :yep)
+         (((+ 3 4)) :nope)
+         (((/ 3 0)) :whoops)
+         (t :huh))
+       :yep)
+   (eq (>case 7
+         (((+ 8 1) (* 3 3)) :yep)
+         (((+ 3 4)) :nope)
+         (((/ 3 0)) :whoops)
+         (t :huh))
+       :nope)
+   (handler-case (>case 8
+                   (((+ 8 1) (* 3 3)) :yep)
+                   (((+ 3 4)) :nope)
+                   (((/ 3 0)) :whoops)
+                   (t :huh))
+     (error (e)
+       (declare (ignore e))
+       t)
+     (:no-error (obj)
+       (declare (ignore obj))
+       nil))))
+
+(defun route (source destination path)
+  (let ((link (gethash source path)))
+    (cond ((null link) nil)
+          ((eql destination link) t)
+          (t (route link destination path)))) )
+
+;;;
+;;;    LPN ch. 10
+;;;    
+(deftest test-open-path ()
+  (check
+   (let ((graph (make-hash-table)))
+     (open-path (source destination) '(nancy metz faulquemont stAvold freyming forbach saarbrücken dudweiler)
+       (setf (gethash source graph) destination))
+     (route 'nancy 'dudweiler graph))))
+                                       
+
+;DOTUPLES
+;PARTITION-N
+;MAPTUPLES
+
+;; (deftest test-maptuples ()
+;;   (check
+;;    (equal (maptuples #'+ (x y) '(1 2 3 4)) (mapcar #'(lambda (args) (apply #'+ args)) (group '(1 2 3 4) 2)))
+;;    (equal (maptuples #'+ (x y z) '(1 2 3 4 5 6)) (mapcar #'(lambda (args) (apply #'+ args)) (group '(1 2 3 4 5 6) 3)))) )
+
+(deftest test-maptuples ()
+  (check
+   (equal (maptuples #'+ 2 '(1 2 3 4)) '(3 7))
+   (equal (maptuples #'+ 3 '(1 2 3 4 5 6)) '(6 15))))
+
+
+;; (setf (symbol-function 'my-length) (lrec #'(lambda (x f) (declare (ignore x)) (1+ (funcall f))) 0))
+;; (setf (symbol-function 'every-oddp) (lrec #'(lambda (x f) (and (oddp x) (funcall f))) t))
+;; (setf (symbol-function 'my-copy-list) (lrec #'(lambda (x f) (cons x (funcall f)))))
+;; (setf (symbol-function 'my-remove-duplicates) (lrec #'(lambda (x f) (adjoin x (funcall f)))))
+;; (setf (symbol-function 'find-if-odd) (lrec #'(lambda (x f) (if (oddp x) x (funcall f)))))
+
+;; (setf (symbol-function 'my-copy-tree) (ttrav #'cons))
+;; (my-copy-tree '(a (b (c (d))))) => (A (B (C (D))))
+;; (setf (symbol-function 'count-leaves) (ttrav #'(lambda (l r) (+ l (or r 1))) 1))
+;; (count-leaves '(a (b (c (d))))) => 8
+;; (count-leaves '((a b (c d)) (e) f)) => 10
+;; (setf (symbol-function 'flatten) (ttrav #'nconc #'mklist))
+;; (flatten '((a b (c d)) (e) f)) => (A B C D E F)
+
+;; (setf (symbol-function 'flatten) (trec #'(lambda (o l r) (declare (ignore o)) (nconc (funcall l) (funcall r))) #'mklist))
+;; (flatten '((a b (c d)) (e) f)) => (A B C D E F)
+;; (setf (symbol-function 'rfind-if-oddp) (trec #'(lambda (o l r) (declare (ignore o)) (or (funcall l) (funcall r))) #'(lambda (tree) (and (oddp tree) tree))))
+;; (rfind-if-oddp '(2 (4 ((6 3) 8) 7))) => 3
 
 (deftest test-firsts-rests ()
   (check

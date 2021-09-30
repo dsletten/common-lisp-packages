@@ -24,7 +24,7 @@
 ;;;;
 ;;;;   Example:
 ;;;;
-;;;;   Notes: Recursive descent parser
+;;;;   Notes: Recursive descent parser (Art of Java)
 ;;;;
 ;;;;   What about assignment (=) ?
 ;;;;

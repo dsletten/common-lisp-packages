@@ -22,7 +22,7 @@
 ;;;;   Example:
 ;;;;
 ;;;;   Notes:
-;;;;
+;;;;   Needs work: MAPTUPLES
 ;;;;
 
 ;;;
@@ -36,32 +36,64 @@
 (defpackage :lang
   (:shadowing-import-from :collections :intersection :set :subsetp :union)
   (:use :common-lisp :collections)
-  (:export :after :append1 :approximately= :array-indices :before :best :best-worst
-           :class-template :compose :conc1 :copy-array :cycle
-           :defchain :destructure :dohash :doset :dostring :dotuples :dovector :drop :drop-while :duplicatep
+  (:export :after :append1 :analyze-tree :approximately= :array-indices
+           :before :best :best-worst :build-prefix
+           :>case :class-template :compose :conc1 :copy-array :cycle
+           :defchain :destructure :dohash :doset :dostring :dotuples :dovector
+           :drop :drop-until :drop-while :duplicatep
            :ends-with :every-pred :expand :explode
-           :filter :filter-split :find-some-if :find-subtree :firsts-rests :flatten
-           :get-num :group :high-low :high-low-n :horners
-	   :iffn :is-integer
+           :filter :filter-split :find-some-if :find-subtree :firsts-rests :for :flatten
+           :get-num :group :group-until :high-low :high-low-n :horners
+	   :if-let :if3 :iffn :in :in-if :inq :is-integer :iterate
+           :juxtapose
            :last1 :list-to-string :longerp
            :macroexpand-all :make-empty-seq :make-identity-matrix :make-range
            :map-> :map-array :map-array-index :map0-n :map1-n :mapa-b :mapcars :mappend :mapset
-           :memoize :mklist :mkstr :most :mostn
-           :ppmx :prefixp :print-plist :prompt :prompt-read :prune-if :prune-if-not
-           :read-num :repeat :reread :rmapcar 
+           :memoize :mklist :mkstr :most :mostn :nif
+           :partial :partial* :partition :ppmx
+           :prefix-generator :prefixp :print-plist :prompt :prompt-read :prune-if :prune-if-not
+           :read-list :read-num :repeat :reread :rmapcar 
            :rotate0 :rotate-list0 :rotate1 :rotate-list1
            :same-shape-tree-p
            :shift0 :shift-list0 :shift1 :shift-list1
            :show-symbols :shuffle :singlep :some-pred :sort-symbol-list :splice
 ;           :split-if
-           :starts-with :symb
-           :take :take-drop :take-while :transfer
+           :stable-partition :stream-partition :starts-with :symb
+           :take :take-drop :take-while :take-until :transfer
            :transition :transition-1 :transition-n :transition-stream :translate :traverse :tree-find-if :tree-map
-           :until :valid-num-p :while :with-gensyms)  
-  (:shadow :while :until :prefixp :dovector :macroexpand-all))
+           :until :valid-num-p 
+           :when-let :when-let* :while :with-gensyms))
+;  (:shadow :while :until :prefixp :dovector :macroexpand-all)) ; ????
 
 (in-package lang)
 
+;;;
+;;;    Seibel pg. 101
+;;;
+;; (defmacro with-gensyms ((&rest names) &body body)
+;;   `(let ,(loop for n in names
+;;                collect `(,n (gensym)))
+;;      ,@body))
+
+;;;
+;;;    Seibel's downloadable code is slightly different:
+;;;    
+;; (defmacro with-gensyms ((&rest names) &body body)
+;;   `(let ,(loop for n in names collect `(,n (make-symbol ,(string n))))
+;;      ,@body))
+
+;; (defmacro with-gensyms ((&rest names) &body body)
+;;   `(let ,(loop for n in names
+;;                collect `(,n (make-symbol ,(symbol-name n))))
+;;      ,@body))
+
+;;;
+;;;    Should it be called WITH-GENSYMS if it uses MAKE-SYMBOL???
+;;;    
+(defmacro with-gensyms ((&rest names) &body body)
+  `(let ,(loop for n in names
+               collect `(,n ',(make-symbol (symbol-name n)))) ; ??
+     ,@body))
 
 ;;;
 ;;;    Splice a new sequence into another.
@@ -583,11 +615,11 @@
     (vector (vector))))
 
 (defun prefix-generator (l)
+  "Given a list L return a function that successively yields all prefixes of L."
   (let ((q (make-linked-queue))
         (list l))
     #'(lambda ()
         (prog1 (copy-list (elements q))
-;        (prog1 (elements q)
           (if (endp list)
               (make-empty q)
               (enqueue q (pop list)))) )))
@@ -649,35 +681,12 @@
   `(loop (when ,test (return))
       ,@body) )
 
-;; (defmacro dovector ((var vector-exp &optional result) &body body)
-;;   (let ((v (gensym))
-;;         (l (gensym))
-;;         (i (gensym)))
-;;     `(do* ((,v ,vector-exp)
-;;            (,l (length ,v))
-;;            (,i 0 (1+ ,i))
-;;            ,var)
-;;           ((= ,i ,l) ,result)
-;;        (setf ,var (aref ,v ,i))
-;;        ,@body)))
-
-(defmacro dovector ((var vector-exp &optional result) &body body)
-  (let ((v (gensym))
-        (l (gensym))
-        (i (gensym)))
-    `(do* ((,v ,vector-exp)
-           (,l (length ,v))
-           (,i 0 (1+ ,i)))
-          ((= ,i ,l) ,result)
-       (let ((,var (aref ,v ,i)))
-         ,@body))))
-
 ;;;
 ;;;    Don't (declare (ignore ,i))!!
 ;;;    The macro doesn't use it directly, but DOTIMES does!
 ;;;    
 (defmacro repeat (count &body body)
-  (let ((i (gensym)))
+  (with-gensyms (i)
     `(dotimes (,i ,count)
        ,@body)))
 
@@ -691,25 +700,127 @@
 ;;   `(loop repeat ,count
 ;;          do ,@body))
 
+;; (defmacro dovector ((var vector &optional result) &body body)
+;;   (let ((v (gensym))
+;;         (l (gensym))
+;;         (i (gensym)))
+;;     `(do* ((,v ,vector)
+;;            (,l (length ,v))
+;;            (,i 0 (1+ ,i))
+;;            ,var)
+;;           ((= ,i ,l) ,result)
+;;        (setf ,var (aref ,v ,i))
+;;        ,@body)))
+
+(defmacro dovector ((var vector &optional result) &body body)
+  (with-gensyms (v l i)
+    `(do* ((,v ,vector)
+           (,l (length ,v))
+           (,i 0 (1+ ,i)))
+          ((= ,i ,l) ,result)
+       (let ((,var (aref ,v ,i)))
+         ,@body))))
+
 ;;;
 ;;;    Disallow crosstalk w/ LOOP keywords in BODY?
-;;;    Binding of VARS should be available in RESULT...
+;;;    Binding of VARS should be available in RESULT... This is consistent with DOLIST but not very useful?
 ;;;    
-(defmacro dotuples (((&rest vars) l &optional result) &body body)
-  (let ((list (gensym))
-        (rest (gensym)))
-    `(do ((,list ,l))
-         ((endp ,list) ,result)
-       (destructuring-bind (,@vars . ,rest) ,list
-         ,@body
-         (setf ,list ,rest)))) )
+;; (defmacro dotuples ((vars l &optional result) &body body)
+;;   (with-gensyms (list rest)
+;;     `(do ((,list ,l))
+;;          ((endp ,list) ,result)
+;;        (destructuring-bind (,@vars . ,rest) ,list
+;;          ,@body
+;;          (setf ,list ,rest)))) )
 
-;; (defmacro dotuples (((&rest vars) l &optional result) &body body)
-;;   (let ((res (gensym)))
-;;     `(let ((,res ,result))
-;;        (loop for ,vars on ,l by #'(lambda (l) (nthcdr ,(length vars) l))
-;;              do ,@body)
-;;        (or ,res nil))))
+(defmacro dotuples ((vars l &optional result) &body body)
+  "Iterate over list L consuming VARS variables on each iteration. The bindings of these variables are visible in BODY."
+  `(loop for ,vars on ,l by #'(lambda (l) (nthcdr ,(length vars) l))
+         do ,@body
+         finally (return ,result)))
+
+;;;
+;;;    Kind of weird? VARS specifies variable bindings, but there is no body in which they are visible...
+;;;    
+;; (defmacro maptuples (f vars l)
+;;   "Map the function F over the list L, consuming VARS variables on each iteration. 
+;; If the length of L is not a multiple of the number of VARS, then some variables will be assigned NIL on the final iteration."
+;;   `(loop for ,vars on ,l by #'(lambda (l) (nthcdr ,(length vars) l))
+;;          collect (funcall ,f ,@vars)))
+
+(defun maptuples (f n l)
+  "Map function F  over list L, consuming N elements on each invocation."
+  (mapcar #'(lambda (args) (apply f args)) (group l n)))
+
+;;;
+;;;    Cosmetic changes to Graham's DO-TUPLES/O
+;;;    
+(defmacro open-path (vars source &body body)
+  (if vars
+      (with-gensyms (src)
+        `(let ((,src ,source))
+           (mapc #'(lambda ,vars ,@body)
+                 ,@(map0-n #'(lambda (n)
+                               `(nthcdr ,n ,src))
+                           (1- (length vars)))) ))
+      nil))
+
+;;;
+;;;    Derived from my DOTUPLES above
+;;;    Graham's is more elegant.
+;;;
+;; (defmacro open-path (vars source &body body)
+;;   (with-gensyms (src rest)
+;;     `(do ((,src ,source (rest ,src)))
+;;          (nil)
+;;        (destructuring-bind (,@vars . ,rest) ,src
+;;          ,@body
+;;          (when (null ,rest)
+;;            (return)))) ))
+
+;; (macroexpand-1 '(do-tuples/o (x y) '(a b c d) (print (list x y))))
+
+;; (PROG ((#:G4225 '(A B C D)))
+;;   (MAPC #'(LAMBDA (X Y) (PRINT (LIST X Y)))
+;;         (NTHCDR 0 #:G4225)
+;;         (NTHCDR 1 #:G4225)))
+;; T
+;; * (macroexpand-1 '(open-path (x y) '(a b c d) (print (list x y))))
+
+;; (LET ((#:SRC '(A B C D)))
+;;   (MAPC #'(LAMBDA (X Y) (PRINT (LIST X Y))) (NTHCDR 0 #:SRC) (NTHCDR 1 #:SRC)))
+;; T
+
+
+;;;    CLOSED-PATH
+(defmacro do-tuples/c (parms source &body body)
+  (if parms
+      (with-gensyms (src rest bodfn)
+        (let ((len (length parms)))
+          `(let ((,src ,source))
+             (when (nthcdr ,(1- len) ,src)
+               (labels ((,bodfn ,parms ,@body))
+                 (do ((,rest ,src (cdr ,rest)))
+                     ((not (nthcdr ,(1- len) ,rest))
+                      ,@(mapcar #'(lambda (args)
+                                    `(,bodfn ,@args))
+                                (dt-args len rest src))
+                      nil)
+                   (,bodfn ,@(map1-n #'(lambda (n)
+                                         `(nth ,(1- n) 
+                                               ,rest))
+                                     len))))))))))
+ 
+(defun dt-args (len rest src)
+  (map0-n #'(lambda (m)
+              (map1-n #'(lambda (n) 
+                          (let ((x (+ m n)))
+                            (if (>= x len)
+                                `(nth ,(- x len) ,src)
+                                `(nth ,(1- x) ,rest))))
+                      len))
+          (- len 2)))
+
 
 ;; (defmacro dostring ((ch string &optional result) &body body)
 ;;   (let ((s (gensym))
@@ -724,9 +835,7 @@
 ;;        ,@body)))
 
 (defmacro dostring ((ch string &optional result) &body body)
-  (let ((s (gensym))
-        (l (gensym))
-        (i (gensym)))
+  (with-gensyms (s l i)
     `(do* ((,s ,string)
            (,l (length ,s))
            (,i 0 (1+ ,i)))
@@ -746,8 +855,7 @@
 ;;        (or ,res nil))))
 
 (defmacro dohash (((key val) hash &optional result) &body body)
-  (let ((next (gensym))
-        (more (gensym)))
+  (with-gensyms (next more)
     `(with-hash-table-iterator (,next ,hash)
        (loop (multiple-value-bind (,more ,key ,val) (,next)
                (unless ,more (return ,result))
@@ -913,17 +1021,85 @@
           until (emptyp (first take-drop))
           collect (first take-drop))))
 
-(defun group-until (f seq)
-  "Group elements of SEQ into a subsequence until F returns true for that subsequence, then start next subsequence."
+;;;
+;;;    The semantics here seem wrong since the reversed list is tested but then flipped around when included in the result.
+;;;    That may actually be irrelevant here since the TIPPING-POINT function normally tests the subsequence as a set, i.e.,
+;;;    independent of its ordering.
+;;;    
+;; (defun group-until-list (tipping-point seq)
+;;   "Group elements of SEQ into a subsequence until TIPPING-POINT returns true for that subsequence, then start next subsequence."
+;;   (let ((groups (reduce #'(lambda (groups elt)
+;;                             (destructuring-bind (current . result) groups
+;;                               (if (funcall tipping-point (cons elt current))           ; Reversed list is tested??
+;;                                   (cons (list elt) (cons (nreverse current) result)) ; But flipped for result???
+;;                                   (cons (cons elt current) result))))
+;;                         seq
+;;                         :initial-value (cons '() '()))) )
+;;     (destructuring-bind (current . result) groups
+;;       (nreverse (cons (nreverse current) result)))) )
+
+;;;
+;;;    The above version is faster than these 2, presumably due to CLOS below.
+;;;    The persistant-queue version is surprisingly competitive to the rollback version.
+;;;    I expected that the ELEMENTS method for the persistent-queue would sink it.
+;;;
+;;;    It does appear to slow down as the length of the accumulated subsequence grows:
+;;;    (defvar *l* (loop repeat 800 collect (random 20)))
+;;;    (time (dotimes (i 10000) (GROUP-UNTIL #'(LAMBDA (L) (> (REDUCE #'+ L) 20)) *l*)))
+;;;    (time (dotimes (i 10000) (GROUP-UNTIL-persistent #'(LAMBDA (L) (> (REDUCE #'+ L) 20)) *l*)))
+;;;
+;;;    vs.
+;;;
+;;;    (time (dotimes (i 10000) (GROUP-UNTIL #'(LAMBDA (L) (> (REDUCE #'+ L) 100)) *l*)))
+;;;    (time (dotimes (i 10000) (GROUP-UNTIL-persistent #'(LAMBDA (L) (> (REDUCE #'+ L) 100)) *l*)))
+;;;    
+(defun group-until-persistent (tipping-point seq)
+  "Group elements of SEQ into a subsequence until TIPPING-POINT returns true for that subsequence, then start next subsequence."
   (let ((groups (reduce #'(lambda (groups elt)
                             (destructuring-bind (current . result) groups
-                              (if (funcall f (cons elt current))
-                                  (cons (list elt) (cons (nreverse current) result))
-                                  (cons (cons elt current) result))))
+                              (if (funcall tipping-point (elements (enqueue current elt)))
+                                  (cons (enqueue (make-persistent-queue) elt) (enqueue result (elements current)))
+                                  (cons (enqueue current elt) result))))
                         seq
-                        :initial-value (cons '() '()))) )
+                        :initial-value (cons (make-persistent-queue) (make-persistent-queue)))) )
     (destructuring-bind (current . result) groups
-      (nreverse (cons (nreverse current) result)))) )
+      (elements (enqueue result (elements current)))) ))
+
+;; (defun group-until (tipping-point seq)
+;;   "Group elements of SEQ into a subsequence until TIPPING-POINT returns true for that subsequence, then start next subsequence."
+;;   (let ((groups (reduce #'(lambda (groups elt)
+;;                             (destructuring-bind (current . result) groups
+;;                               (enqueue current elt)
+;;                               (if (funcall tipping-point (elements current))
+;;                                   (let ((new-current (make-rollback-queue)))
+;;                                     (rollback current)
+;;                                     (enqueue result (elements current))
+;;                                     (enqueue new-current elt)
+;;                                     (cons new-current result))
+;;                                   (cons current result))))
+;;                         seq
+;;                         :initial-value (cons (make-rollback-queue) (make-linked-queue)))) )
+;;     (destructuring-bind (current . result) groups
+;;       (elements (enqueue result (elements current)))) ))
+
+;;;
+;;;    All of the fat trimmed off...
+;;;    
+(defun group-until (tipping-point seq)
+  "Group elements of SEQ into a subsequence until TIPPING-POINT returns true for that subsequence, then start next subsequence."
+  (let ((groups (reduce #'(lambda (groups elt)
+                            (destructuring-bind (current . result) groups
+                              (enqueue current elt)
+                              (when (funcall tipping-point (elements current))
+                                (rollback current)
+                                (enqueue result (elements current))
+                                (make-empty current)
+                                (enqueue current elt))
+                              groups))
+                        seq
+                        :initial-value (cons (make-rollback-queue) (make-linked-queue)))) )
+    (destructuring-bind (current . result) groups
+      (elements (enqueue result (elements current)))) ))
 
 ;;;
 ;;;    This is not tail-recursive, so it will fail with a large enough (?!) tree.
@@ -1608,6 +1784,8 @@ If so return the tail of the list starting with the duplicate or the index in th
 ;;;    Given a list and a tail of that list, accumulate all elements
 ;;;    preceding the tail.
 ;;;    (let ((l (list 1 2 3 4 5))) (build-prefix l (nthcdr 4 l))) => (1 2 3 4)
+;;;    Compare:
+;;;    (let ((l (list 1 2 3 4 5))) (take 4 l)) => (1 2 3 4)
 ;;;    
 (defun build-prefix (l tail)
   (cond ((eq l tail) '())
@@ -1784,8 +1962,8 @@ If so return the tail of the list starting with the duplicate or the index in th
 ;;;
 ;;;    Non-destructive alternative to MAPCAN.
 ;;;    
-(defun mappend (fn &rest lsts)
-  (apply #'append (apply #'mapcar fn lsts)))
+(defun mappend (f &rest lists)
+  (apply #'append (apply #'mapcar f lists)))
 
 ;;;
 ;;;    Map over multiple lists in sequence, accumulating all results.
@@ -2036,6 +2214,65 @@ If so return the tail of the list starting with the duplicate or the index in th
                   (reduce #'compose fs)))) )))
 
 ;;;
+;;;    Inspired by Clojure juxt
+;;;    - Multiple values returned by each function are captured in their own list.
+;;;
+(defun juxtapose (&rest fs)
+  #'(lambda (&rest args)
+      (values-list (mapcar #'(lambda (f) (multiple-value-list (apply f args))) fs))))
+;      (values-list (mapcar #'(lambda (f) (apply f args)) fs))))
+
+;;;
+;;;    Graham ACL pg. 110
+;;;
+;;;    "Curry"
+;;;    Have to pay runtime penalty rather than using function literal (essentially inline)?
+;;;
+;;;    Clozure:
+;;;    
+;; ? (time (dotimes (i 10000) (funcall #'(lambda (x) (+ x 8)) 7)))
+;; (DOTIMES (I 10000) (FUNCALL #'(LAMBDA (X) (+ X 8)) 7))
+;; took  7 microseconds (0.000007 seconds) to run.
+;; During that period, and with 16 available CPU cores,
+;;      10 microseconds (0.000010 seconds) were spent in user mode
+;;       0 microseconds (0.000000 seconds) were spent in system mode
+;; NIL
+;; ? (time (dotimes (i 10000) (funcall (partial #'+ 8) 7)))
+;; (DOTIMES (I 10000) (FUNCALL (PARTIAL #'+ 8) 7))
+;; took 6,144 microseconds (0.006144 seconds) to run.
+;;      1,107 microseconds (0.001107 seconds, 18.02%) of which was spent in GC.
+;; During that period, and with 16 available CPU cores,
+;;      6,161 microseconds (0.006161 seconds) were spent in user mode
+;;          0 microseconds (0.000000 seconds) were spent in system mode
+;;  1,280,000 bytes of memory allocated.
+;; NIL
+;; ? (time (dotimes (i 10000) (funcall #'(lambda (x) (+ x 8)) 7)))
+;; (DOTIMES (I 10000) (FUNCALL #'(LAMBDA (X) (+ X 8)) 7))
+;; took 12 microseconds (0.000012 seconds) to run.
+;; During that period, and with 16 available CPU cores,
+;;      16 microseconds (0.000016 seconds) were spent in user mode
+;;       0 microseconds (0.000000 seconds) were spent in system mode
+;; NIL
+;; ? (time (dotimes (i 10000) (funcall (partial #'+ 8) 7)))
+;; (DOTIMES (I 10000) (FUNCALL (PARTIAL #'+ 8) 7))
+;; took 4,169 microseconds (0.004169 seconds) to run.
+;; During that period, and with 16 available CPU cores,
+;;      4,171 microseconds (0.004171 seconds) were spent in user mode
+;;          0 microseconds (0.000000 seconds) were spent in system mode
+;;  1,280,000 bytes of memory allocated.
+;; NIL
+(defun partial (f &rest args)
+  #'(lambda (&rest args2)
+      (apply f (append args args2))))
+
+;;;
+;;;    "Right Curry"
+;;;    
+(defun partial* (f &rest args)
+  #'(lambda (&rest args2)
+      (apply f (append args2 args))))
+
+;;;
 ;;;    Slightly modified from Graham.
 ;;;    
 ;(defun fif (if then &optional else)
@@ -2056,7 +2293,14 @@ If so return the tail of the list starting with the duplicate or the index in th
 	  (funcall then x)
 	  (funcall else x))))
 
-;;; Multiple args to pred??
+;;; 
+;;;    Multiple args to pred??
+;;;    ACL pg. 110 CONJOIN/DISJOIN accept multiple args to pred, but...
+;;;    Clojure's version takes potentially multiple predicates and applies them all to 0+ args.
+;;;    That's easy enough to replicate with Graham's simpler version which only directly handles 1 arg:
+;;;    (every (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(7 21 35))
+;;;    
+
 ;; (defun fint (fn &rest fns)
 ;;   (if (null fns)
 ;;       fn
@@ -2121,12 +2365,6 @@ If so return the tail of the list starting with the duplicate or the index in th
 ;;   2,305,244,700 processor cycles
 ;;   415,988,880 bytes consed
 
-;;;
-;;;    Clojure's version takes potentially multiple predicates and applies them all to 0+ args.
-;;;    That's easy enough to replicate with Graham's simpler version which only directly handles 1 arg:
-;;;    (every (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(7 21 35))
-;;;    
-
 ;; (defun fun (fn &rest fns)
 ;;   (if (null fns)
 ;;       fn
@@ -2149,9 +2387,9 @@ If so return the tail of the list starting with the duplicate or the index in th
         #'(lambda (x) (or (funcall p x) (funcall chain x)))) ))
 
 ;;;
-;;;    Not sold on this one...Seems like forced refactoring.
+;;;    Not sold on these three...Seems like forced refactoring.
 ;;;    Refactor simply because there is a pattern.
-;;;    -Produces inherently non tail recursive functions.
+;;;    -Produces inherently non tail recursive functions (LREC).
 ;;;    -A lot of boilerplate!
 ;;;    -Functions such as EVERY already exist!
 ;;;    
@@ -2171,14 +2409,250 @@ If so return the tail of the list starting with the duplicate or the index in th
 ;;           ((functionp base) #'function-base)
 ;;           (t #'value-base))))
 
+;; (defun ttrav (f &optional (base #'identity))
+;;   (labels ((value-base (tree)
+;;              (if (atom tree)
+;;                  base
+;;                  (funcall f 
+;;                           (value-base (car tree))
+;;                           (when (cdr tree)
+;;                             (value-base (cdr tree)))) ))
+;;            (function-base (tree)
+;;              (if (atom tree)
+;;                  (funcall base tree)
+;;                  (funcall f
+;;                           (function-base (car tree))
+;;                           (when (cdr tree)
+;;                             (function-base (cdr tree)))) )))
+;;     (cond ((functionp base) #'function-base)
+;;           (t #'value-base))))
+
+;; (defun trec (f &optional (base #'identity))
+;;   (labels ((value-base (tree)
+;;              (if (atom tree)
+;;                  base
+;;                  (funcall f tree
+;;                           #'(lambda () (value-base (car tree)))
+;;                           #'(lambda () (when (cdr tree)
+;;                                          (value-base (cdr tree)))) )))
+;;            (function-base (tree)
+;;              (if (atom tree)
+;;                  (funcall base tree)
+;;                  (funcall f tree
+;;                           #'(lambda () (function-base (car tree)))
+;;                           #'(lambda () (when (cdr tree)
+;;                                          (function-base (cdr tree)))) ))))
+;;     (cond ((functionp base) #'function-base)
+;;           (t #'value-base))))
+
+;;;
+;;;    Why???
+;;;
+;; `(loop for ,var from ,start to ,stop
+;;        do ,@body)
+
+;; (defmacro for ((var start stop) &body body)
+;;   (let ((gstop (gensym)))
+;;     `(do ((,var ,start (1+ ,var))
+;;           (,gstop ,stop))
+;;          ((> ,var ,gstop))
+;;        ,@body)))
+
 (defmacro for ((var start stop) &body body)
-  (let ((gstop (gensym)))
+  (with-gensyms (gstop)
     `(do ((,var ,start (1+ ,var))
-          (,gstop , stop))
+          (,gstop ,stop))
          ((> ,var ,gstop))
        ,@body)))
 
+
+;;;
+;;;    Based on Clojure's `if-let`.
+;;;    Binding only created in case where test succeeds.
+;;;    
+(defmacro if-let ((var test) then else)
+  (with-gensyms (result)
+    `(let ((,result ,test))
+       (if ,result
+           (let ((,var ,result))
+             ,then)
+           ,else))))
+
+(defmacro when-let ((var test) &body body)
+  `(let ((,var ,test))
+     (when ,var
+       ,@body)))
 					 
+;;;
+;;;    If any test fails, the whole body is skipped.
+;;;    
+(defmacro when-let* (bindings &body body)
+  (if (null bindings)
+      `(progn ,@body)
+      (destructuring-bind ((var test) &rest more) bindings
+        `(let ((,var ,test))
+           (when ,var
+             (when-let* ,more ,@body)))) ))
+
+;;;
+;;;    Given a list of COND-LET clauses scavenge all variable occurrences to determine the full set of variables.
+;;;    Not all variables may be named in all clauses, and there will be duplicates among the clauses.
+;;;
+;;;    Example:
+;;;    (condlet (((= 1 2) (x (princ 'a)) (y (princ 'b))) --> X, Y
+;;;              ((= 1 1) (y (princ 'c)) (x (princ 'd))) --> Y, X
+;;;              (t (x (princ 'e)) y (z (princ 'f))))    --> X, Y, Z
+;;;      (list x y z)))
+;;;
+;;;    As with LET, the binding clauses may take 3 forms:
+;;;    (x <INIT-FORM>)
+;;;    (y)
+;;;    z
+;;;      
+(defun extract-vars (clauses)
+  (let ((bindforms (mappend #'rest clauses)))
+    (remove-duplicates (mapcar #'extract-var bindforms))))
+
+(defun extract-var (bindform)
+  (if (consp bindform)
+      (first bindform) 
+      bindform))
+
+(defmacro cond-let (clauses &body body)
+  (with-gensyms (bodyfn)
+    (let* ((vars (extract-vars clauses))
+           (var-table (mapcar #'(lambda (v) (cons v (gensym))) vars)))
+      (labels ((lookup (var)
+                 (cdr (assoc var var-table)))
+               (build-clause (clause)
+                 (destructuring-bind (test . bindforms) clause
+                   `(,test (let ,(build-bindings bindforms)
+                             (,bodyfn ,@(mapcar #'lookup vars)))) )) ; Set up call to body
+               (build-bindings (bindforms)
+                 (let* ((bindings (mapcar #'(lambda (bindform)
+                                              (if (consp bindform)
+                                                  (destructuring-bind (var &optional (initial nil initialp)) bindform
+                                                    (if initialp
+                                                        (list (lookup var) initial) ; (x 1) => (#:G123 1)
+                                                        (list (lookup var)))) ; (y)   => (#:G124)
+                                                  (lookup bindform))) ; z => #:G125
+                                          bindforms))
+                        (bound-vars (mapcar #'extract-var bindings))
+                        (unbound-vars (loop for (nil . gensym) in var-table
+                                            unless (member gensym bound-vars)
+                                            collect gensym)))
+                   (append bindings unbound-vars))))
+        `(flet ((,bodyfn ,vars ; Arbitrary order (after duplicates removed) of params. Must match invocation order, i.e., in VAR-TABLE alist.
+                  ,@body))
+           (cond ,@(mapcar #'build-clause clauses)))) )))
+
+;; (defmacro condlet (clauses &body body)
+;;   (let ((bodfn (gensym))
+;;         (vars (mapcar #'(lambda (v) (cons v (gensym)))
+;;                       (remove-duplicates
+;;                         (mapcar #'car 
+;;                                 (mappend #'cdr clauses))))))
+;;     `(labels ((,bodfn ,(mapcar #'car vars)
+;;                  ,@body))
+;;        (cond ,@(mapcar #'(lambda (cl)
+;;                            (condlet-clause vars cl bodfn))
+;;                        clauses)))))
+
+;; (defun condlet-clause (vars cl bodfn)
+;;   `(,(car cl) (let ,(mapcar #'cdr vars)
+;;                 (let ,(condlet-binds vars cl)
+;;                   (,bodfn ,@(mapcar #'cdr vars))))))
+
+;; (defun condlet-binds (vars cl)
+;;   (mapcar #'(lambda (bindform)
+;;               (if (consp bindform)
+;;                   (cons (cdr (assoc (car bindform) vars))
+;;                         (cdr bindform))))
+;;           (cdr cl)))
+
+(defmacro if3 (test true false uncertain)
+  `(case ,test
+     ((nil) ,false)
+     (? ,uncertain) ; Only matches lang::?  !!!
+     (t ,true)))
+
+;; (defmacro if3 (test true false uncertain)
+;;   "Three-valued logic: true, false, uncertain. Uncertainty is expressed as any symbol whose name is \"?\""
+;;   (with-gensyms (result)
+;;     `(let ((,result ,test))
+;;        (typecase ,result
+;;          (symbol (cond ((null ,result),false)
+;;                        ((string= "?" ,result) ,uncertain)
+;;                        (t ,true)))
+;;          (otherwise ,true)))) )
+
+(defmacro if3 (test true false uncertain)
+  "Three-valued logic: true, false, uncertain. Uncertainty is expressed as any symbol whose name is \"?\""
+  (with-gensyms (result)
+    `(let ((,result ,test))
+       (cond ((null ,result) ,false)
+             ((and (symbolp ,result) (string= "?" ,result)) ,uncertain)
+             (t ,true)))) )
+
+(defmacro nif (expr pos zero neg)
+  `(case (truncate (signum ,expr))
+     (1 ,pos)
+     (0 ,zero)
+     (-1 ,neg)))
+
+;;;
+;;;    No good. Only covers rationals, double-precision floats...
+;;;    
+;; (defmacro nif (expr pos zero neg)
+;;   `(case (signum ,expr)
+;;      ((1 1d0) ,pos)
+;;      ((0 0d0) ,zero)
+;;      ((-1 -1d0) ,neg)))
+
+(defmacro nif (expr pos zero neg)
+  "Conditional evaluation based on sign of EXPR."
+  (with-gensyms (v)
+    `(let ((,v ,expr))
+       (cond ((plusp ,v) ,pos)
+             ((zerop ,v) ,zero)
+             (t ,neg)))) )
+
+(defmacro in (expr choices)
+  (with-gensyms (target)
+    `(let ((,target ,expr))
+       (or ,@(mapcar #'(lambda (choice)
+                         `(eql ,target ,choice))
+                     choices)))) )
+
+;;;
+;;;    Suppress evaluation
+;;;    
+(defmacro inq (expr choices)
+  `(in ,expr ,(mapcar #'(lambda (choice)
+                          `',choice)
+                      choices)))
+
+(defmacro in-if (f choices)
+  (with-gensyms (test)
+    `(let ((,test ,f))
+       (or ,@(mapcar #'(lambda (choice)
+                         `(funcall ,test ,choice))
+                     choices)))) )
+
+;;;
+;;;    Variant of CASE. Key forms are evaluated.
+;;;    
+(defmacro >case (expr &rest clauses)
+  (with-gensyms (v)
+    `(let ((,v ,expr))
+       (cond ,@(mapcar #'(lambda (clause) (>casex v clause)) clauses)))) )
+
+(defun >casex (valsym clause)
+  (destructuring-bind (key . forms) clause
+    (cond ((consp key) `((in ,valsym ,key) ,@forms))
+          ((inq key (t otherwise)) `(t ,@forms))
+          (t (error "Bad >case clause")))) )
+
 (defun shuffle (v &optional (random-state *random-state*))
   "Randomize vector V using Fisher-Yates algorithm."
   (loop for i from (1- (length v)) downto 1
@@ -2366,7 +2840,7 @@ If so return the tail of the list starting with the duplicate or the index in th
 ;;;    See ~/lisp/programs/mapping.lisp
 ;;;    
 (defmacro traverse ((l (&rest lists)) process rest end)
-  (let ((result (gensym)))
+  (with-gensyms (result)
     `(do ((,result '() (cons ,process ,result))
           (,l ,lists ,rest))
          (,end (nreverse ,result)))) )
@@ -2397,9 +2871,7 @@ If so return the tail of the list starting with the duplicate or the index in th
 ;;;    
 (set-macro-character #\{ #'(lambda (stream ch)
                              (declare (ignore ch))
-                             (let ((table (gensym))
-                                   (key (gensym))
-                                   (value (gensym)))
+                             (with-gensyms (table key value)
                                `(let ((,table (make-hash-table :test #'equalp)))
                                   (dotuples ((,key ,value) (list ,@(read-delimited-list #\} stream t)))
                                     (setf (gethash ,key ,table) ,value))
@@ -2497,7 +2969,7 @@ If so return the tail of the list starting with the duplicate or the index in th
               slots)))
 
 (defun macroexpand-all (expr &optional env)
-  (print expr)
+;  (print expr)
   (multiple-value-bind (expanded expandedp) (macroexpand-1 expr env)
     (cond (expandedp (macroexpand-all expanded env))
           ((atom expanded) expanded)
@@ -2530,9 +3002,9 @@ If so return the tail of the list starting with the duplicate or the index in th
 ;;;    Display the packages to which each of the symbols in a form belong.
 ;;;    
 (defun analyze-tree (obj)
-  (cond ((null obj) obj)
-        ((symbolp obj) (intern (package-name (symbol-package obj))))
+  (cond ((symbolp obj) (intern (package-name (symbol-package obj))))
         ((atom obj) obj)
+        ((null (cdr obj)) (cons (analyze-tree (car obj)) (cdr obj)))
         (t (cons (analyze-tree (car obj))
                  (analyze-tree (cdr obj)))) ))      
 
@@ -2593,33 +3065,9 @@ If so return the tail of the list starting with the duplicate or the index in th
 ;;   (sort (copy-list symbols) #'(lambda (s1 s2) (string-lessp (symbol-name s1) (symbol-name s2)))) )
 
 ;;;
-;;;    Seibel pg. 101
-;;;
-;; (defmacro with-gensyms ((&rest names) &body body)
-;;   `(let ,(loop for n in names
-;;                collect `(,n (gensym)))
-;;      ,@body))
-
-;;;
-;;;    Seibel's downloadable code is slightly different:
-;;;    
-;; (defmacro with-gensyms ((&rest names) &body body)
-;;   `(let ,(loop for n in names collect `(,n (make-symbol ,(string n))))
-;;      ,@body))
-
-;; (defmacro with-gensyms ((&rest names) &body body)
-;;   `(let ,(loop for n in names
-;;                collect `(,n (make-symbol ,(symbol-name n))))
-;;      ,@body))
-
-(defmacro with-gensyms ((&rest names) &body body)
-  `(let ,(loop for n in names
-               collect `(,n ',(make-symbol (symbol-name n)))) ; ??
-     ,@body))
-
-;;;
 ;;;    http://www.amazon.com/Data-Structures-Algorithms-Made-Easy/dp/1466304162
 ;;;    Problem #2: Find the nth node from the end of the list
+;;;    (This is actually the related solution to Problem #5: pg. 58)
 ;;;    
 (defun nth-from-end (n l)
   (do ((l1 l (rest l1))
@@ -2629,40 +3077,57 @@ If so return the tail of the list starting with the duplicate or the index in th
     (when (>= i n)
       (setf l2 (rest l2)))) )
 
+;;;
+;;;    Nonsense?
+;;;    
 (defun partition (l)
-  "Partition a list into sublists of the 'odd' and 'even' elements. The corresponding elements will always be grouped together, however, which sublist is considered 'odd' and which 'even' depends on the number of elements
-   in the original list."
+  "Partition a list into sublists of the 'odd' and 'even' elements. The corresponding elements will always be grouped together, however, which sublist is considered 'odd' and which 'even' depends on the number of elements in the original list."
   (labels ((partition-aux (l odds evens)
              (if (endp l)
-                 (values odds evens)
-                 (partition-aux (rest l) evens (cons (first l) odds)))) )
-    (partition-aux l '() '())))
+                 (values (elements odds) (elements evens))
+                 (partition-aux (rest l) evens (enqueue odds (first l))))) )
+    (partition-aux l (make-linked-queue) (make-linked-queue))))
 
 (defun stable-partition (l)
   "Partition a list into sublists of the 'odd' and 'even' elements. The 'odd' and 'even' sublists always reflect the elements' positions (odd or even) in the original list."
   (labels ((partition-odd (l odds evens)
              (if (endp l)
-                 (values odds evens)
-                 (partition-even (rest l) (cons (first l) odds) evens)))
+                 (values (elements odds) (elements evens))
+                 (partition-even (rest l) (enqueue odds (first l)) evens)))
            (partition-even (l odds evens)
              (if (endp l)
-                 (values odds evens)
-                 (partition-odd (rest l) odds (cons (first l) evens)))) )
-    (partition-odd l '() '())))
+                 (values (elements odds) (elements evens))
+                 (partition-odd (rest l) odds (enqueue evens (first l))))) )
+    (partition-odd l (make-linked-queue) (make-linked-queue))))
 
 (defun stable-stream-partition (stream)
   "Partition elements of a character stream into sublists of 'odd' and 'even' elements."
   (labels ((partition-odd (odds evens)
              (let ((ch (read-char stream nil)))
                (if (null ch)
-                   (values odds evens)
-                   (partition-even (cons ch odds) evens))))
+                   (values (elements odds) (elements evens))
+                   (partition-even (enqueue odds ch) evens))))
            (partition-even (odds evens)
              (let ((ch (read-char stream nil)))
                (if (null ch)
-                   (values odds evens)
-                   (partition-odd odds (cons ch evens)))) ))
-    (partition-odd '() '())))
+                   (values (elements odds) (elements evens))
+                   (partition-odd odds (enqueue evens ch)))) ))
+    (partition-odd (make-linked-queue) (make-linked-queue))))
+
+(defun partition-n (n l)
+  "Partition the elements of list L into N lists of approximately equal length."
+  (let ((result (loop repeat n
+                      collect (make-linked-queue))))
+    (labels ((partition (l)
+               (if (endp l)
+                   (mapcar #'elements result)
+                   (partition-elt l result)))
+             (partition-elt (l queues)
+               (if (endp queues)
+                   (partition l)
+                   (progn (enqueue (first queues) (first l))
+                          (partition-elt (rest l) (rest queues)))) ))
+      (partition l))))
 
 (defun approximately= (a b &optional (epsilon 1d-6))
   (<= (abs (- a b)) (* epsilon (abs a))))

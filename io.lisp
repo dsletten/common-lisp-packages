@@ -121,13 +121,13 @@
 ;;;
 ;;;    Edi Weitz
 ;;;
-;; (defun read-file-as-string (file-name)
-;;   (with-open-file (in-stream file-name :if-does-not-exist nil)
-;;     (if in-stream
-;;         (let* ((result (make-string (file-length in-stream)))
-;;                (pos (read-sequence result in-stream)))
-;;           (subseq result 0 pos))
-;;         (format *error-output* "Error: File does not exist!~%"))))
+(defun read-file-as-string (file-name)
+  (with-open-file (in-stream file-name :if-does-not-exist nil)
+    (if in-stream
+        (let* ((result (make-string (file-length in-stream)))
+               (pos (read-sequence result in-stream)))
+          (subseq result 0 pos))
+        (format *error-output* "Error: File does not exist!~%"))))
 
 ;;;
 ;;;    Wade Humeniuk
