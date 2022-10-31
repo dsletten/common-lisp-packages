@@ -37,19 +37,19 @@
   (:shadowing-import-from :collections :intersection :set :subsetp :union)
   (:use :common-lisp :collections)
   (:export :after :append1 :analyze-tree :approximately= :array-indices
-           :before :best :best-worst :build-prefix
+           :before :best :bestn :best-worst :build-prefix
            :>case :class-template :compose :conc1 :copy-array :cycle
            :defchain :destructure :dohash :doset :dostring :dotuples :dovector
            :drop :drop-until :drop-while :duplicatep
            :ends-with :every-pred :expand :explode
            :filter :filter-split :find-some-if :find-subtree :firsts-rests :for :flatten
-           :get-num :group :group-until :high-low :high-low-n :horners
+           :get-num :group :group-until :horners
 	   :if-let :if3 :iffn :in :in-if :inq :is-integer :iterate
            :juxtapose
            :last1 :list-to-string :longerp
            :macroexpand-all :make-empty-seq :make-identity-matrix :make-range
            :map-> :map-array :map-array-index :map0-n :map1-n :mapa-b :mapcars :mappend :mapset
-           :memoize :mklist :mkstr :most :mostn :nif
+           :memoize :mklist :mkstr :most :mostn :most-least :most-least-n :nif
            :partial :partial* :partition :ppmx
            :prefix-generator :prefixp :print-plist :prompt :prompt-read :prune-if :prune-if-not
            :read-list :read-num :repeat :reread :rmapcar 
@@ -749,7 +749,7 @@
 ;;          collect (funcall ,f ,@vars)))
 
 (defun maptuples (f n l)
-  "Map function F  over list L, consuming N elements on each invocation."
+  "Map function F over list L, consuming N elements on each invocation."
   (mapcar #'(lambda (args) (apply f args)) (group l n)))
 
 ;;;
@@ -1424,34 +1424,34 @@ If so return the tail of the list starting with the duplicate or the index in th
 ;;;
 ;;; Compare MOST
 ;;;
-;; (defun high-low (f seq)
-;;   (labels ((high-low-list (seq winner max loser min)
+;; (defun most-least (f seq)
+;;   (labels ((most-least-list (seq winner max loser min)
 ;;              (if (endp seq)
 ;;                  (values winner max loser min)
 ;;                  (let* ((elt (first seq))
 ;;                         (score (funcall f elt)))
-;;                    (cond ((> score max) (high-low-list (rest seq) elt score loser min))
-;;                          ((< score min) (high-low-list (rest seq) winner max elt score))
-;;                          (t (high-low-list (rest seq) winner max loser min)))) ))
-;;            (high-low-vector (i winner max loser min)
+;;                    (cond ((> score max) (most-least-list (rest seq) elt score loser min))
+;;                          ((< score min) (most-least-list (rest seq) winner max elt score))
+;;                          (t (most-least-list (rest seq) winner max loser min)))) ))
+;;            (most-least-vector (i winner max loser min)
 ;;              (if (= i (length seq))
 ;;                  (values winner max loser min)
 ;;                  (let* ((elt (elt seq i))
 ;;                         (score (funcall f elt)))
-;;                    (cond ((> score max) (high-low-vector (1+ i) elt score loser min))
-;;                          ((< score min) (high-low-vector (1+ i) winner max elt score))
-;;                          (t (high-low-vector (1+ i) winner max loser min)))) )))
+;;                    (cond ((> score max) (most-least-vector (1+ i) elt score loser min))
+;;                          ((< score min) (most-least-vector (1+ i) winner max elt score))
+;;                          (t (most-least-vector (1+ i) winner max loser min)))) )))
 ;;     (typecase seq
 ;;       (list (if (null seq)
 ;;                 nil
 ;;                 (let ((starter (funcall f (first seq))))
-;;                   (high-low-list (rest seq) (first seq) starter (first seq) starter))))
+;;                   (most-least-list (rest seq) (first seq) starter (first seq) starter))))
 ;;       (vector (if (zerop (length seq))
 ;;                   nil
 ;;                   (let ((starter (funcall f (elt seq 0))))
-;;                     (high-low-vector 1 (elt seq 0) starter (elt seq 0) starter)))) )))
+;;                     (most-least-vector 1 (elt seq 0) starter (elt seq 0) starter)))) )))
 
-(defun high-low (f seq)
+(defun most-least (f seq)
   "Locate the first elements in SEQ that yield the highest/lowest value when F is applied. The values returned by F for those elements are also returned."
   (typecase seq
     (list (if (null seq)
@@ -1506,41 +1506,41 @@ If so return the tail of the list starting with the duplicate or the index in th
 
 (defun best (f seq)
   "Return the first element as if the elements of SEQ were sorted by means of F."
-  (reduce #'(lambda (winner elt)
-              (if (funcall f elt winner)
-                  elt
-                  winner))
-          seq))
+  (labels ((a-vs-b (b a)
+             (if (funcall f a b) a b)))
+    (reduce #'a-vs-b seq)))
 
 (defun bestn (f seq)
   "Return all elements with the highest score as if the elements of SEQ were sorted by means of F."
-  (typecase seq
-    (list (if (null seq)
-              nil
-              (loop with winners = (make-linked-queue)
-                    with winner = (first seq)
-                    for elt in seq
-                    if (funcall f elt winner)
-                      do (make-empty winners)
-                         (enqueue winners elt)
-                         (setf winner elt)
-                    else if (not (funcall f winner elt))
-                      do (enqueue winners elt)
-                    end
-                    finally (return (elements winners)))) )
-    (vector (if (zerop (length seq))
+  (labels ((elt-beats-winner (elt winner)
+             (funcall f elt winner))
+           (elt-is-winner (elt winner)
+             (not (funcall f winner elt))))
+    (typecase seq
+      (list (if (null seq)
                 nil
                 (loop with winners = (make-linked-queue)
-                      with winner = (elt seq 0)
-                      for elt across seq
-                      if (funcall f elt winner)
-                        do (make-empty winners)
-                           (enqueue winners elt)
-                           (setf winner elt)
-                      else if (not (funcall f winner elt))
-                        do (enqueue winners elt)
-                      end
-                      finally (return (elements winners)))) )))
+                      with winner = (first seq)
+                      for elt in seq
+                      do (cond ((elt-beats-winner elt winner)
+                                (make-empty winners)
+                                (enqueue winners elt)
+                                (setf winner elt))
+                               ((elt-is-winner elt winner)
+                                (enqueue winners elt)))
+                      finally (return (elements winners)))) )
+      (vector (if (zerop (length seq))
+                  nil
+                  (loop with winners = (make-linked-queue)
+                        with winner = (elt seq 0)
+                        for elt across seq
+                        do (cond ((elt-beats-winner elt winner)
+                                  (make-empty winners)
+                                  (enqueue winners elt)
+                                  (setf winner elt))
+                                 ((elt-is-winner elt winner)
+                                  (enqueue winners elt)))
+                        finally (return (elements winners)))) ))))
 
 ;;;
 ;;;    CONSes!
@@ -1641,7 +1641,7 @@ If so return the tail of the list starting with the duplicate or the index in th
                       end
                       finally (return (values (elements winners) max)))) )))
 
-(defun high-low-n (f seq)
+(defun most-least-n (f seq)
   "Locate all elements in SEQ that yield the highest/lowest value when F is applied. The values returned by F for those elements are also returned."
   (typecase seq
     (list (if (null seq)
@@ -1658,7 +1658,8 @@ If so return the tail of the list starting with the duplicate or the index in th
                       do (make-empty winners)
                          (enqueue winners elt)
                          (setf max score)
-                    else if (= score min)
+                    end
+                    if (= score min)
                       do (enqueue losers elt)
                     else if (< score min)
                       do (make-empty losers)
@@ -1680,7 +1681,8 @@ If so return the tail of the list starting with the duplicate or the index in th
                         do (make-empty winners)
                            (enqueue winners elt)
                            (setf max score)
-                      else if (= score min)
+                      end
+                      if (= score min)
                         do (enqueue losers elt)
                       else if (< score min)
                         do (make-empty losers)

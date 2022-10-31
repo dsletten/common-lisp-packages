@@ -200,6 +200,9 @@
 (defmethod elements ((q linked-queue))
   (slot-value q 'front))
 
+;;;
+;;;    Why is this commented out?!
+;;;    
 ;; (defmethod size ((q linked-queue))
 ;;   (linked-queue-size q))
 
@@ -229,6 +232,7 @@
 ;;;
 ;;;    Rollback queue
 ;;;    - Latest enqueue operation can be undone.
+;;;    - Use DLL!!
 ;;;    
 (defclass rollback-queue (linked-queue)
   ((undo :initform nil)))
@@ -327,6 +331,7 @@
 
 ;;;
 ;;;    Vector-based implementation
+;;;    - Queue grows backward from end of vector.
 ;;;    
 (defvar *default-capacity* 20)
 ;;;
@@ -409,6 +414,9 @@
 (defmethod size ((q vector-queue))
   (slot-value q 'size))
 
+;;;
+;;;    Does not release enqueued objects!!
+;;;    
 (defmethod make-empty ((q vector-queue))
   (with-slots (front rear size elements) q
     (let ((length (length elements)))
@@ -418,6 +426,7 @@
 
 ;;;
 ;;;    Shrink and Grow
+;;;    - How does this ever shrink?!
 ;;;    
 (defgeneric shift-queue (queue))
 (defmethod shift-queue ((q vector-queue))
@@ -457,11 +466,18 @@
 ;;     (rplacd (last result) result)
 ;;     result))
 
+;;;
+;;;    This is not actually a queue! This merely cycles through the elements of the fixed CONTENTS.
+;;;    The only method it defines is NEXT...
+;;;    
 (defclass circular-queue (queue)
   ((index :accessor index :initform 0)
    (buffer :reader buffer :initarg :contents)
    (size :accessor size)))
 
+;;;
+;;;    This contains a RING-BUFFER but doesn't use its NEXT method?!?
+;;;    
 (defun make-circular-queue (contents)
   (let ((buffer (make-instance 'ring-buffer :contents (make-array (length contents) :initial-contents contents))))
     (setf (size buffer) (length contents))
@@ -483,6 +499,9 @@
       (setf (index b) 0))
     value))
 
+;;;
+;;;    Not a conventional ring buffer! Cycles through fixed list of elements...
+;;;    
 (defclass ring-buffer ()
   ((index :accessor index :initform 0)
    (buffer :reader buffer :initarg :contents)
