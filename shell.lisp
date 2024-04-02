@@ -45,6 +45,10 @@
   #+ :sbcl (if (>= n (length sb-ext:*posix-argv*))
                nil
                (nth (+ n 1) sb-ext:*posix-argv*))
+  #+ :clozure (if (>= n (length ccl:*command-line-argument-list*))
+                  nil
+                  (nth n ccl:*command-line-argument-list*))
+
   ;;
   ;;    These must come after -- on command line.
   ;;    See os-interface.htm

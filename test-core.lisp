@@ -5,7 +5,7 @@
 ;;;;   What I like about Lisp is that you can feel the bits between your toes.
 ;;;;   -- Drew McDermott
 ;;;;
-;;;;   Name:               test-lang.lisp
+;;;;   Name:               test-core.lisp
 ;;;;
 ;;;;   Started:            Thu Feb 20 01:29:30 2020
 ;;;;   Modifications:
@@ -26,10 +26,10 @@
 ;;;;   Notes:
 ;;;;
 ;;;;
-(load "/home/slytobias/lisp/packages/lang.lisp")
+(load "/home/slytobias/lisp/packages/core.lisp")
 (load "/home/slytobias/lisp/packages/test.lisp")
 
-(in-package :lang)
+(in-package :core)
 
 (use-package :test)
 
@@ -524,8 +524,22 @@
    (equal (multiple-value-list (most-least #'integer-length #(0 1 3 4 7 -1 -4 -7 -8))) '(4 3 0 0))
    (equal (multiple-value-list (most-least #'integer-length (reverse #(0 1 3 4 7 -1 -4 -7 -8)))) '(-8 3 -1 0))))
 
+(defclass dude ()
+  ((name :reader name :initarg :name)
+   (height :reader height :initarg :height)))
+
+(defgeneric tallerp (dude1 dude2))
+(defmethod tallerp ((d1 dude) (d2 dude))
+  (> (height d1) (height d2)))
+
+(defgeneric shorterp (dude1 dude2))
+(defmethod shorterp ((d1 dude) (d2 dude))
+  (< (height d1) (height d2)))
+
 (deftest test-best ()
   (check
+   (equal (best #'> '()) '())
+   (equal (best #'> #()) '())
    (= (best #'> '(1 1 1)) 1)
    (= (best #'< '(1 1 1)) 1)
    (= (best #'> '(1 2 3 4 5)) 5)
@@ -533,21 +547,37 @@
    (= (best #'> (shuffle (vector 1 2 3 4 5))) 5)
    (= (best #'< (shuffle (vector 1 2 3 4 5))) 1)
    (char= (best #'char> "Is this not pung?") #\u)
-   (char= (best #'char< "Is this not pung?") #\Space)))
+   (char= (best #'char< "Is this not pung?") #\Space)
+   (let ((dudes (list (make-instance 'dude :name "Bob" :height 64)
+                      (make-instance 'dude :name "Tom" :height 73)
+                      (make-instance 'dude :name "Larry" :height 70))))
+     (string= (name (best #'tallerp dudes)) "Tom"))
+   (let ((dudes (list (make-instance 'dude :name "Bob" :height 64)
+                      (make-instance 'dude :name "Tom" :height 73)
+                      (make-instance 'dude :name "Larry" :height 70))))
+     (string= (name (best #'shorterp dudes)) "Bob"))))
 
 (deftest test-bestn ()
   (check
+   (equal (bestn #'> '()) '())
    (equal (bestn #'> '(1 1 1)) '(1 1 1))
    (equal (bestn #'< '(1 1 1)) '(1 1 1))
    (equal (bestn #'> '(1 2 3 4 5)) '(5))
    (equal (bestn #'> '(1 2 5 3 4 5)) '(5 5))
    (equal (bestn #'> '(4 1 2 3 4 5)) '(5))
    (equal (bestn #'< '(1 2 3 4 5)) '(1))
+   (equal (bestn #'> #()) '())
    (equal (bestn #'> (shuffle (vector 1 2 3 4 5 5 5))) '(5 5 5))
    (equal (bestn #'< (shuffle (vector 1 1 1 2 3 4 5))) '(1 1 1))
    (equal (bestn #'char> "Is this not png?") '(#\t #\t))
    (equal (bestn #'char-greaterp "Is this NOT png?") '(#\t #\T))
-   (equal (bestn #'char< "Is this not pung?") '(#\Space #\Space #\Space))))
+   (equal (bestn #'char< "Is this not pung?") '(#\Space #\Space #\Space))
+   (let ((dudes (list (make-instance 'dude :name "Bob" :height 64)
+                      (make-instance 'dude :name "Tom" :height 73)
+                      (make-instance 'dude :name "Larry" :height 70)
+                      (make-instance 'dude :name "Jim" :height 73))))
+     (equal (mapcar #'name (bestn #'tallerp dudes)) '("Tom" "Jim")))) )
+   
 
 (deftest test-best-worst ()
   (check
@@ -710,6 +740,61 @@
    (not (funcall (partial* #'typep 'atom) '(1 2)))
    (= (funcall (partial* #'- 1) 8) (1- 8))))
 
+(defun smallp (s)
+  (< (length s) 10))
+
+(defun odd-length-p (s)
+  (oddp (length s)))
+
+(setf (symbol-function 'append-if) (curry (pred s suffix) (if (funcall pred s) (concatenate 'string s suffix) s)))
+
+;; (curry (x y) (* x (expt 2 y))) <-- Can't curry every function???
+(deftest test-curry ()
+  (check
+   (let ((f (curry (x y z) (+ x (* y z)))))
+     (and (functionp f)
+          (let ((g (funcall f 3)))
+            (and (functionp g)
+                 (let ((h (funcall g 5)))
+                   (and (functionp h)
+                        (let ((v (funcall h 8)))
+                          (and (not (functionp v))
+                               (= 43 v)))) )))) )
+   (equal "Hello World"
+          (funcall (funcall (funcall #'append-if #'smallp) "Hello World") "!!!"))
+   (equal "Hi World!!!"
+          (funcall (funcall (funcall #'append-if #'smallp) "Hi World") "!!!"))
+   (equal "Hello World!!!"
+          (funcall (funcall (funcall #'append-if #'odd-length-p) "Hello World") "!!!"))
+   (equal "Hi World"
+          (funcall (funcall (funcall #'append-if #'odd-length-p) "Hi World") "!!!"))
+   (equal "IS THIS NOT PUNG?"
+          (funcall (funcall (curry (n) (if (evenp n) #'string-upcase #'string-downcase)) 0) "Is this not pung?"))
+   (equal "is this not pung?"
+          (funcall (funcall (curry (n) (if (evenp n) #'string-upcase #'string-downcase)) 9) "Is this not pung?"))))
+
+;; CORE(72): (curry (x y z) (+ x (* y z)))
+;; #<Interpreted Function (unnamed) @ #x10007825172>
+;; CORE(73): (curry-apply * '(3 5 8))
+;; 43
+;; CORE(74): (curry-apply ** '(3 5))
+;; #<Interpreted Closure (unnamed) @ #x1000782ecf2>
+;; CORE(75): (curry-apply * '(8))
+;; 43
+
+;; CORE(77): (curry-call (curry (x y z) (+ x (* y z))) 3 5 8)
+;; 43
+;; CORE(78): (curry-call (curry (x y z) (+ x (* y z))) 3 5)
+;; #<Interpreted Closure (unnamed) @ #x10007845482>
+;; CORE(79): (curry-call * 8)
+;; 43
+;; CORE(80): (curry () (+ 2 3))
+;; 5
+;; CORE(81): (curry-call (curry () (+ 2 3)))
+;; 5
+;; CORE(82): (curry-apply (curry () (+ 2 3)) '())
+;; 5
+
 
 ;;;
 ;;;    Look for examples in other tests.
@@ -810,34 +895,34 @@
 ;;                                       (RETURN NIL)))))) (tree-map #'cons (analyze-tree tree) tree))
 
 ;; ((COMMON-LISP . LET)
-;;  (((LANG . L)
-;;    ((COMMON-LISP . QUOTE) ((LANG . A) (LANG . B) (LANG . C) (LANG . D)))))
+;;  (((CORE . L)
+;;    ((COMMON-LISP . QUOTE) ((CORE . A) (CORE . B) (CORE . C) (CORE . D)))))
 ;;  ((COMMON-LISP . DOTIMES)
-;;   ((LANG . I) ((COMMON-LISP . 1+) ((COMMON-LISP . LENGTH) (LANG . L)))
+;;   ((CORE . I) ((COMMON-LISP . 1+) ((COMMON-LISP . LENGTH) (CORE . L)))
 ;;    (COMMON-LISP . T))
 ;;   ((COMMON-LISP . UNLESS)
 ;;    ((COMMON-LISP . EQUAL)
-;;     ((LANG . BUILD-PREFIX) (LANG . L)
-;;      ((COMMON-LISP . NTHCDR) (LANG . I) (LANG . L)))
-;;     ((LANG . TAKE) (LANG . I) (LANG . L)))
+;;     ((CORE . BUILD-PREFIX) (CORE . L)
+;;      ((COMMON-LISP . NTHCDR) (CORE . I) (CORE . L)))
+;;     ((CORE . TAKE) (CORE . I) (CORE . L)))
 ;;    ((COMMON-LISP . RETURN) NIL)))) ; <---------------------- 
 
 
 (deftest test-analyze-tree ()
   (check
    (equal (analyze-tree nil) 'COMMON-LISP)
-   (equal (analyze-tree '(a b c)) '(LANG LANG LANG))
-   (equal (analyze-tree '(if (and p q) r s)) '(COMMON-LISP (COMMON-LISP LANG LANG) LANG LANG))
+   (equal (analyze-tree '(a b c)) '(CORE CORE CORE))
+   (equal (analyze-tree '(if (and p q) r s)) '(COMMON-LISP (COMMON-LISP CORE CORE) CORE CORE))
    (equal (analyze-tree '(LET ((L '(A B C D)))
                           (DOTIMES (I (1+ (LENGTH L)) T)
                             (UNLESS
                                 (EQUAL (BUILD-PREFIX L (NTHCDR I L))
                                        (TAKE I L))
                               (RETURN NIL)))))
-          '(COMMON-LISP ((LANG (COMMON-LISP (LANG LANG LANG LANG))))
-            (COMMON-LISP (LANG (COMMON-LISP (COMMON-LISP LANG)) COMMON-LISP)
+          '(COMMON-LISP ((CORE (COMMON-LISP (CORE CORE CORE CORE))))
+            (COMMON-LISP (CORE (COMMON-LISP (COMMON-LISP CORE)) COMMON-LISP)
              (COMMON-LISP
-              (COMMON-LISP (LANG LANG (COMMON-LISP LANG LANG)) (LANG LANG LANG))
+              (COMMON-LISP (CORE CORE (COMMON-LISP CORE CORE)) (CORE CORE CORE))
               (COMMON-LISP COMMON-LISP)))) )))
 
 

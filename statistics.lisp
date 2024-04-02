@@ -111,6 +111,9 @@
 (defun median (vals)
   (aref (sort (copy-seq vals) #'<) (truncate (length vals) 2)))
 
+;;;
+;;;    Does not allow for multiple values with same frequency...
+;;;    
 (defun mode (vals)
   (do ((frequency-table (make-hash-table :test #'eql))
        (max-frequency 0)
