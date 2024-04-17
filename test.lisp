@@ -25,11 +25,11 @@
 ;;;;
 ;;;;
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  #+ :sbcl (load "/home/slytobias/lisp/packages/lang" :verbose nil)
-  #- :sbcl (load "/home/slytobias/lisp/packages/lang.lisp" :verbose nil))
+  #+ :sbcl (load "/home/slytobias/lisp/packages/core" :verbose nil)
+  #- :sbcl (load "/home/slytobias/lisp/packages/core.lisp" :verbose nil))
 
 (defpackage :test
-  (:use :common-lisp :lang)
+  (:use :common-lisp :core)
   (:export :check :combine-results :compare-reference-function :defsuite :deftest :find-tests :*test-name*))
 
 (in-package :test)
