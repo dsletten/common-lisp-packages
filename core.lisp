@@ -2314,6 +2314,26 @@ If so return the tail of the list starting with the duplicate or the index in th
           (apply f (append args args2)))) )
 
 ;;;
+;;;    Clojure style
+;;;    
+(defun partial (f &rest args)
+  (if (null args)
+      f
+      (destructuring-bind (arg0 &rest args) args
+        (if (null args)
+            #'(lambda (&rest args2)
+                (apply f arg0 args2))
+            (destructuring-bind (arg1 &rest args) args
+              (if (null args)
+                  #'(lambda (&rest args2)
+                      (apply f arg0 arg1 args2))
+                  (destructuring-bind (arg2 &rest args) args
+                    (if (null args)
+                        #'(lambda (&rest args2)
+                            (apply f arg0 arg1 arg2 args2))
+                        #'(lambda (&rest args2)
+                            (apply f arg0 arg2 arg2 (append args args2)))) )))) )))
+;;;
 ;;;    "Right Curry"
 ;;;    
 (defun partial* (f &rest args)

@@ -65,6 +65,7 @@
 
 ;;;
 ;;;    Initial input is the "empty" function IDENTITY. Thus, all functions can only take one argument (All Curried?)
+;;;    见 improved definition in core.lisp
 ;;;    
 (defun compose (&rest fs)
   (reduce #'(lambda (f g)

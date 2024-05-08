@@ -732,7 +732,9 @@
    (= (funcall (partial #'reduce #'+) '(1 2 3)) 6)
    (funcall (partial #'> (funcall (partial #'reduce #'+) '(1 2 3))) 3)
    (= (funcall (partial #'+ 1) 8) (1+ 8))
-   (equal (funcall (compose (partial #'apply #'nconc) #'mapcar) #'rest '((a b c) (1 2) (x y z))) '(B C 2 Y Z)))) ; MAPCAN
+   (equal (funcall (compose (partial #'apply #'nconc) #'mapcar) #'rest '((a b c) (1 2) (x y z))) '(B C 2 Y Z)) ; MAPCAN
+   (every (compose (partial #'= (length "pung")) #'length) '("over" "your" "turn" "send"))))
+;   (every #'(lambda (s) (= (length "pung") (length s))) '("over" "your" "turn" "send"))))
 
 (deftest test-partial* ()
   (check
