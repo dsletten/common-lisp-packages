@@ -218,7 +218,10 @@
   "Attempt to read a number from string S. Apply the TEST validity function if provided. Return NIL if value is not valid."
   (let* ((*read-default-float-format* precision)
          (*read-eval* nil)
-         (num (read-from-string s nil)))
+         (num (handler-case (read-from-string s nil)
+                (error (e)
+                  (format t "Your input is not so good: ~A~%" e)
+                  t))))
     (if (valid-num-p num test)
         num
         nil)))
@@ -917,6 +920,10 @@
   (if (listp obj)
       obj
       (list obj)))
+
+;; (defgeneric mklist (obj))
+;; (defmethod mklist (obj) (list obj))
+;; (defmethod mklist ((l list)) l)
 
 ;;;
 ;;;    Graham calls this LONGER. I believe this is inappropriate since this
@@ -3021,6 +3028,8 @@ If so return the tail of the list starting with the duplicate or the index in th
 (set-macro-character #\[ #'(lambda (stream ch)
                              (declare (ignore ch))
                              `(vector ,@(read-delimited-list #\] stream t))))
+;(set-macro-character #\[ #'(lambda (stream ch)
+;                             `(vector ,@(funcall (get-dispatch-macro-character #\# #\() stream ch nil))))
 (set-syntax-from-char #\] #\))
 
 ;;;
