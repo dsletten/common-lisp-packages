@@ -38,7 +38,7 @@
   (:use :common-lisp :collections)
   (:export :after :append1 :analyze-tree :approximately= :array-indices
            :before :best :best-index :best-worst :best-worst-n :bestn :build-prefix
-           :>case :class-template :compose :conc1 :copy-array :cycle
+           :>case :class-template :comment :compose :conc1 :copy-array :cycle
            :defchain :destructure :dohash :doset :dostring :dotuples :dovector
            :drop :drop-until :drop-while :duplicatep
            :emptyp :ends-with :every-pred :expand :explode
@@ -67,6 +67,11 @@
 ;  (:shadow :while :until :prefixp :dovector :macroexpand-all)) ; ????
 
 (in-package :core)
+
+(proclaim '(inline last1 singlep append1 conc1 mklist))
+
+(defmacro comment (&body body)
+  (declare (ignore body)))
 
 ;;;
 ;;;    Seibel pg. 101
@@ -221,7 +226,7 @@
          (num (handler-case (read-from-string s nil)
                 (error (e)
                   (format t "Your input is not so good: ~A~%" e)
-                  t))))
+                  (return-from read-num nil)))) )
     (if (valid-num-p num test)
         num
         nil)))
@@ -957,51 +962,6 @@
                   when val collect val into result
                   finally (return (coerce result (if (stringp seq) 'string 'vector)))) )))
 
-;; (defun filter (f seq)
-;;   (labels ((filter-seq ()
-;;              (let ((result '()))
-;;                (map nil #'(lambda (elt)
-;;                             (let ((val (funcall f elt)))
-;;                               (when val (push val result))))
-;;                     seq)
-;;                (nreverse result))))
-;;     (typecase seq
-;;       (list (filter-seq))
-;;       (string (coerce (filter-seq) 'string))
-;;       (vector (coerce (filter-seq) 'vector)))) )
-
-;; (defun filter (fn list)
-;;   (let ((acc '()))
-;;     (dolist (elt list (nreverse acc))
-;;       (let ((val (funcall fn elt)))
-;; 	(when val (push val acc)))) ))
-
-;;;
-;;;    Conventional FILTER below. Not Graham's.
-;;;    Collect elts that pass test.
-;;;    
-;; (defun filter (fn list)
-;;   (let ((acc '()))
-;;     (dolist (elt list (nreverse acc))
-;;       (when (funcall fn elt) (push elt acc)))) )
-
-;; (defun filter (f seq)
-;;   (remove-if-not f seq))
-
-;; (defun filter (f seq)
-;;   (etypecase seq
-;;     (list (loop for elt in seq
-;;                 when (funcall f elt)
-;;                 collect elt))
-;;     (string (coerce (loop for elt across seq
-;;                           when (funcall f elt)
-;;                           collect elt)
-;;                     'string))
-;;     (vector (coerce (loop for elt across seq
-;;                           when (funcall f elt)
-;;                           collect elt)
-;;                     'vector))))
-
 ;;;
 ;;;    See matrix::list-to-rows-fill-rows
 ;;;    
@@ -1173,6 +1133,40 @@
     (if (atom tree)
         tree
         (flatten-aux tree '()))) )
+
+
+(defun flatten-q (tree)
+  (labels ((flatten-aux (tree result)
+             (cond ((null tree) (elements result))
+                   ((null (car tree)) (flatten-aux (cdr tree) result))
+                   ((atom (car tree)) (flatten-aux (cdr tree) (enqueue result (car tree))))
+                   (t (destructuring-bind ((head . tail1) . tail2) tree
+                        (flatten-aux (list* head tail1 tail2) result)))) ))
+    (if (atom tree)
+        tree
+        (flatten-aux tree (make-linked-queue)))) )
+
+(defun flatten-q (tree)
+  (labels ((flatten-aux (tree result)
+             (if (null tree)
+                 (elements result)
+                 (destructuring-bind (car . cdr) tree
+                   (cond ((null car) (flatten-aux cdr result))
+                         ((atom car) (flatten-aux cdr (enqueue result car)))
+                         (t (destructuring-bind (car1 . cdr1) car
+                              (flatten-aux (list* car1 cdr1 cdr) result)))) ))))
+    (if (atom tree)
+        tree
+        (flatten-aux tree (make-linked-queue)))) )
+
+(defun flatten-dfs-q (tree)
+  (labels ((flatten-aux (tree result)
+             (cond ((null tree) result)
+                   ((atom tree) (enqueue result tree))
+                   (t (flatten-aux (cdr tree) (flatten-aux (car tree) result)))) ))
+    (if (atom tree)
+        tree
+        (elements (flatten-aux tree (make-linked-queue)))) ))
 
 ;; See prune.lisp
 ;; (defun prune-if (pred tree)

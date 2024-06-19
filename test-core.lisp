@@ -105,6 +105,17 @@
         
 ;(defun get-num (prompt &key test (precision 'double-float))
 
+(deftest test-read-num ()
+  (check
+   (handler-case (read-num "1:2")
+     (error (e)
+       (format t "Error was not handled: ~A~%" e)
+       nil)
+     (:no-error (obj)
+       (declare (ignore obj))
+       (format t "Package separator should not signal error.")
+       t))))
+  
 (deftest test-valid-num-p ()
   (check
    (valid-num-p 8)
@@ -357,6 +368,53 @@
    (equal (multiple-value-list (find-some-if #'(lambda (s) (if (= (length s) 4) (string-upcase s) nil)) #("Yoshimi" "Battles" "The" "Pink" "Robots"))) '("Pink" "PINK"))))
    
 
+(deftest test-last1 ()
+  (check
+   (null (last1 '()))
+   (equal 'c (last1 '(a b c)))
+   (equal 'b (last1 '(a b . c)))) )
+
+(deftest test-singlep ()
+  (check
+   (singlep '(a))
+   (not (singlep '()))
+   (not (singlep '(a b c)))) )
+
+(deftest test-append1 ()
+  (check
+   (equal '(a b c) (append1 '(a b) 'c))
+   (equal '(a) (append1 '() 'a))
+   (equal '(a b (c d)) (append1 '(a b) '(c d)))) )
+
+(deftest test-conc1 ()
+  (check
+   (equal '(a b c) (conc1 '(a b) 'c))
+   (equal '(a) (conc1 '() 'a))
+   (equal '(a b (c d)) (conc1 '(a b) '(c d)))
+   (let ((l (list 1 2 3)))
+     (eq l (conc1 l 4)))) )
+
+(deftest test-mklist ()
+  (check
+   (eq #1='(a b c) (mklist #1#))
+   (equal '(a) (mklist 'a))))
+
+(deftest test-longerp ()
+  (check
+   (longerp '(a b c) '(d e))
+   (not (longerp '(a b c) '(d e f)))
+   (not (longerp '(a b c) '(d e f g)))
+   (longerp (loop for i upto 100000 collect i) '(a b c))
+   (not (longerp '(a b c) (loop for i upto 100000 collect i)))
+   (longerp "abc" "de")
+   (not (longerp "abc" "def"))
+   (not (longerp "abc" "defg"))
+   (longerp [1 2 3] [4 5])
+   (not (longerp [1 2 3] [4 5 6]))
+   (not (longerp [1 2 3] [4 5 6 7]))
+   (longerp '(a b c d) [4 5])
+   (longerp ["Is" "this" "not" "pung?"] '(:nope))))
+
 ;; (flet ((f (x) (if (numberp x) (1+ x) nil))) (mapcar #'f (remove-if-not #'f '(a 1 2 b 3 c d 4)))) => (2 3 4 5)
 ;; (flet ((f (x) (if (numberp x) (1+ x) nil))) (map 'vector #'f (remove-if-not #'f '[a 1 2 b 3 c d 4]))) => #(2 3 4 5)
 ;; (flet ((f (ch) (and (alpha-char-p ch) (lower-case-p ch) (char-upcase ch)))) (map 'string #'f (remove-if-not #'f "Is this not pung?"))) => "STHISNOTPUNG"
@@ -371,18 +429,6 @@
    (string= (filter (every-pred #'alpha-char-p #'lower-case-p #'char-upcase) "Is this not pung?") "STHISNOTPUNG")
    (equal (filter #'(lambda (ch) (and (alpha-char-p ch) (lower-case-p ch) (char-upcase ch))) (coerce "Is this not pung?" 'list)) '(#\S #\T #\H #\I #\S #\N #\O #\T #\P #\U #\N #\G))
    (equal (filter (every-pred #'alpha-char-p #'lower-case-p #'char-upcase) (coerce "Is this not pung?" 'list)) '(#\S #\T #\H #\I #\S #\N #\O #\T #\P #\U #\N #\G))))
-
-(deftest test-longerp ()
-  (check
-   (longerp '(a b c) '(d e))
-   (not (longerp '(a b c) '(d e f)))
-   (not (longerp '(a b c) '(d e f g)))
-   (longerp "abc" "de")
-   (not (longerp "abc" "def"))
-   (not (longerp "abc" "defg"))
-   (longerp [1 2 3] [4 5])
-   (not (longerp [1 2 3] [4 5 6]))
-   (not (longerp [1 2 3] [4 5 6 7]))))
 
 (deftest test-group ()
   (check
@@ -713,13 +759,15 @@
   (check
    (equal (funcall (compose #'first #'rest #'rest #'rest #'rest) #1='(a b c d e f)) (fifth #1#))
    (equal (mapcar (compose #'1+ #'1+) #2=(loop for i from 1 to 10 collect i)) (mapcar #'(lambda (x) (+ x 2)) #2#))
-   (equal (mapcar (compose #'list #'(lambda (x) (* x 2))) #3=(loop for i from 1 to 5 collect i)) (mapcar #'(lambda (x) (list (* x 2))) #3#))
+   ;; IDENTITY!
+   (equal #3=(loop for i from 1 to 10 collect i) (mapcar (compose #'1+ #'1-) #3#))
+   (equal (mapcar (compose #'list #'(lambda (x) (* x 2))) #4=(loop for i from 1 to 5 collect i)) (mapcar #'(lambda (x) (list (* x 2))) #4#))
    ;; COUNT-IF
-   (equal (funcall (compose #'length #'remove-if-not) #'evenp #4=(loop for i from 1 to 10 collect i)) (length (remove-if-not #'evenp #4#)))
+   (equal (funcall (compose #'length #'remove-if-not) #'evenp #5=(loop for i from 1 to 10 collect i)) (length (remove-if-not #'evenp #5#)))
    (equal (funcall (compose #'1+ #'find-if) #'oddp '(2 3 4)) 4)
    (equal (mapcar (compose #'length #'cons) '(a b c d) '((1 2) (3) () (4 5 6))) '(3 2 1 4))
    ;; COMPLEMENT
-   (equal (mapcar (compose #'not #'evenp) #5=(loop for i from 1 to 10 collect i)) (mapcar (complement #'evenp) #5#))))
+   (equal (mapcar (compose #'not #'evenp) #6=(loop for i from 1 to 10 collect i)) (mapcar (complement #'evenp) #6#))))
 
 (deftest test-juxtapose ()
   (check
@@ -729,10 +777,11 @@
 
 (deftest test-partial ()
   (check
-   (= (funcall (partial #'reduce #'+) '(1 2 3)) 6)
+   (= 6 (funcall (partial #'reduce #'+) '(1 2 3)))
    (funcall (partial #'> (funcall (partial #'reduce #'+) '(1 2 3))) 3)
-   (= (funcall (partial #'+ 1) 8) (1+ 8))
-   (equal (funcall (compose (partial #'apply #'nconc) #'mapcar) #'rest '((a b c) (1 2) (x y z))) '(B C 2 Y Z)) ; MAPCAN
+   (= (1+ 8) (funcall (partial #'+ 1) 8))
+   (string= "Twelve thousand three hundred forty-five" (funcall (partial #'format nil "~@(~R~)") 12345))
+   (equal '(B C 2 Y Z) (funcall (compose (partial #'apply #'nconc) #'mapcar) #'rest (copy-tree '((a b c) (1 2) (x y z))))) ; MAPCAN
    (every (compose (partial #'= (length "pung")) #'length) '("over" "your" "turn" "send"))))
 ;   (every #'(lambda (s) (= (length "pung") (length s))) '("over" "your" "turn" "send"))))
 
@@ -740,7 +789,8 @@
   (check
    (funcall (partial* #'typep 'atom) 'a) ; ATOM
    (not (funcall (partial* #'typep 'atom) '(1 2)))
-   (= (funcall (partial* #'- 1) 8) (1- 8))))
+   (= (funcall (partial* #'- 1) 8) (1- 8))
+   (equal '(t nil t nil) (mapcar (compose (partial* #'< 10000) #'abs) '(23 12345 -80 -80000)))) )
 
 (defun smallp (s)
   (< (length s) 10))
@@ -926,7 +976,6 @@
              (COMMON-LISP
               (COMMON-LISP (CORE CORE (COMMON-LISP CORE CORE)) (CORE CORE CORE))
               (COMMON-LISP COMMON-LISP)))) )))
-
 
 (deftest test-for ()
   (check
