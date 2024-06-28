@@ -51,7 +51,7 @@
            :map-> :map-array :map-array-index :map0-n :map1-n :mapa-b :mapcars :mappend :mapset
            :memoize :mklist :mkstr :most :mostn :most-least :most-least-n :nif
            :partial :partial* :partition :ppmx
-           :prefix-generator :prefixp :print-plist :prompt :prompt-read :prune-if :prune-if-not
+           :prefix-generator :prefixp :print-plist :prompt :prompt-read :prune :prune-if :prune-if-not
            :read-list :read-num :repeat :reread :rmapcar 
            :rotate0 :rotate-list0 :rotate1 :rotate-list1
            :same-shape-tree-p
@@ -1167,6 +1167,16 @@
     (if (atom tree)
         tree
         (elements (flatten-aux tree (make-linked-queue)))) ))
+
+(defun prune (item tree &key (test #'eql) (key #'identity))
+  "Remove all instances of the atom ITEM from TREE."
+  (labels ((prune-aux (tree result)
+	     (cond ((null tree) (nreverse result))
+                   (t (destructuring-bind (car . cdr) tree
+                        (cond ((and (atom car) (funcall test item (funcall key car))) (prune-aux cdr result))
+                              ((atom car) (prune-aux cdr (cons car result)))
+                              (t (prune-aux cdr (cons (prune-aux car '()) result)))) )))) )
+    (prune-aux tree '())))
 
 ;; See prune.lisp
 ;; (defun prune-if (pred tree)
