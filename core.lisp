@@ -37,7 +37,7 @@
   (:shadowing-import-from :collections :intersection :set :subsetp :union)
   (:use :common-lisp :collections)
   (:export :after :append1 :analyze-tree :approximately= :array-indices
-           :before :best :best-index :best-worst :best-worst-n :bestn :build-prefix
+           :before :best :best-index :best-worst :best-worst-n :bestn :build-prefix :build-tree
            :>case :class-template :comment :compose :conc1 :copy-array :cycle
            :defchain :destructure :dohash :doset :dostring :dotuples :dovector
            :drop :drop-until :drop-while :duplicatep
@@ -504,18 +504,42 @@
 
 ;;;
 ;;;    Using queue since LOOP semantics are so goofy!!
+;;;    Cool but slow????
 ;;;    
+;; (defun take-drop (n seq)
+;;   "Split a sequence at the Nth element. Return the subsequences before and after."
+;;   (assert (typep n `(integer 0))
+;;           (n)
+;;           "N must be a non-negative integer.")
+;;   (typecase seq
+;;     (list (do ((q (make-linked-queue))
+;;                (tail seq (rest tail))
+;;                (i 0 (1+ i)))
+;;               ((or (= i n) (endp tail)) (values (elements q) tail))
+;;             (enqueue q (first tail))))
+;;     (vector (values (take n seq) (drop n seq)))) ) ; Works for strings too
+
+;; (defun take-drop (n seq)
+;;   "Split a sequence at the Nth element. Return the subsequences before and after."
+;;   (assert (typep n `(integer 0))
+;;           (n)
+;;           "N must be a non-negative integer.")
+;;   (typecase seq
+;;     (list (do ((head '() (cons (first tail) head))
+;;                (tail seq (rest tail))
+;;                (i 0 (1+ i)))
+;;               ((or (= i n) (endp tail)) (values (nreverse head) tail))))
+;;     (vector (values (take n seq) (drop n seq)))) ) ; Works for strings too
+
 (defun take-drop (n seq)
   "Split a sequence at the Nth element. Return the subsequences before and after."
   (assert (typep n `(integer 0))
           (n)
           "N must be a non-negative integer.")
   (typecase seq
-    (list (do ((q (make-linked-queue))
-               (tail seq (rest tail))
+    (list (do ((tail seq (rest tail))
                (i 0 (1+ i)))
-              ((or (= i n) (endp tail)) (values (elements q) tail))
-            (enqueue q (first tail))))
+              ((or (= i n) (endp tail)) (values (subseq seq 0 i) tail))))
     (vector (values (take n seq) (drop n seq)))) ) ; Works for strings too
 
 ;;;
@@ -990,11 +1014,31 @@
 ;;         until (emptyp (first take-drop))
 ;;         collect (first take-drop)))
 
+;;;
+;;;    Must terminate when (EMPTYP TAKE) to handle N = 0.
+;;;    
 (defun group (seq n)
   (loop for (take drop) =      (multiple-value-list (take-drop n seq))
                           then (multiple-value-list (take-drop n drop))
         until (emptyp take)
         collect take))
+
+;;;
+;;;    This is even slower
+;;;    
+;; (defun group (seq n)
+;;   (do ((result (make-linked-queue))
+;;        (row (make-linked-queue))
+;;        (l seq (rest l))
+;;        (i 0 (1+ i)))
+;;       ((emptyp l) (unless (collections:emptyp row)
+;;                     (enqueue result (elements row)))
+;;        (elements result))
+;;     (when (= i n)
+;;       (setf i 0)
+;;       (enqueue result (elements row))
+;;       (make-empty row))
+;;     (enqueue row (first l))))
 
 ;;;
 ;;;    The semantics here seem wrong since the reversed list is tested but then flipped around when included in the result.
@@ -2169,6 +2213,15 @@ If so return the tail of the list starting with the duplicate or the index in th
              (cons (apply #'tree-map f cars)
                    (apply #'tree-map f cdrs)))) ))
 
+;;;
+;;;    见 ~/lisp/books/Tanimoto/ch02/2010/ch02.lisp REASSEMBLE
+;;;    
+(defun build-tree (f obj)
+  (cond ((null obj) obj)
+        ((atom obj) (funcall f obj))
+        (t (cons (build-tree f (car obj))
+                 (build-tree f (cdr obj))))) )
+
 ;(defun readlist (&rest args)
 (defun read-list (&rest args)
   (values (read-from-string
@@ -3167,7 +3220,7 @@ If so return the tail of the list starting with the duplicate or the index in th
   (dotuples ((property value) (symbol-plist sym))
     (format t "Property: ~S~%" property)
     (format t "Value: ~S~%" value)))
-            
+
 ;;;
 ;;;    Display the packages to which each of the symbols in a form belong.
 ;;;    
