@@ -1120,43 +1120,6 @@
     (destructuring-bind (current . result) groups
       (elements (enqueue result (elements current)))) ))
 
-;;;
-;;;    This is not tail-recursive, so it will fail with a large enough (?!) tree.
-;;;    (length (flatten (loop repeat 100000 collect t))) => 100000
-;; INFO: Control stack guard page unprotected
-;; Control stack guard page temporarily disabled: proceed with caution
-
-;; debugger invoked on a SB-KERNEL::CONTROL-STACK-EXHAUSTED in thread
-;; #<THREAD "main thread" RUNNING {10005204C3}>:
-;;   Control stack exhausted (no more space for function call frames).
-;; This is probably due to heavily nested or infinitely recursive function
-;; calls, or a tail call that SBCL cannot or has not optimized away.
-
-;;;
-;;;    Third version:
-;;;    (length (flatten (loop repeat 100000 collect t))) => 100000
-;;;    
-;;;    But it is substantially faster than the third version since that one CONSes a lot more.
-;;;    (Although that one is pretty fast too...)
-;;;    
-;; (defun flatten (l)
-;;   (labels ((flatten-aux (l result)
-;;              (cond ((endp l) result)
-;;                    ((listp (first l)) (flatten-aux (first l) (flatten-aux (rest l) result)))
-;;                    (t (cons (first l) (flatten-aux (rest l) result)))) ))
-;;     (flatten-aux l '())))
-
-;;;
-;;;    Also not tail-recursive. Almost as fast as previous one. (Same as On Lisp version.)
-;;;    
-;; (defun flatten (obj)
-;;   (labels ((flatten-aux (obj results)
-;;              (cond ((null obj) results)
-;;                    ((atom obj) (cons obj results))
-;;                    (t (flatten-aux (car obj)
-;;                                    (flatten-aux (cdr obj) results)))) ))
-;;     (flatten-aux obj '()))) 
-
 ;; (defun flatten (tree)
 ;;   (labels ((flatten-aux (tree result)
 ;;              (cond ((null tree) (nreverse result))
