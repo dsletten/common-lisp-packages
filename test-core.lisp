@@ -48,24 +48,24 @@
 ;;;    
 (deftest test-splice ()
   (check
-   (string= (splice "Why all this pung?" 0 7 "Who ordered") "Who ordered this pung?")
-   (string= (splice "Is this pung?" 8 0 "not ") "Is this not pung?")
-   (string= (splice "Is this foo?" 8 3 "not pung") "Is this not pung?")
-   (equal (splice '(a b d e) 2 0 '(c)) '(a b c d e))
-   (equal (splice '(a b d e) 2 1 '(c)) '(a b c e))
-   (equal (splice '(a b d e) 2 2 '(c)) '(a b c))))
+   (string= "Who ordered this pung?" (splice "Why all this pung?" 0 7 "Who ordered"))
+   (string= "Is this not pung?" (splice "Is this pung?" 8 0 "not "))
+   (string= "Is this not pung?" (splice "Is this foo?" 8 3 "not pung"))
+   (equal '(a b c d e) (splice '(a b d e) 2 0 '(c)))
+   (equal '(a b c e) (splice '(a b d e) 2 1 '(c)))
+   (equal '(a b c) (splice '(a b d e) 2 2 '(c)))) )
 
 ;;;
 ;;;    Fix!!
 ;;;    
 (deftest test-expand ()
   (check
-   (string= (expand #1="asdf") #1#)
-   (string= (expand "") "")
-   (string= (expand "a-f") "abcdef")
-   (string= (expand "23a-f") "23abcdef")
-   (string= (expand "a-dw-z") "abcdwxyz")
-   (string= (expand "A-Z0-9") "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")))
+   (string= #1="asdf" (expand #1#))
+   (string= "" (expand ""))
+   (string= "abcdef" (expand "a-f"))
+   (string= "23abcdef" (expand "23a-f"))
+   (string= "abcdwxyz" (expand "a-dw-z"))
+   (string= "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" (expand "A-Z0-9"))))
 
 (deftest test-translate ()
   (check
@@ -314,14 +314,60 @@
 
 (deftest test-prefixp ()
   (check
+   (prefixp '() '())
    (prefixp '() '(g t c a t))
+   (not (prefixp '(g t c a t) '()))
    (prefixp '(g t c) '(g t c a t))
+   (not (prefixp '(g t c a t) '(g t c)))
    (prefixp #1='(g t c a t) #1#)
    (not (prefixp '(g t c) '(a g g t c)))
+   (not (prefixp '("Is" "this" "not") '("Is" "this" "not" "pung?")))
+   (prefixp '("Is" "this" "not") '("Is" "this" "not" "pung?") :test #'string=)
+   (not (prefixp '(1 2 5/2) '(1d0 2d0 2.5d0 3d0)))
+   (prefixp '(1 2 5/2) '(1d0 2d0 2.5d0 3d0) :test #'=)
+   (prefixp "" "Is this not pung?")
+   (prefixp "Is this not pung?" "Is this not pung?")
    (prefixp "Is" "Is this not pung?")
    (prefixp "IS" "is this not pung?" :test #'char-equal)
    (prefixp #*101 #*101111)
+   (prefixp #() #(:a :b :c :d :e))
+   (prefixp #2=#(:a :b :c :d :e) #2#)
    (prefixp #(:a :b :c :d) #(:a :b :c :d :e))))
+
+(deftest test-suffixp ()
+  (check
+   (suffixp '() '())
+   (suffixp '() '(g t c a t))
+   (suffixp '(c a t) '(g t c a t))
+   (not (suffixp '(g t c a t) '(c a t)))
+   (suffixp #1='(g t c a t) #1#)
+   (not (suffixp '(a g g) '(a g g t c)))
+   (suffixp '() '(a b c))
+   (suffixp '(c) '(a b c))
+   (suffixp '(b c) '(a b c))
+   (suffixp '(a b c) '(a b c))
+   (suffixp "" "asdf")
+   (suffixp "f" "asdf")
+   (suffixp "df" "asdf")
+   (suffixp "sdf" "asdf")
+   (suffixp "asdf" "asdf")
+   (not (suffixp '("this" "not" "pung?") '("Is" "this" "not" "pung?")))
+   (suffixp '("this" "not" "pung?") '("Is" "this" "not" "pung?") :test #'string=)
+   (not (suffixp '(2 3 7/2 4) '(1d0 2d0 3d0 3.5d0 4d0)))
+   (suffixp '(2 3 7/2 4) '(1d0 2d0 3d0 3.5d0 4d0) :test #'=)
+   (suffixp "" "Is this not pung?")
+   (suffixp "Is this not pung?" "Is this not pung?")
+   (suffixp "pung?" "Is this not pung?")
+   (suffixp "PUNG?" "is this not pung?" :test #'char-equal)
+   (suffixp #*111 #*101111)
+   (suffixp #() #(a b c))
+   (suffixp #(c) #(a b c))
+   (suffixp #(b c) #(a b c))
+   (suffixp #(a b c) #(a b c))
+   (suffixp #(a b c) #(a a b c))
+   (suffixp #() #(:a :b :c :d :e))
+   (suffixp #2=#(:a :b :c :d :e) #2#)
+   (suffixp #(:b :c :d) #(:a :b :c :d))))
 
 (deftest test-rotate-list0 ()
   (check
@@ -469,6 +515,8 @@
    (longerp [1 2 3] [4 5])
    (not (longerp [1 2 3] [4 5 6]))
    (not (longerp [1 2 3] [4 5 6 7]))
+   (longerp (loop for i upto 100000 collect i) "yep")
+   (not (longerp "nope" (loop for i upto 100000 collect i)))
    (longerp '(a b c d) [4 5])
    (longerp ["Is" "this" "not" "pung?"] '(:nope))))
 
@@ -837,6 +885,9 @@
    (equal (tree-map #'(lambda (x) (+ x 3)) '(1 2 (3 (4 (5) 6) (7)) 8 (9))) '(4 5 (6 (7 (8) 9) (10)) 11 (12)))
    (equal (tree-map #'(lambda (x) (+ x 5)) '(((( (1) )))) ) '(((( (6) )))) )))
 
+;;;
+;;;    见 ~/lisp/books/Tanimoto/ch02/2010/ch02.lisp
+;;;    
 (defun exify (obj)
   (build-tree #'(lambda (_) (declare (ignore _)) 'x) obj))
 

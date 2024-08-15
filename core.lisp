@@ -41,7 +41,7 @@
            :>case :class-template :comment :compose :conc1 :copy-array :cycle
            :defchain :destructure :dohash :doset :dostring :dotuples :dovector
            :drop :drop-until :drop-while :duplicatep
-           :emptyp :ends-with :every-pred :expand :explode
+           :emptyp :ends-with :equals :every-pred :expand :explode
            :filter :filter-split :find-some-if :find-subtree :firsts-rests :for :flatten
            :get-num :group :group-until :horners
 	   :if-let :if3 :iffn :in :in-if :inq :is-integer :iterate
@@ -58,7 +58,7 @@
            :shift0 :shift-list0 :shift1 :shift-list1
            :show-symbols :shuffle :singlep :some-pred :sort-symbol-list :splice
 ;           :split-if
-           :stable-partition :stream-partition :starts-with :symb
+           :stable-partition :stream-partition :starts-with :suffixp :symb
            :take :take-drop :take-while :take-until :transfer
            :transition :transition-1 :transition-n :transition-stream :translate :traverse :tree-find-if :tree-map
            :until :valid-num-p 
@@ -657,30 +657,79 @@
               (make-empty q)
               (enqueue q (pop list)))) )))
 
-;;;
-;;;    Lists
-;;;    
-;; (defun prefixp (l1 l2)
-;;   (cond ((null l1) t) ; endp?
-;; 	((null l2) nil)
-;; 	((eql (first l1) (first l2)) (prefixp (rest l1) (rest l2)))
-;; 	(t nil)))
+;; pathname, structure, hash table, bit vector
+(defgeneric equals (o1 o2)
+  (:documentation "Is O1 equal to O2 in a type-specific sense?"))
+(defmethod equals (o1 o2)
+  (eql o1 o2))
+(defmethod equals ((n1 number) (n2 number))
+  (= n1 n2))
+(defmethod equals ((s1 string) (s2 string))
+  (string= s1 s2))
+(defmethod equals ((ch1 character) (ch2 character))
+  (char= ch1 ch2))
+(defmethod equals ((l1 list) (l2 list))
+                                        ;  (equal l1 l2))
+  (cond ((null l1) (null l2))
+        ((null l2) nil)
+        ((equals (first l1) (first l2)) (equals (rest l1) (rest l2)))
+        (t nil)))
+(defmethod equals ((v1 vector) (v2 vector))
+  (if (= (length v1) (length v2))
+      (do ((i 0 (1+ i)))
+          ((= i (length v1)) t)
+        (unless (equals (aref v1 i) (aref v2 i))
+          (return nil)))) )
+(defmethod equals ((s1 symbol) (s2 symbol))
+  (equals (symbol-name s1) (symbol-name s2)))
+;; (defmethod equals ((k1 keyword) (k2 keyword))
+;;   (call-next-method))
+
+(defgeneric prefixp (s1 s2 &key test)
+  (:documentation "Is sequence S1 a prefix of S2?"))
+(defmethod prefixp ((v1 vector) (v2 vector) &key (test #'eql))
+  (let ((length1 (length v1)))
+    (if (>= (length v2) length1)
+        (let ((index (mismatch v1 v2 :test test)))
+          (or (null index) (= index length1)))
+        nil)))
+(defmethod prefixp ((l1 list) (l2 list) &key (test #'eql))
+  (cond ((null l1) t)
+        ((null l2) nil)
+        ((funcall test (first l1) (first l2)) (prefixp (rest l1) (rest l2) :test test))
+        (t nil)))
+  
 
 ;;;
-;;;    Sequences
+;;;    (prefixp (reverse l1) (reverse l2)) !!!!
 ;;;    
-;; (defun prefixp (s1 s2)
-;;   "Is S1 a prefix of S2"
-;;   (let ((l1 (length s1)))
-;;     (if (>= (length s2) l1)
-;;         (search s1 s2 :end2 l1) ; (= (mismatch s1 s2) l1)
-;;         nil)))
 
-(defun prefixp (seq1 seq2 &key (test #'eql))
-  (let ((match (search seq1 seq2 :test test)))
-    (if (null match)
-        nil
-        (zerop match))))
+(defgeneric suffixp (s1 s2 &key test)
+  (:documentation "Is sequence S1 and suffix of S2?"))
+(defmethod suffixp ((v1 vector) (v2 vector) &key (test #'eql))
+  (if (>= (length v2) (length v1))
+      (let ((index (mismatch v1 v2 :test test :from-end t)))
+        (or (null index) (zerop index)))
+      nil))
+;; (defmethod suffixp ((l1 list) (l2 list) &key (test #'eql))
+;;   (labels ((match1 (l1 l2)
+;;              (cond ((null l1) (null l2))
+;;                    ((null l2) nil)
+;;                    ((funcall test (first l1) (first l2))
+;;                     (or (match2 (rest l1) (rest l2))
+;;                         (match1 l1 (rest l2))))
+;;                    (t (match1 l1 (rest l2)))) )
+;;            (match2 (l1 l2)
+;;              (cond ((null l1) (null l2))
+;;                    ((null l2) nil)
+;;                    ((funcall test (first l1) (first l2))
+;;                     (match2 (rest l1) (rest l2)))
+;;                    (t nil))))
+;;     (or (null l1) (match1 l1 l2))))
+(defmethod suffixp ((l1 list) (l2 list) &key (test #'eql))
+  (cond ((null l2) (null l1))
+        ((not (mismatch l1 l2 :test test)))
+        (t (suffixp l1 (rest l2) :test test))))
 
 ;---------------Macros------------------------
 ;; (defmacro while (test &body body)
@@ -959,15 +1008,55 @@
 ;;;    function does not return the 'longer' of the two sequences. Rather, it
 ;;;    simply tests whether SEQ1 is longer than SEQ2.
 ;;;    
-(defun longerp (seq1 seq2)
-  "Is SEQ1 strictly longer than SEQ2?"
-  (labels ((compare (seq1 seq2)
-             (cond ((endp seq1) nil)
-                   ((endp seq2) t)
-                   (t (compare (rest seq1) (rest seq2)))) ))
-    (if (and (listp seq1) (listp seq2))
-        (compare seq1 seq2)
-        (> (length seq1) (length seq2)))) )
+;; (defun longerp (seq1 seq2)
+;;   "Is SEQ1 strictly longer than SEQ2?"
+;;   (labels ((compare (seq1 seq2)
+;;              (cond ((endp seq1) nil)
+;;                    ((endp seq2) t)
+;;                    (t (compare (rest seq1) (rest seq2)))) ))
+;;     (if (and (listp seq1) (listp seq2))
+;;         (compare seq1 seq2)
+;;         (> (length seq1) (length seq2)))) )
+
+;; (defun longerp (seq1 seq2)
+;;   "Is SEQ1 strictly longer than SEQ2?"
+;;   (labels ((compare-ll (seq1 seq2)
+;;              (cond ((endp seq1) nil)
+;;                    ((endp seq2) t)
+;;                    (t (compare-ll (rest seq1) (rest seq2)))) )
+;;            (compare-ln (seq n)
+;;              (cond ((endp seq) nil)
+;;                    ((zerop n) t)
+;;                    (t (compare-ln (rest seq) (1- n)))) )
+;;            (compare-nl (n seq)
+;;              (cond ((zerop n) nil)
+;;                    ((endp seq) t)
+;;                    (t (compare-nl (1- n) (rest seq)))) ))
+;;     (cond ((and (listp seq1) (listp seq2)) (compare-ll seq1 seq2))
+;;           ((listp seq1) (compare-ln seq1 (length seq2)))
+;;           ((listp seq2) (compare-nl (length seq1) seq2))
+;;           (t (> (length seq1) (length seq2)))) ))
+
+(defgeneric longerp (seq1 seq2)
+  (:documentation "Is SEQ1 strictly longer than SEQ2?"))
+(defmethod longerp ((seq1 list) (seq2 list))
+  (cond ((endp seq1) nil)
+        ((endp seq2) t)
+        (t (longerp (rest seq1) (rest seq2)))) )
+(defmethod longerp ((seq1 list) (seq2 sequence))
+  (labels ((compare (seq n)
+             (cond ((endp seq) nil)
+                   ((zerop n) t)
+                   (t (compare (rest seq) (1- n)))) ))
+    (compare seq1 (length seq2))))
+(defmethod longerp ((seq1 sequence) (seq2 list))
+  (labels ((compare (n seq)
+             (cond ((zerop n) nil)
+                   ((endp seq) t)
+                   (t (compare (1- n) (rest seq)))) ))
+    (compare (length seq1) seq2)))
+(defmethod longerp ((seq1 sequence) (seq2 sequence))
+  (> (length seq1) (length seq2)))
 
 ;;;
 ;;;    This collects the _values_ of applying the function to elts, not

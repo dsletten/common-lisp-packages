@@ -42,9 +42,12 @@
   (:documentation "A fixed set of pre-defined values."))
 
 (defmethod make-instance :around ((class (eql (find-class 'enumeration))) &rest initargs)
-  (find-token initargs)
+  (find-token class initargs)
   (apply #'call-next-method class initargs))
 
+;;;
+;;;    This is not working???
+;;;    
 (defgeneric find-token (class args)
   (:documentation "Control access to instance creation."))
                                   
@@ -75,9 +78,9 @@
          (write-string (,print-method ,name) stream))
        (let ((token ',token))
          (defmethod find-token ((class (eql (find-class ',name))) args)
-           (if (eq token (getf :token args))
+           (if (eq token (getf args :token))
                t
-               (error "Can't create any more ~A!" ,name)))
+               (error "Can't create any more ~A!" ',name)))
 ;       (let* ((,init-instances (mapcar #'(lambda (initargs) (apply #'make-instance ',name initargs)) ',instances))
          (let* ((,init-instances (mapcar #'(lambda (initargs) (make-instance ',name :name (first initargs) :description (second initargs) :token token :allow-other-keys t)) ',instances))
                 (,values-instance (make-instance ',values-class :instances ,init-instances)))
