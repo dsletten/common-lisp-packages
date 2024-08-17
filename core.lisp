@@ -413,11 +413,18 @@
 ;; 	  (length l))
 ;;   (nthcdr n l))
 
-(defun drop (n seq)
-  "Drop the first N elements of sequence SEQ."
-  (typecase seq
-    (list (nthcdr n seq))
-    (vector (subseq seq (min n (length seq)))) ))
+;; (defun drop (n seq)
+;;   "Drop the first N elements of sequence SEQ."
+;;   (typecase seq
+;;     (list (nthcdr n seq))
+;;     (vector (subseq seq (min n (length seq)))) ))
+
+(defgeneric drop (n seq)
+  (:documentation "Drop the first N elements of sequence SEQ."))
+(defmethod drop (n (seq list))
+  (nthcdr n seq))
+(defmethod drop (n (seq vector))
+ (subseq seq (min n (length seq))))
 
 ;; (defun take (l n)
 ;;   "Take the first N elements of list L."
@@ -434,13 +441,20 @@
 ;;;   This version simply returns all elements if n > length.
 ;;;   -Trying to avoid calling LENGTH on list...
 ;;;   
-(defun take (n seq)
-  "Take the first N elements of sequence SEQ."
-  (typecase seq
-    (list (loop repeat n
-                for elt in seq
-                collect elt))
-    (vector (subseq seq 0 (min n (length seq)))) ))
+;; (defun take (n seq)
+;;   "Take the first N elements of sequence SEQ."
+;;   (typecase seq
+;;     (list (loop repeat n
+;;                 for elt in seq
+;;                 collect elt))
+;;     (vector (subseq seq 0 (min n (length seq)))) ))
+
+(defgeneric take (n seq)
+  (:documentation "Take the first N elements of sequence SEQ."))
+(defmethod take (n (seq list))
+  (loop repeat n for elt in seq collect elt))
+(defmethod take (n (seq vector))
+  (subseq seq 0 (min n (length seq))))
 
 ;; (defun take (l n)
 ;;   "Take the first N elements of list L."
@@ -492,16 +506,30 @@
 ;;               ((or (= i n) (endp tail)) (values (nreverse head) tail))))
 ;;     (vector (values (take n seq) (drop n seq)))) ) ; Works for strings too
 
-(defun take-drop (n seq)
-  "Split a sequence at the Nth element. Return the subsequences before and after."
+;; (defun take-drop (n seq)
+;;   "Split a sequence at the Nth element. Return the subsequences before and after."
+;;   (assert (typep n `(integer 0))
+;;           (n)
+;;           "N must be a non-negative integer.")
+;;   (typecase seq
+;;     (list (do ((tail seq (rest tail))
+;;                (i 0 (1+ i)))
+;;               ((or (= i n) (endp tail)) (values (subseq seq 0 i) tail))))
+;;     (vector (values (take n seq) (drop n seq)))) ) ; Works for strings too
+
+(defgeneric take-drop (n seq)
+  (:documentation "Split a sequence at the Nth element. Return the subsequences before and after."))
+(defmethod take-drop :around (n seq)
   (assert (typep n `(integer 0))
           (n)
           "N must be a non-negative integer.")
-  (typecase seq
-    (list (do ((tail seq (rest tail))
-               (i 0 (1+ i)))
-              ((or (= i n) (endp tail)) (values (subseq seq 0 i) tail))))
-    (vector (values (take n seq) (drop n seq)))) ) ; Works for strings too
+  (call-next-method))
+(defmethod take-drop (n (seq list))
+  (do ((tail seq (rest tail))
+       (i 0 (1+ i)))
+      ((or (= i n) (endp tail)) (values (subseq seq 0 i) tail))))
+(defmethod take-drop (n (seq vector))
+  (values (take n seq) (drop n seq))) ; Works for strings too
 
 ;;;
 ;;;    Why is this so hard to get right?!?
