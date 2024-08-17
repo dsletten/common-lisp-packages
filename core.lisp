@@ -1026,15 +1026,29 @@
 ;;;    More efficient version of: (mapcar #'f (remove-if-not #'f seq))
 ;;;    FILTER uses the result of applying F to determine which elements to keep.
 ;;;    
-(defun filter (f seq)
-  (typecase seq
-    (list (loop for elt in seq
-                for val = (funcall f elt)
-                when val collect val))
-    (vector (loop for elt across seq
-                  for val = (funcall f elt)
-                  when val collect val into result
-                  finally (return (coerce result (if (stringp seq) 'string 'vector)))) )))
+;; (defun filter (f seq)
+;;   (typecase seq
+;;     (list (loop for elt in seq
+;;                 for val = (funcall f elt)
+;;                 when val collect val))
+;;     (vector (loop for elt across seq
+;;                   for val = (funcall f elt)
+;;                   when val collect val into result
+;;                   finally (return (coerce result (if (stringp seq) 'string 'vector)))) )))
+(defgeneric filter (f seq)
+  (:documentation "Retain non-nil values obtained by applying F to elts of SEQ."))
+(defmethod filter (f (seq list))
+  (loop for elt in seq
+        for val = (funcall f elt)
+        when val collect val))
+(defmethod filter (f (seq sequence))
+  (loop for elt across seq
+        for val = (funcall f elt)
+        when val collect val))
+(defmethod filter (f (seq vector))
+  (coerce (call-next-method) 'vector))
+(defmethod filter (f (seq string))
+  (coerce (call-next-method) 'string))
 
 ;;;
 ;;;    See matrix::list-to-rows-fill-rows

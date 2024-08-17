@@ -525,10 +525,14 @@
 (deftest test-group ()
   (check
    (null (group (loop for i from 1 to 10 collect i) 0))
+   (equal '((1 2 3) (4 5 6) (7 8 9))
+          (group (loop for i from 1 to 9 collect i) 3))
    (equal '((1 2 3) (4 5 6) (7 8 9) (10))
           (group (loop for i from 1 to 10 collect i) 3))
    (equal '((1 2 3 4 5 6 7) (8 9 10))
           (group (loop for i from 1 to 10 collect i) 7))
+   (equalp '(#(1 2 3) #(4 5 6) #(7 8 9))
+           (group (coerce (loop for i from 1 to 9 collect i) 'vector) 3))
    (equalp '(#(1 2 3) #(4 5 6) #(7 8 9) #(10))
            (group (coerce (loop for i from 1 to 10 collect i) 'vector) 3))
    (equalp '(#(1 2 3 4 5 6 7) #(8 9 10))
@@ -538,7 +542,9 @@
    (equal  '("Is this not" " pung?")
            (group "Is this not pung?" 11))
    (equal '("Is this" " not pu" "ng?")
-          (group "Is this not pung?" 7))))
+          (group "Is this not pung?" 7))
+   (equal '((:a 1) (:b 2) (:c 3) (:d 4)) ; Property list -> Association list
+          (group '(:a 1 :b 2 :c 3 :d 4) 2))))
 
 (defun count-vowels (s)
   (count-if #'(lambda (ch) (member ch (coerce "aeiou" 'list))) s :key #'char-downcase))
