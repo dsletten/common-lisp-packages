@@ -41,7 +41,7 @@
            :>case :class-template :comment :compose :conc1 :copy-array :cycle
            :defchain :destructure :dohash :doset :dostring :dotuples :dovector
            :drop :drop-until :drop-while :duplicatep
-           :emptyp :ends-with :equals :every-pred :expand :explode
+           :emptyp :equals :every-pred :expand :explode
            :filter :filter-split :find-some-if :find-subtree :firsts-rests :for :flatten
            :get-num :group :group-until :horners
 	   :if-let :if3 :iffn :in :in-if :inq :is-integer :iterate
@@ -58,7 +58,7 @@
            :shift0 :shift-list0 :shift1 :shift-list1
            :show-symbols :shuffle :singlep :some-pred :sort-symbol-list :splice
 ;           :split-if
-           :stable-partition :stream-partition :starts-with :suffixp :symb
+           :stable-partition :stream-partition :suffixp :symb
            :take :take-drop :take-while :take-until :transfer
            :transition :transition-1 :transition-n :transition-stream :translate :traverse :tree-find-if :tree-map
            :until :valid-num-p 
@@ -157,45 +157,6 @@
 			  (coerce (expand out) 'list))
 		  (coerce target 'list))
 	  'string))
-
-;;;
-;;;    These 2 are actually generic sequence functions.
-;;;    - Separate implementation for lists?
-;;;    
-;; (defun starts-with (s1 s2 &key (test #'eql))
-;;   "Determines whether or not the first sequence arg contains the second sequence arg as a subsequence at its start."
-;;   (let ((length1 (length s1))
-;;         (length2 (length s2)))
-;;     (and (>= length1 length2)
-;;          (search s2 s1 :end2 length2 :test test))))
-
-(defun starts-with (s1 s2 &key (test #'eql))
-  (let ((mismatch (mismatch s1 s2 :test test)))
-    (if mismatch
-        (>= mismatch (length s2))
-        t)))
-
-;;;
-;;;    Simply using EVERY can fail when (< (length s1) (length s2))
-;;;    E.g., (every #'eql "T" "TEST") => T but "T" does not start with "TEST"
-;;;    
-;; (defun starts-with (s1 s2 &key (test #'eql))
-;;   (let ((length1 (length s1))
-;;         (length2 (length s2)))
-;;     (and (>= length1 length2)
-;;          (every test s1 s2))))
-  
-;; (defun ends-with (s1 s2 &key (test #'eql))
-;;   "Determines whether or not the second sequence arg is the ending subsequence of the first arg."
-;;   (let ((length1 (length s1))
-;;         (length2 (length s2)))
-;;     (if (< length1 length2)
-;;         nil
-;;         (search s2 s1 :from-end t :start2 (- (length s1) (length s2)) :test test))))
-
-(defun ends-with (s1 s2 &key (test #'eql))
-  "Determines whether or not the second sequence arg is the ending subsequence of the first arg."
-  (not (mismatch s1 s2 :start1 (max (- (length s1) (length s2)) 0) :test test :from-end t)))
 
 (defun prompt-read (prompt &rest keys &key (allow-empty t) (trim t) test)
   (labels ((validate (response)
