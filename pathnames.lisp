@@ -1,8 +1,8 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (load "/home/slytobias/lisp/packages/lang.lisp"))
+  (load "/home/slytobias/lisp/packages/core.lisp"))
 
 (defpackage :pathnames
-  (:use :common-lisp :lang)
+  (:use :common-lisp :core)
 ;  #+allegro (:shadow :pathname-as-directory :pathname-as-file) ?
   (:export :directory-p :directory-pathname-p
            :file-exists-p :file-p :file-pathname-p

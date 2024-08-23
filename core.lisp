@@ -41,7 +41,7 @@
            :>case :class-template :comment :compose :conc1 :copy-array :cycle
            :defchain :destructure :dohash :doset :dostring :dotuples :dovector
            :drop :drop-until :drop-while :duplicatep
-           :emptyp :equals :every-pred :expand :explode
+           :emptyp :ends-with :equals :eqls :every-pred :expand :explode
            :filter :filter-split :find-some-if :find-subtree :firsts-rests :for :flatten
            :get-num :group :group-until :horners
 	   :if-let :if3 :iffn :in :in-if :inq :is-integer :iterate
@@ -58,7 +58,7 @@
            :shift0 :shift-list0 :shift1 :shift-list1
            :show-symbols :shuffle :singlep :some-pred :sort-symbol-list :splice
 ;           :split-if
-           :stable-partition :stream-partition :suffixp :symb
+           :stable-partition :starts-with :stream-partition :suffixp :symb
            :take :take-drop :take-while :take-until :transfer
            :transition :transition-1 :transition-n :transition-stream :translate :traverse :tree-find-if :tree-map
            :until :valid-num-p 
@@ -658,7 +658,6 @@
 (defmethod equals ((ch1 character) (ch2 character))
   (char= ch1 ch2))
 (defmethod equals ((l1 list) (l2 list))
-                                        ;  (equal l1 l2))
   (cond ((null l1) (null l2))
         ((null l2) nil)
         ((equals (first l1) (first l2)) (equals (rest l1) (rest l2)))
@@ -673,6 +672,25 @@
   (equals (symbol-name s1) (symbol-name s2)))
 ;; (defmethod equals ((k1 keyword) (k2 keyword))
 ;;   (call-next-method))
+
+;; pathname, structure, hash table, bit vector
+(defgeneric eqls (o1 o2)
+  (:documentation "Is O1 EQL to O2 or are all elements EQL?"))
+(defmethod eqls (o1 o2)
+  (eql o1 o2))
+(defmethod eqls ((s1 string) (s2 string))
+  (string= s1 s2))
+(defmethod eqls ((l1 list) (l2 list))
+  (cond ((null l1) (null l2))
+        ((null l2) nil)
+        ((eqls (first l1) (first l2)) (eqls (rest l1) (rest l2)))
+        (t nil)))
+(defmethod eqls ((v1 vector) (v2 vector))
+  (if (= (length v1) (length v2))
+      (do ((i 0 (1+ i)))
+          ((= i (length v1)) t)
+        (unless (eqls (aref v1 i) (aref v2 i))
+          (return nil)))) )
 
 (defgeneric prefixp (s1 s2 &key test)
   (:documentation "Is sequence S1 a prefix of S2?"))
@@ -719,6 +737,12 @@
   (cond ((null l2) (null l1))
         ((not (mismatch l1 l2 :test test)))
         (t (suffixp l1 (rest l2) :test test))))
+
+(defun starts-with (s1 s2 &key (test #'eql))
+  (prefixp s2 s1 :test test))
+
+(defun ends-with (s1 s2 &key (test #'eql))
+  (suffixp s2 s1 :test test))
 
 ;---------------Macros------------------------
 ;; (defmacro while (test &body body)

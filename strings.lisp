@@ -29,12 +29,12 @@
 ;(load "/home/slytobias/lisp/packages/test.lisp")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  #+ :sbcl (load "/home/slytobias/lisp/packages/lang" :verbose nil)
-  #- :sbcl (load "/home/slytobias/lisp/packages/lang.lisp" :verbose nil))
+  #+ :sbcl (load "/home/slytobias/lisp/packages/core" :verbose nil)
+  #- :sbcl (load "/home/slytobias/lisp/packages/core.lisp" :verbose nil))
 
 (defpackage :strings
-  (:use :common-lisp :lang)
-;  (:use :common-lisp :lang :test)
+  (:use :common-lisp :core)
+;  (:use :common-lisp :core :test)
   (:export :center :commify :commify-list :elide :english-and-list :english-or-list :get-article
            :irregular-plural :join
            :ljust

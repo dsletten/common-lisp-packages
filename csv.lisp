@@ -24,13 +24,13 @@
 ;;;;   Notes:
 ;;;;
 ;;;;
-(load "/home/slytobias/lisp/packages/lang.lisp")
+(load "/home/slytobias/lisp/packages/core.lisp")
 (load "/home/slytobias/lisp/packages/test.lisp")
 (load "/home/slytobias/lisp/packages/collections.lisp" :verbose nil)
 
 (defpackage :csv
   (:shadowing-import-from :collections :intersection :set :subsetp :union)
-  (:use :common-lisp :lang :collections :test))
+  (:use :common-lisp :core :collections :test))
 
 (in-package :csv)
 

@@ -287,6 +287,41 @@
    (equal (drop-until #'oddp '(0 2 4 5 7 2 9)) '(5 7 2 9))
    (equalp (drop-until #'oddp [0 2 4 5 7 2 9]) #(5 7 2 9))))
 
+(deftest test-equals ()
+  (check
+   (equals 2 2d0)
+   (equals "pung" "pung")
+   (not (equals "pung" "Pung"))
+   (equals #\h #\h)
+   (not (equals #\h #\H))
+   (equals '(1 2 3) '(1 2 3))
+   (equals #(1 2 3) #(1 2 3))
+   (equals '(1 2 3) '(1d0 2d0 3d0))
+   (equals #(1 2 3) #(1d0 2d0 3d0))
+   (equals '("pung" "foo" "bar") '("pung" "foo" "bar"))
+   (equals #("pung" "foo" "bar") #("pung" "foo" "bar"))
+   (equals 'cl-user::cxr 'core::cxr)
+   (equals '(:a #(1 2) (#\c ("d" "e"))) '(:a #(1 2) (#\c ("d" "e"))))
+   (equals '(:a #(1 2d0) (#\c ("d" "e"))) '(:a #(1d0 2) (#\c ("d" "e")))) ))
+
+(deftest test-eqls ()
+  (check
+   (eqls 2 2)
+   (not (eqls 2 2d0))
+   (eqls "pung" "pung")
+   (not (eqls "pung" "Pung"))
+   (eqls #\h #\h)
+   (not (eqls #\h #\H))
+   (eqls '(1 2 3) '(1 2 3))
+   (eqls #(1 2 3) #(1 2 3))
+   (not (eqls '(1 2 3) '(1d0 2d0 3d0)))
+   (not (eqls #(1 2 3) #(1d0 2d0 3d0)))
+   (eqls '("pung" "foo" "bar") '("pung" "foo" "bar"))
+   (eqls #("pung" "foo" "bar") #("pung" "foo" "bar"))
+   (not (eqls 'cl-user::cxr 'core::cxr))
+   (eqls '(:a #(1 2) (#\c ("d" "e"))) '(:a #(1 2) (#\c ("d" "e"))))
+   (not (eqls '(:a #(1 2d0) (#\c ("d" "e"))) '(:a #(1d0 2) (#\c ("d" "e")))) )))
+
 (deftest test-prefixp ()
   (check
    (prefixp '() '())
@@ -353,6 +388,31 @@
    (suffixp #() #(:a :b :c :d :e))
    (suffixp #2=#(:a :b :c :d :e) #2#)
    (suffixp #(:b :c :d) #(:a :b :c :d))))
+
+(deftest test-starts-with ()
+  (check
+   (starts-with "Is" "Is")
+   (starts-with "Is this not pung?" "Is")
+   (not (starts-with "Is this not pung?" "is"))
+   (starts-with "Is this not pung?" "is" :test #'char-equal)
+   (starts-with (subseq "Is this not pung?" 12) "pung")
+   (starts-with '(a b c) '(a b))
+   (starts-with '(a b) '(a b))
+   (starts-with '(1 2 3 4 5) '(1 2))
+   (not (starts-with '(1 2 3 4 5) '(2 3)))
+   (starts-with '((a . 1) (b . 2) (c . 3)) '((a . 1)) :test #'equal)
+   (starts-with (subseq [1 2 3 4 5] 2) [3 4])
+   (starts-with #[1 10] #[1 3])))
+
+(deftest test-ends-with ()
+  (check   
+    (ends-with "Is this not pung?" "pung?")
+    (ends-with (subseq "Is this not pung?" 0 7) "this")
+    (not (ends-with "Is this not pung?" "PUNG?"))
+    (ends-with "Is this not pung?" "PUNG?" :test #'char-equal)
+    (ends-with '(a b c) '(b c))
+    (ends-with (subseq [1 2 3 4 5] 0 4) [3 4])
+    (ends-with #[1 10] #[8 10])))
 
 (deftest test-rotate-list0 ()
   (check

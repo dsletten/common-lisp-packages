@@ -25,10 +25,10 @@
 ;;;;   Notes:
 ;;;;
 ;;;;
-(load "/home/slytobias/lisp/packages/lang.lisp")
+(load "/home/slytobias/lisp/packages/core.lisp")
 (load "/home/slytobias/lisp/packages/test.lisp")
 
-(defpackage :hanoi (:use :common-lisp :lang :test))
+(defpackage :hanoi (:use :common-lisp :core :test))
 
 (in-package :hanoi)
 

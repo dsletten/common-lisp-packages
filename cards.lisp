@@ -27,13 +27,13 @@
 ;;;;   https://codepoints.net/playing_cards
 ;;;;   https://eev.ee/blog/2015/09/12/dark-corners-of-unicode/
 ;;;;
-(load "/home/slytobias/lisp/packages/lang.lisp")
+(load "/home/slytobias/lisp/packages/core.lisp")
 (load "/home/slytobias/lisp/packages/collections.lisp")
 (load "/home/slytobias/lisp/packages/test.lisp")
 
 (defpackage :cards
   (:shadowing-import-from :collections :intersection :set :subsetp :union)
-  (:use :common-lisp :lang :collections :test) 
+  (:use :common-lisp :core :collections :test) 
   (:export :rank :suit :face-up :label :turn :turn-up :turn-down :deck :emptyp :remaining :shuffle :deal :add :presentp :clubs :diamonds :hearts :spades :card :deck :jack :queen :king :ace)
   (:shadow :shuffle :count))
 
@@ -144,7 +144,7 @@
 (defgeneric shuffle (deck))
 (defmethod shuffle ((d deck))
   (with-slots (cards random-state) d
-    (let ((shuffled (lang:shuffle (coerce (elements cards) 'vector) random-state))
+    (let ((shuffled (core:shuffle (coerce (elements cards) 'vector) random-state))
           (shuffled-deck (make-linked-queue)))
       (loop for card across shuffled do (enqueue shuffled-deck card))
       (setf cards shuffled-deck))))
