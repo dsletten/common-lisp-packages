@@ -27,6 +27,8 @@
 ;;;;   https://codepoints.net/playing_cards
 ;;;;   https://eev.ee/blog/2015/09/12/dark-corners-of-unicode/
 ;;;;
+;;;;   https://en.wikipedia.org/wiki/List_of_poker_hands
+;;;;
 (load "/home/slytobias/lisp/packages/core.lisp")
 (load "/home/slytobias/lisp/packages/collections.lisp")
 (load "/home/slytobias/lisp/packages/test.lisp")
@@ -34,8 +36,12 @@
 (defpackage :cards
   (:shadowing-import-from :collections :intersection :set :subsetp :union)
   (:use :common-lisp :core :collections :test) 
-  (:export :rank :suit :face-up :label :turn :turn-up :turn-down :deck :emptyp :remaining :shuffle :deal :add :presentp :clubs :diamonds :hearts :spades :card :deck :jack :queen :king :ace)
-  (:shadow :shuffle :count))
+  (:export :rank :suit :face-up :label :turn :turn-up :turn-down :deck
+           :emptyp :remaining :shuffle :deal :add :presentp :remove :classify :pprint
+           :clubs :diamonds :hearts :spades
+           :card :deck
+           :jack :queen :king :ace)
+  (:shadow :shuffle :count :emptyp :remove :pprint))
 
 (in-package :cards)
 
@@ -65,6 +71,10 @@
 (defun card-equal (card1 card2)
   (and (eql (rank card1) (rank card2)) 
        (eql (suit card1) (suit card2))))
+
+(defun rank+ (card)
+  "Determine the numerical rank for CARD."
+  (position (rank card) ranks))
 
 (defun rankp (r)
   (find r ranks))
@@ -103,6 +113,73 @@
 (defmethod print-object ((c card) stream)
   (print-unreadable-object (c stream :type t)
     (format stream "~A of ~A" (rank c) (label c))))
+
+(defun pprint (cards stream)
+  (format stream "~:{~A~A~:^, ~}" (mapcar #'(lambda (card) (list (rank card) (label card))) cards)))
+
+(defun flushp (hand)
+  (if (= (length hand) 5)
+      (let ((card-suits (mapcar #'suit hand)))
+        (every #'(lambda (suit) (eq suit (first card-suits))) (rest card-suits)))
+      nil))
+
+(defun straightp (hand)
+  (if (= (length hand) 5)
+      (let ((sorted-hand (sort (copy-list hand) #'(lambda (a b) (< (rank+ a) (rank+ b)))) ))
+        (every #'(lambda (a b) (= 1 (- (rank+ a) (rank+ b)))) (rest sorted-hand) sorted-hand))
+      nil))
+
+(defun straight-flush-p (hand)
+  (and (straightp hand) (flushp hand)))
+
+(defun bin (hand)
+  "Group cards in HAND by rank."
+  (loop with bins = (make-hash-table)
+        for card in hand
+        do (push card (gethash (rank card) bins '()))
+        finally (return bins)))
+
+(defun four-of-a-kind-p (hand)
+  (if (= (length hand) 5)
+      (loop for v being the hash-values in (bin hand)
+            if (= (length v) 4) do (return t)
+            finally (return nil))
+      nil))
+
+(defun three-of-a-kind-p (hand)
+  (if (= (length hand) 5)
+      (loop for v being the hash-values in (bin hand)
+            if (= (length v) 3) do (return t)
+            finally (return nil))
+      nil))
+
+(defun count-pairs (hand)
+  (loop for v being the hash-values in (bin hand)
+        count (= (length v) 2) into pairs
+        finally (return pairs)))
+
+(defun full-house-p (hand)
+  (and (= (length hand) 5)
+       (three-of-a-kind-p hand)
+       (= 1 (count-pairs hand))))
+
+(defun two-pair-p (hand)
+  (= 2 (count-pairs hand)))
+
+(defun one-pair-p (hand)
+  (= 1 (count-pairs hand)))
+
+(defun classify (hand)
+  (assert (= 5 (length hand)) () "Not a poker hand.")
+  (cond ((straight-flush-p hand) :straight-flush)
+        ((four-of-a-kind-p hand) :four-of-a-kind)
+        ((full-house-p hand) :full-house)
+        ((flushp hand) :flush)
+        ((straightp hand) :straight)
+        ((three-of-a-kind-p hand) :three-of-a-kind)
+        ((= 2 (count-pairs hand)) :two-pair)
+        ((= 1 (count-pairs hand)) :one-pair)
+        (t :high-card)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;    DECK class
@@ -155,7 +232,7 @@
     (dequeue cards)))
 
 (defmethod deal :around ((d deck))
-  (assert (not (emptyp (cards d))))
+  (assert (not (collections:emptyp (cards d))))
   (call-next-method))
 
 (defgeneric presentp (deck card))
@@ -172,3 +249,13 @@
   (assert (not (= (remaining d) (count d))) () "Deck is full.")
   (assert (not (presentp d c)) () "Card ~A already present in deck." c)
   (call-next-method))
+
+(defgeneric remove (deck card)
+  (:documentation "Remove the given CARD from the DECK."))
+(defmethod remove ((d deck) (target card))
+  (with-slots (cards) d
+    (loop repeat (remaining d)
+          for card = (dequeue cards)
+          if (card-equal target card) do (return target)
+          else do (enqueue cards card)
+          finally (return nil))))

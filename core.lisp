@@ -158,12 +158,14 @@
 		  (coerce target 'list))
 	  'string))
 
-(defun prompt-read (prompt &rest keys &key (allow-empty t) (trim t) test)
+(defun prompt-read (prompt &rest keys &key (allow-empty t) (trim t) test error)
   (labels ((validate (response)
              (cond ((and (string= response "") (not allow-empty)) (fail))
                    ((null test) response)
                    ((funcall test response) response)
-                   (t (fail))))
+                   (t (when error
+                        (funcall error response))
+                      (fail))))
            (fail ()
              (apply #'prompt-read prompt keys)))
     (format *query-io* prompt)
@@ -1378,54 +1380,39 @@
 ;;;    (before 'a 'u '(b a b u s h k a)) => (A B U S H K A)
 ;;;    
 
-;; (defun before (x y list &key (test #'eql))
-;;   (and list
-;;        (let ((first (car list)))
-;; 	 (cond ((funcall test y first) nil)
-;; 	       ((funcall test x first) list)
-;; 	       (t (before x y (cdr list) :test test)))) ))
-
-;;    Do we reach X _before_ we see Y?
-;;    :TEST is presumably some flavor of equality.
-;;    What about other types of predicates?
-;;    
-;; (defun before (x y seq &key (test #'eql))
-;;   "Does X occur before Y in SEQ? This is true whenever X occurs without Y having yet been encountered, 
-;; i.e., even if Y is not actually in the sequence. For a positive result, returns the rest of the list or
-;; the index of the position immediately following X."
-;;   (typecase seq
-;;     (null nil)
-;;     (list (loop for (elt . rest) on seq
-;;                 when (funcall test y elt) return nil
-;;                 when (funcall test x elt) return rest))  <------ ?!??!?!?
-;;     (vector (loop for elt across seq
-;;                   for i from 1
-;;                   when (funcall test y elt) return nil
-;;                   when (funcall test x elt) return i))))
-(defun before (x y seq &key (test #'eql))
-  "Does X occur before Y in SEQ? This is true whenever X occurs without Y having yet been encountered, 
+(defgeneric before (x y seq &key test key)
+  (:documentation  "Does X occur before Y in SEQ? This is true whenever X occurs without Y having yet been encountered, 
 i.e., even if Y is not actually in the sequence. For a positive result, returns the tail of the list
-starting with X or the index of the position of X in the sequence."
-  (typecase seq
-    (null nil)
-    (list (loop for cons on seq
-                for elt = (first cons)
-                when (funcall test y elt) return nil
-                when (funcall test x elt) return cons))
-    (vector (loop for elt across seq
-                  for i from 0
-                  when (funcall test y elt) return nil
-                  when (funcall test x elt) return i))))
+starting with X or the index of the position of X in the sequence."))
+(defmethod before (x y (seq null) &key test key)
+  (declare (ignore x y seq test key))
+  nil)
+(defmethod before (x y (seq list) &key (test #'eql) (key #'identity))
+  (if (funcall test x y)
+      nil
+      (loop for cons on seq
+            for elt = (first cons)
+            when (funcall test y (funcall key elt)) return nil
+            when (funcall test x (funcall key elt)) return cons)))
+(defmethod before (x y (seq vector) &key (test #'eql) (key #'identity))
+  (if (funcall test x y)
+      nil
+      (loop for elt across seq
+            for i from 0
+            when (funcall test y (funcall key elt)) return nil
+            when (funcall test x (funcall key elt)) return i)))
 
-;;    Do we reach X only _after_ we see Y?
-(defun after (x y seq &key (test #'eql))
-  "Does X occur after Y in SEQ? X must explicitly and exclusively be present after Y."
-  (let ((rest (before y x seq :test test)))
-    (if (null rest)
-        nil
-        (typecase seq
-          (list (member x rest :test test))
-          (vector (position x seq :start rest :test test)))) ))
+(defgeneric after (x y seq &key test key)
+  (:documentation "Does X occur after Y in SEQ? X must explicitly and exclusively be present after Y."))
+(defmethod after (x y (seq null) &key test key)
+  (declare (ignore x y seq test key))
+  nil)
+(defmethod after (x y (seq list) &key (test #'eql) (key #'identity))
+ (member x (before y x seq :test test :key key) :test test :key key))
+(defmethod after (x y (seq vector) &key (test #'eql) (key #'identity))
+  (let ((index (before y x seq :test test :key key)))
+    (and index
+         (position x seq :start index :test test :key key))))
 
 (defun duplicatep (obj seq &key (test #'eql))
   "Are there duplicate instances of OBJ in SEQ as determined by TEST?
