@@ -41,7 +41,7 @@
            :>case :class-template :comment :compose :conc1 :copy-array :cycle
            :defchain :destructure :dohash :doset :dostring :dotuples :dovector
            :drop :drop-until :drop-while :duplicatep
-           :emptyp :ends-with :equals :eqls :every-pred :expand :explode
+           :emptyp :ends-with :equalelts :equals :eqls :every-pred :expand :explode
            :filter :filter-split :find-some-if :find-subtree :firsts-rests :for :flatten
            :get-num :group :group-until :horners
 	   :if-let :if3 :iffn :in :in-if :inq :is-integer :iterate
@@ -2287,6 +2287,22 @@ If so return the tail of the list starting with the duplicate or the index in th
         ((atom obj) (funcall f obj))
         (t (cons (build-tree f (car obj))
                  (build-tree f (cdr obj))))) )
+
+(defun equalelts (seq &key (test #'equal) (key #'identity))
+  (or (emptyp seq)
+      (multiple-value-bind (take drop) (take-drop 1 seq)
+        (let ((exemplar (funcall key (elt take 0))))
+          (every (compose (partial* test exemplar) key) drop)))) )
+
+;; (defgeneric equalelts (seq &key test key)
+;;   (:documentation "Are are elements of SEQ equal with respect to TEST after applying KEY?"))
+;; (defmethod equalelts ((seq null) &key test key)
+;;   (declare (ignore seq test key))
+;;   t)
+;; (defmethod equalelts ((seq list) &key (test #'equal) (key #'identity))
+;;   (every #'(lambda (x y) (funcall test (funcall key x) (funcall key y))) seq (rest seq)))
+;; (defmethod equalelts ((seq vector) &key (test #'equal) (key #'identity))
+;;   (not (mismatch seq seq :start1 1 :end2 (1- (length seq)) :key key :test test)))
 
 ;(defun readlist (&rest args)
 (defun read-list (&rest args)

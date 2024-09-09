@@ -119,8 +119,7 @@
 
 (defun flushp (hand)
   (if (= (length hand) 5)
-      (let ((card-suits (mapcar #'suit hand)))
-        (every #'(lambda (suit) (eq suit (first card-suits))) (rest card-suits)))
+      (equalelts hand :key #'suit)
       nil))
 
 (defun straightp (hand)
@@ -129,8 +128,17 @@
         (every #'(lambda (a b) (= 1 (- (rank+ a) (rank+ b)))) (rest sorted-hand) sorted-hand))
       nil))
 
+(defun royalp (hand)
+  (if (= (length hand) 5)
+      (let ((sorted-hand (sort (copy-list hand) #'(lambda (a b) (< (rank+ a) (rank+ b)))) ))
+        (eq (rank (first sorted-hand)) 10))
+      nil))
+
 (defun straight-flush-p (hand)
   (and (straightp hand) (flushp hand)))
+
+(defun royal-flush-p (hand)
+  (and (straightp hand) (flushp hand) (royalp hand)))
 
 (defun bin (hand)
   "Group cards in HAND by rank."
@@ -171,7 +179,8 @@
 
 (defun classify (hand)
   (assert (= 5 (length hand)) () "Not a poker hand.")
-  (cond ((straight-flush-p hand) :straight-flush)
+  (cond ((royal-flush-p hand) :royal-flush)
+        ((straight-flush-p hand) :straight-flush)
         ((four-of-a-kind-p hand) :four-of-a-kind)
         ((full-house-p hand) :full-house)
         ((flushp hand) :flush)
