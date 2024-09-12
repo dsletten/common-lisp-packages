@@ -123,22 +123,23 @@
       nil))
 
 (defun straightp (hand)
+  "Determines whether HAND is a straight and returns the low card."
   (if (= (length hand) 5)
       (let ((sorted-hand (sort (copy-list hand) #'(lambda (a b) (< (rank+ a) (rank+ b)))) ))
-        (every #'(lambda (a b) (= 1 (- (rank+ a) (rank+ b)))) (rest sorted-hand) sorted-hand))
-      nil))
-
-(defun royalp (hand)
-  (if (= (length hand) 5)
-      (let ((sorted-hand (sort (copy-list hand) #'(lambda (a b) (< (rank+ a) (rank+ b)))) ))
-        (eq (rank (first sorted-hand)) 10))
-      nil))
+        (values (every #'(lambda (a b) (= 1 (- (rank+ a) (rank+ b))))
+                       (rest sorted-hand)
+                       sorted-hand)
+                (first sorted-hand)))
+      (values nil nil)))
 
 (defun straight-flush-p (hand)
   (and (straightp hand) (flushp hand)))
 
 (defun royal-flush-p (hand)
-  (and (straightp hand) (flushp hand) (royalp hand)))
+  (multiple-value-bind (straightp low-card) (straightp hand)
+    (and straightp
+         (flushp hand)
+         (= (rank+ low-card) 10))))
 
 (defun bin (hand)
   "Group cards in HAND by rank."

@@ -700,15 +700,17 @@
 (deftest test-duplicatep ()
   (check
    (not (duplicatep 'a '(a b c d)))
-   (equal (duplicatep 'a '(a b c d a e f g)) '(A E F G))
+   (equal '(A E F G) (duplicatep 'a '(a b c d a e f g)))
    (not (duplicatep #\a "abcd"))
-   (= (duplicatep #\a "abcdaefg") 4)
+   (= 4 (duplicatep #\a "abcdaefg"))
    (not (duplicatep #\a "abcdAEFG"))
-   (= (duplicatep #\a "abcdAEFG" :test #'char-equal) 4)
+   (= 4 (duplicatep #\a "abcdAEFG" :test #'char-equal))
    (not (duplicatep 2 #(2 4 6 8)))
-   (= (duplicatep 2 #(2 4 6 8 0 2 3 5 7 9)) 5)
+   (= 5 (duplicatep 2 #(2 4 6 8 0 2 3 5 7 9)))
    (not (duplicatep 2 #(2 4 6 8 0 2.0 3 5 7 9)))
-   (= (duplicatep 2 #(2 4 6 8 0 2.0 3 5 7 9) :test #'=) 5)))
+   (= 5 (duplicatep 2 #(2 4 6 8 0 2.0 3 5 7 9) :test #'=))
+   (not (duplicatep 'c '((a . 1) (c . 2) (d . 3) (c . 4))))
+   (equal '((c . 4)) (duplicatep 'c '((a . 1) (c . 2) (d . 3) (c . 4)) :key #'first))))
 
 ;;;
 ;;;    See TAKE-UNTIL
@@ -1472,6 +1474,6 @@
           (not (equalelts (list andy joey dee-dee tommy johnny) :key #'last-name))
           (equalelts (list joey dee-dee tommy johnny) :key #'last-name)))
    (not (equalelts '(1 4 7 10 13)))
-   (equalelts '(1 4 7 10 13) :key #'(lambda (n) (mod n 3)))
-   (equalelts #(1 4 7 10 13) :key #'(lambda (n) (mod n 3)))
+   (equalelts '(1 4 7 10 13) :key (partial* #'mod 3))
+   (equalelts #(1 4 7 10 13) :key (partial* #'mod 3))
    (equalelts "147" :key #'(lambda (ch) (mod (digit-char-p ch) 3)))) )

@@ -1414,15 +1414,17 @@ starting with X or the index of the position of X in the sequence."))
     (and index
          (position x seq :start index :test test :key key))))
 
-(defun duplicatep (obj seq &key (test #'eql))
-  "Are there duplicate instances of OBJ in SEQ as determined by TEST?
-If so return the tail of the list starting with the duplicate or the index in the sequence of the duplicate."
-  (typecase seq
-    (list (member obj (rest (member obj seq :test test)) :test test))
-    (vector (let ((initial (position obj seq :test test)))
-              (if initial
-                  (position obj seq :start (1+ initial) :test test)
-                  nil)))) )
+(defgeneric duplicatep (obj seq &key test key)
+  (:documentation "Are there duplicate instances of OBJ in SEQ as determined by TEST? If so return the tail of the list starting with the duplicate or the index in the vector of the duplicate."))
+(defmethod duplicatep (obj (seq null) &key test key)
+  (declare (ignore obj seq test key))
+  nil)
+(defmethod duplicatep (obj (seq list) &key (test #'eql) (key #'identity))
+  (member obj (rest (member obj seq :test test :key key)) :test test :key key))
+(defmethod duplicatep (obj (seq vector) &key (test #'eql) (key #'identity))
+  (let ((initial (position obj seq :test test :key key)))
+    (and initial
+         (position obj seq :start (1+ initial) :test test :key key))))
 
 ;;;
 ;;;    (This is sort of TAKE-UNTIL)
@@ -2289,13 +2291,14 @@ If so return the tail of the list starting with the duplicate or the index in th
                  (build-tree f (cdr obj))))) )
 
 (defun equalelts (seq &key (test #'equal) (key #'identity))
+  "Are all elements of SEQ equal with respect to TEST after applying KEY?"
   (or (emptyp seq)
-      (multiple-value-bind (take drop) (take-drop 1 seq)
-        (let ((exemplar (funcall key (elt take 0))))
-          (every (compose (partial* test exemplar) key) drop)))) )
+      (multiple-value-bind (head tail) (take-drop 1 seq)
+        (let ((exemplar (funcall key (elt head 0))))
+          (every (compose (partial* test exemplar) key) tail)))) )
 
 ;; (defgeneric equalelts (seq &key test key)
-;;   (:documentation "Are are elements of SEQ equal with respect to TEST after applying KEY?"))
+;;   (:documentation "Are all elements of SEQ equal with respect to TEST after applying KEY?"))
 ;; (defmethod equalelts ((seq null) &key test key)
 ;;   (declare (ignore seq test key))
 ;;   t)
