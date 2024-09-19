@@ -2290,12 +2290,12 @@ starting with X or the index of the position of X in the sequence."))
         (t (cons (build-tree f (car obj))
                  (build-tree f (cdr obj))))) )
 
-(defun equalelts (seq &key (test #'equal) (key #'identity))
-  "Are all elements of SEQ equal with respect to TEST after applying KEY?"
-  (or (emptyp seq)
-      (multiple-value-bind (head tail) (take-drop 1 seq)
-        (let ((exemplar (funcall key (elt head 0))))
-          (every (compose (partial* test exemplar) key) tail)))) )
+;; (defun equalelts (seq &key (test #'equal) (key #'identity))
+;;   "Are all elements of SEQ equal with respect to TEST after applying KEY?"
+;;   (or (emptyp seq)
+;;       (multiple-value-bind (head tail) (take-drop 1 seq)
+;;         (let ((exemplar (funcall key (elt head 0))))
+;;           (every (compose (partial* test exemplar) key) tail)))) )
 
 ;; (defgeneric equalelts (seq &key test key)
 ;;   (:documentation "Are all elements of SEQ equal with respect to TEST after applying KEY?"))
@@ -2306,6 +2306,21 @@ starting with X or the index of the position of X in the sequence."))
 ;;   (every #'(lambda (x y) (funcall test (funcall key x) (funcall key y))) seq (rest seq)))
 ;; (defmethod equalelts ((seq vector) &key (test #'equal) (key #'identity))
 ;;   (not (mismatch seq seq :start1 1 :end2 (1- (length seq)) :key key :test test)))
+
+(defgeneric equalelts (seq &key test key)
+  (:documentation "Are all elements of SEQ equal with respect to TEST after applying KEY?"))
+(defmethod equalelts :around (seq &key test key)
+  (declare (ignore test key))
+  (or (emptyp seq)
+      (call-next-method)))
+(defmethod equalelts ((seq list) &key (test #'equal) (key #'identity))
+  (loop for elt in seq
+        with exemplar = (funcall key (elt seq 0))
+        always (funcall test exemplar (funcall key elt))))
+(defmethod equalelts ((seq vector) &key (test #'equal) (key #'identity))
+  (loop for elt across seq
+        with exemplar = (funcall key (elt seq 0))
+        always (funcall test exemplar (funcall key elt))))
 
 ;(defun readlist (&rest args)
 (defun read-list (&rest args)
