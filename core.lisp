@@ -25,10 +25,6 @@
 ;;;;   Needs work: MAPTUPLES
 ;;;;
 
-;;;
-;;;    Need queue for TAKE-DROP
-;;;    
-
 (eval-when (:compile-toplevel :load-toplevel :execute)
   #+ :sbcl (load "/home/slytobias/lisp/packages/collections" :verbose nil)
   #- :sbcl (load "/home/slytobias/lisp/packages/collections.lisp" :verbose nil))
@@ -407,20 +403,6 @@
 ;     (when (null list)
 ;       (error "Could not transfer element"))))
 
-;; (defun drop (l n)
-;;   "Drop the first N elements of list L."
-;;   (assert (typep n `(integer 0 ,(length l)))
-;; 	  (n)
-;; 	  "N must be a non-negative integer less than or equal to ~D."
-;; 	  (length l))
-;;   (nthcdr n l))
-
-;; (defun drop (n seq)
-;;   "Drop the first N elements of sequence SEQ."
-;;   (typecase seq
-;;     (list (nthcdr n seq))
-;;     (vector (subseq seq (min n (length seq)))) ))
-
 (defgeneric drop (n seq)
   (:documentation "Drop the first N elements of sequence SEQ."))
 (defmethod drop (n (seq list))
@@ -428,96 +410,12 @@
 (defmethod drop (n (seq vector))
  (subseq seq (min n (length seq))))
 
-;; (defun take (l n)
-;;   "Take the first N elements of list L."
-;;    (assert (listp l) (l) "L should be a list.")
-;; ;;   (assert (typep n `(integer 0 ,(length l)))
-;; ;; 	  (n)
-;; ;; 	  "N must be a non-negative integer less than or equal to ~D."
-;; ;; 	  (length l))
-;;   (loop for elt in l
-;; 	for i from 1
-;; 	while (<= i n) collect elt))
-
-;;;
-;;;   This version simply returns all elements if n > length.
-;;;   -Trying to avoid calling LENGTH on list...
-;;;   
-;; (defun take (n seq)
-;;   "Take the first N elements of sequence SEQ."
-;;   (typecase seq
-;;     (list (loop repeat n
-;;                 for elt in seq
-;;                 collect elt))
-;;     (vector (subseq seq 0 (min n (length seq)))) ))
-
 (defgeneric take (n seq)
   (:documentation "Take the first N elements of sequence SEQ."))
 (defmethod take (n (seq list))
   (loop repeat n for elt in seq collect elt))
 (defmethod take (n (seq vector))
   (subseq seq 0 (min n (length seq))))
-
-;; (defun take (l n)
-;;   "Take the first N elements of list L."
-;;   (assert (listp l) (l) "L should be a list.")
-;;   (assert (typep n `(integer 0 ,(length l)))
-;; 	  (n)
-;; 	  "N must be a non-negative integer less than or equal to ~D."
-;; 	  (length l))
-;;   (labels ((take-aux (l n take)
-;; 	     (cond ((zerop n) (nreverse take))
-;; 		   (t (take-aux (cdr l) (1- n) (cons (car l) take)))) ))
-;;     (take-aux l n '())))
-
-;; (defun take-drop (l n)
-;;   (values (butlast l (- (length l) n))
-;; 	  (nthcdr n l)))
-
-;; (defun take-drop (l n)
-;;   "Split a list at the Nth element. Return the sublists before and after."
-;;   (list (butlast l (- (length l) n))
-;; 	(nthcdr n l)))
-
-;;;
-;;;    Using queue since LOOP semantics are so goofy!!
-;;;    Cool but slow????
-;;;    
-;; (defun take-drop (n seq)
-;;   "Split a sequence at the Nth element. Return the subsequences before and after."
-;;   (assert (typep n `(integer 0))
-;;           (n)
-;;           "N must be a non-negative integer.")
-;;   (typecase seq
-;;     (list (do ((q (make-linked-queue))
-;;                (tail seq (rest tail))
-;;                (i 0 (1+ i)))
-;;               ((or (= i n) (endp tail)) (values (elements q) tail))
-;;             (enqueue q (first tail))))
-;;     (vector (values (take n seq) (drop n seq)))) ) ; Works for strings too
-
-;; (defun take-drop (n seq)
-;;   "Split a sequence at the Nth element. Return the subsequences before and after."
-;;   (assert (typep n `(integer 0))
-;;           (n)
-;;           "N must be a non-negative integer.")
-;;   (typecase seq
-;;     (list (do ((head '() (cons (first tail) head))
-;;                (tail seq (rest tail))
-;;                (i 0 (1+ i)))
-;;               ((or (= i n) (endp tail)) (values (nreverse head) tail))))
-;;     (vector (values (take n seq) (drop n seq)))) ) ; Works for strings too
-
-;; (defun take-drop (n seq)
-;;   "Split a sequence at the Nth element. Return the subsequences before and after."
-;;   (assert (typep n `(integer 0))
-;;           (n)
-;;           "N must be a non-negative integer.")
-;;   (typecase seq
-;;     (list (do ((tail seq (rest tail))
-;;                (i 0 (1+ i)))
-;;               ((or (= i n) (endp tail)) (values (subseq seq 0 i) tail))))
-;;     (vector (values (take n seq) (drop n seq)))) ) ; Works for strings too
 
 (defgeneric take-drop (n seq)
   (:documentation "Split a sequence at the Nth element. Return the subsequences before and after."))
@@ -529,7 +427,10 @@
 (defmethod take-drop (n (seq list))
   (do ((tail seq (rest tail))
        (i 0 (1+ i)))
-      ((or (= i n) (endp tail)) (values (subseq seq 0 i) tail))))
+      ((or (= i n) (endp tail))
+       (if (endp tail)
+           (values seq '())
+           (values (subseq seq 0 i) tail)))) )
 (defmethod take-drop (n (seq vector))
   (values (take n seq) (drop n seq))) ; Works for strings too
 
@@ -561,67 +462,32 @@
 ;;         collect elt into take
 ;;         finally (return (values take tail))))
 
-;; (defun take-drop (l n)
-;;   "Split a list at the Nth element. Return the sublists before and after."
-;;   (assert (typep n `(integer 0 ,(length l)))
-;; 	  (n)
-;; 	  "N must be a non-negative integer less than or equal to ~D."
-;; 	  (length l))
-;;   (labels ((take-drop-aux (l n take)
-;; 	     (cond ((zerop n) (values (nreverse take) l))
-;; 		   (t (take-drop-aux (cdr l) (1- n) (cons (car l) take)))) ))
-;;     (take-drop-aux l n '())))
-
-;; (defun take-while (pred seq)
-;;   "Take elements of sequence SEQ until PRED evaluates to false. Return remainder of sequence as secondary value."
-;;   (typecase seq
-;;     (list (loop for tail on seq
-;;                 for elt = (first tail)
-;;                 while (funcall pred elt)
-;;                 collect elt into result
-;;                 finally (return (values result tail))))
-;;     (vector (let ((i (loop for i from 0 below (length seq)
-;;                            for elt across seq
-;;                            while (funcall pred elt)
-;;                            finally (return i))))
-;;               (values (subseq seq 0 i) (subseq seq i)))) ))
-
 ;;;
 ;;;    Call TAKE-WHILE, get DROP-WHILE for free.
 ;;;    
-(defun take-while (pred seq)
-  "Take elements of sequence SEQ until PRED evaluates to false. Return remainder of sequence as secondary value."
-  (typecase seq
-    (list (loop for tail on seq
-                for elt = (first tail)
-                while (funcall pred elt)
-                collect elt into result
-                finally (return (values result tail))))
-    (vector (take-drop (or (position-if-not pred seq) (length seq)) seq))))
+(defgeneric take-while (pred seq)
+  (:documentation "Take elements of sequence SEQ until PRED evaluates to false. Return remainder of sequence as secondary value."))
+(defmethod take-while (pred (seq list))
+  (loop for tail on seq
+        for elt in seq
+        while (funcall pred elt)
+        collect elt into result
+        finally (return (values result tail))))
+(defmethod take-while (pred (seq vector))
+  (take-drop (or (position-if-not pred seq) (length seq)) seq))
 
 (defun take-until (pred seq)
   (take-while (complement pred) seq))
 
-;; (defun drop-while (pred seq)
-;;   "Drop elements of sequence SEQ until PRED evaluates to false."
-;;   (typecase seq
-;;     (list (loop for tail on seq
-;;                 for elt = (first tail)
-;;                 while (funcall pred elt)
-;;                 finally (return tail)))
-;;     (vector (subseq seq (loop for i from 0 below (length seq)
-;;                               for elt across seq
-;;                               while (funcall pred elt)
-;;                               finally (return i)))) ))
-
-(defun drop-while (pred seq)
-  "Drop elements of sequence SEQ until PRED evaluates to false."
-  (typecase seq
-    (list (loop for tail on seq
-                for elt = (first tail)
-                while (funcall pred elt)
-                finally (return tail)))
-    (vector (drop (or (position-if-not pred seq) (length seq)) seq))))
+(defgeneric drop-while (pred seq)
+  (:documentation "Drop elements of sequence SEQ until PRED evaluates to false."))
+(defmethod drop-while (pred (seq list))
+  (loop for tail on seq
+        for elt in seq
+        while (funcall pred elt)
+        finally (return tail)))
+(defmethod drop-while (pred (seq vector))
+  (drop (or (position-if-not pred seq) (length seq)) seq))
 
 (defun drop-until (pred seq)
   (drop-while (complement pred) seq))
@@ -1425,21 +1291,6 @@ starting with X or the index of the position of X in the sequence."))
   (let ((initial (position obj seq :test test :key key)))
     (and initial
          (position obj seq :start (1+ initial) :test test :key key))))
-
-;;;
-;;;    (This is sort of TAKE-UNTIL)
-;;;    Or MEMBER-IF that returns both parts of sequence.
-;;;    
-;; (defun split-if (f seq)
-;;   "Split a sequence into the initial subsequence of all elements that fail the given test
-;; and the remaining subsequence from the first element which passes the test."
-;;   (typecase seq
-;;     (list (do ((q (make-linked-queue))
-;;                (tail seq (rest tail)))
-;;               ((or (endp tail) (funcall f (first tail))) (values (elements q) tail))
-;;             (enqueue q (first tail))))
-;;     (vector (let ((initial (or (position-if f seq) 0)))
-;;               (values (take initial seq) (drop initial seq)))) ))
 
 ;; (defun most-concept (f seq)
 ;;   (let ((sorted (stable-sort (map 'vector #'(lambda (elt) (list elt (funcall f elt))) seq) #'> :key #'second)))

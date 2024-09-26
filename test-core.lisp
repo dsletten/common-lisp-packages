@@ -246,11 +246,11 @@
           (multiple-value-list (take-until #'(lambda (x) (> x 14)) (loop for i from 1 to 10 collect i))))
    (equal '(() (1 2 3 4 5 6 7 8 9 10))
           (multiple-value-list (take-until #'(lambda (x) (> x 0)) (loop for i from 1 to 10 collect i))))
-   (equalp '(#(1 2 3 4) #(5 6 7 8 9 10))
+   (equals '(#(1 2 3 4) #(5 6 7 8 9 10))
            (multiple-value-list (take-until #'(lambda (x) (> x 4)) (apply #'vector #[1 10]))))
    (equal '((0 2 4) (5 7 2 9))
           (multiple-value-list (take-until #'oddp '(0 2 4 5 7 2 9))))
-   (equalp '(#(0 2 4) #(5 7 2 9))
+   (equals '(#(0 2 4) #(5 7 2 9))
            (multiple-value-list (take-until #'oddp [0 2 4 5 7 2 9])))) )
 
 (deftest test-drop-while ()
@@ -280,12 +280,12 @@
 
 (deftest test-drop-until ()
   (check
-   (equal (drop-until #'(lambda (x) (> x 4)) (loop for i from 1 to 10 collect i)) '(5 6 7 8 9 10))
-   (equal (drop-until #'(lambda (x) (> x 14)) (loop for i from 1 to 10 collect i)) '())
-   (equal (drop-until #'(lambda (x) (> x 0)) (loop for i from 1 to 10 collect i)) '(1 2 3 4 5 6 7 8 9 10))
-   (equalp (drop-until #'(lambda (x) (> x 4)) (apply #'vector #[1 10])) #(5 6 7 8 9 10))
-   (equal (drop-until #'oddp '(0 2 4 5 7 2 9)) '(5 7 2 9))
-   (equalp (drop-until #'oddp [0 2 4 5 7 2 9]) #(5 7 2 9))))
+   (equal '(5 6 7 8 9 10) (drop-until #'(lambda (x) (> x 4)) (loop for i from 1 to 10 collect i)))
+   (equal '() (drop-until #'(lambda (x) (> x 14)) (loop for i from 1 to 10 collect i)))
+   (equal '(1 2 3 4 5 6 7 8 9 10) (drop-until #'(lambda (x) (> x 0)) (loop for i from 1 to 10 collect i)))
+   (equals #(5 6 7 8 9 10) (drop-until #'(lambda (x) (> x 4)) (apply #'vector #[1 10])))
+   (equal '(5 7 2 9) (drop-until #'oddp '(0 2 4 5 7 2 9)))
+   (equals #(5 7 2 9) (drop-until #'oddp [0 2 4 5 7 2 9]))))
 
 (deftest test-equals ()
   (check
@@ -711,18 +711,6 @@
    (= 5 (duplicatep 2 #(2 4 6 8 0 2.0 3 5 7 9) :test #'=))
    (not (duplicatep 'c '((a . 1) (c . 2) (d . 3) (c . 4))))
    (equal '((c . 4)) (duplicatep 'c '((a . 1) (c . 2) (d . 3) (c . 4)) :key #'first))))
-
-;;;
-;;;    See TAKE-UNTIL
-;;;    
-;; (deftest test-split-if ()
-;;   (check
-;;    (equal (multiple-value-list (split-if #'(lambda (x) (> x 4)) (loop for i from 1 to 10 collect i))) '((1 2 3 4) (5 6 7 8 9 10)))
-;;    (equal (multiple-value-list (split-if #'(lambda (x) (> x 14)) (loop for i from 1 to 10 collect i))) '((1 2 3 4 5 6 7 8 9 10) ()))
-;;    (equal (multiple-value-list (split-if #'(lambda (x) (> x 0)) (loop for i from 1 to 10 collect i))) '(() (1 2 3 4 5 6 7 8 9 10)))
-;;    (equalp (multiple-value-list (split-if #'(lambda (x) (> x 4)) (apply #'vector #[1 10]))) '(#(1 2 3 4) #(5 6 7 8 9 10)))
-;;    (equal (multiple-value-list (split-if #'oddp '(0 2 4 5 7 2 9))) '((0 2 4) (5 7 2 9)))
-;;    (equalp (multiple-value-list (split-if #'oddp [0 2 4 5 7 2 9])) '(#(0 2 4) #(5 7 2 9)))))
 
 (deftest test-most ()
   (check
