@@ -42,7 +42,7 @@
            :get-num :group :group-until :horners
 	   :if-let :if3 :iffn :in :in-if :inq :is-integer :iterate
            :juxtapose
-           :last1 :list-to-string :longerp
+           :last1 :least :leastn :list-to-string :longerp
            :macroexpand-all :make-empty-seq :make-identity-matrix :make-range
            :map-> :map-array :map-array-index :map0-n :map1-n :mapa-b :mapcars :mappend :mapset
            :memoize :mklist :mkstr :most :mostn :most-least :most-least-n :nif
@@ -1293,48 +1293,9 @@ starting with X or the index of the position of X in the sequence."))
          (position obj seq :start (1+ initial) :test test :key key))))
 
 ;; (defun most-concept (f seq)
-;;   (let ((sorted (stable-sort (map 'vector #'(lambda (elt) (list elt (funcall f elt))) seq) #'> :key #'second)))
+;;   (let* ((scores (map 'vector #'(lambda (elt) (list elt (funcall f elt))) seq))
+;;          (sorted (stable-sort scores #'> :key #'second)))
 ;;     (values-list (aref sorted 0))))
-
-;; (defun most (fn list)
-;;   (if (null list)
-;;       (values nil nil)
-;;       (let* ((wins (car list))
-;;              (max (funcall fn wins)))
-;;         (dolist (obj (cdr list))
-;;           (let ((score (funcall fn obj)))
-;;             (when (> score max)
-;;               (setq wins obj
-;; 		    max score))))
-;;         (values wins max))))
-
-;; ;;;
-;; ;;;    This works, but it CONSes a lot!
-;; ;;;    
-;; (defun most (f seq)
-;;   "Locate the first element in SEQ that yields the highest value when F is applied. The secondary value is the value returned by F for that element."
-;;   (let ((first (elt seq 0)))
-;;     (values-list (reduce #'(lambda (winner elt)
-;;                              (let ((score (funcall f elt)))
-;;                                (if (> score (second winner))
-;;                                    (list elt score)
-;;                                    winner)))
-;;                          seq
-;;                          :initial-value (list first (funcall f first)))) ))
-
-;; ;;;
-;; ;;;    Not totally FP!!
-;; ;;;    
-;; (defun most (f seq)
-;;   "Locate the first element in SEQ that yields the highest value when F is applied. The secondary value is the value returned by F for that element."
-;;   (let* ((winner (elt seq 0))
-;;          (max (reduce #'(lambda (max elt)
-;;                           (let ((score (funcall f elt)))
-;;                             (cond ((> score max) (setf winner elt) score)
-;;                                   (t max))))
-;;                       seq
-;;                       :initial-value (funcall f winner))))
-;;     (values winner max)))
 
 ;; (defun most (f seq)
 ;;   (labels ((most-list (seq winner max)
@@ -1362,40 +1323,31 @@ starting with X or the index of the position of X in the sequence."))
 ;;                   (most-vector 1 (elt seq 0) (funcall f (elt seq 0)))) ))))
 
 (defun most (f seq)
-  "Locate the first element in SEQ that yields the highest value when F is applied. The secondary value is the value returned by F for that element."
+  (extremum f #'> seq))
+(defun least (f seq)
+  (extremum f #'< seq))
+
+(defgeneric extremum (f order seq)
+  (:documentation "Locate the first element in SEQ that yields the extreme (in terms of ORDER) value when F is applied. The secondary value is the value returned by F for that element."))
+(defmethod extremum :around (f order seq)
   (if (emptyp seq)
       (values nil nil)
-      (typecase seq
-        (list (loop with winner = (first seq)
-                    with max = (funcall f winner)
-                    for elt in (rest seq)
-                    for score = (funcall f elt)
-                    when (> score max) do (setf winner elt max score)
-                    finally (return (values winner max))))
-        (vector (loop with winner = (elt seq 0)
-                      with max = (funcall f winner)
-                      for i from 1 below (length seq)
-                      for elt = (elt seq i)
-                      for score = (funcall f elt)
-                      when (> score max) do (setf winner elt max score)
-                      finally (return (values winner max)))) )))
-
-;;;
-;;;    These are nice but they don't handle capturing the element itself...
-;;;    
-;; (defun most (f seq)
-;;   (reduce #'(lambda (winner elt)
-;;               (let ((score (funcall f elt)))
-;;                 (if (> score winner)
-;;                     score
-;;                     winner)))
-;;           seq
-;;           :initial-value (funcall f (elt seq 0))))
-
-;; (defun most (f seq)
-;;   (typecase seq
-;;     (list (loop for elt in seq maximize (funcall f elt)))
-;;     (vector (loop for elt across seq maximize (funcall f elt)))) )
+      (call-next-method)))
+(defmethod extremum (f order (seq list))
+ (loop with winner = (first seq)
+       with max = (funcall f winner)
+       for elt in (rest seq)
+       for score = (funcall f elt)
+       when (funcall order score max) do (setf winner elt max score)
+       finally (return (values winner max))))
+(defmethod extremum (f order (seq vector))
+  (loop with winner = (elt seq 0)
+        with max = (funcall f winner)
+        for i from 1 below (length seq)
+        for elt = (elt seq i)
+        for score = (funcall f elt)
+        when (funcall order score max) do (setf winner elt max score)
+        finally (return (values winner max))))
 
 ;;;
 ;;; Compare MOST
@@ -1427,30 +1379,33 @@ starting with X or the index of the position of X in the sequence."))
 ;;                   (let ((starter (funcall f (elt seq 0))))
 ;;                     (most-least-vector 1 (elt seq 0) starter (elt seq 0) starter)))) )))
 
-(defun most-least (f seq)
-  "Locate the first elements in SEQ that yield the highest/lowest value when F is applied. The values returned by F for those elements are also returned."
+(defgeneric most-least (f seq)
+  (:documentation "Locate the first elements in SEQ that yield the highest/lowest value when F is applied. The values returned by F for those elements are also returned."))
+(defmethod most-least :around (f seq)
   (if (emptyp seq)
-      nil
-      (typecase seq
-        (list (loop with winner = (first seq)
-                    with loser = winner
-                    with max = (funcall f winner)
-                    with min = max
-                    for elt in (rest seq)
-                    for score = (funcall f elt)
-                    when (> score max) do (setf winner elt max score)
-                    else when (< score min) do (setf loser elt min score)
-                    finally (return (values winner max loser min))))
-        (vector (loop with winner = (elt seq 0)
-                      with loser = winner
-                      with max = (funcall f winner)
-                      with min = max
-                      for i from 1 below (length seq)
-                      for elt = (elt seq i)
-                      for score = (funcall f elt)
-                      when (> score max) do (setf winner elt max score)
-                      else when (< score min) do (setf loser elt min score)
-                      finally (return (values winner max loser min)))) )))
+      (values nil nil nil nil)
+      (call-next-method)))
+(defmethod most-least (f (seq list))
+  (loop with winner = (first seq)
+        with loser = winner
+        with max = (funcall f winner)
+        with min = max
+        for elt in (rest seq)
+        for score = (funcall f elt)
+        when (> score max) do (setf winner elt max score)
+        else when (< score min) do (setf loser elt min score)
+        finally (return (values winner max loser min))))
+(defmethod most-least (f (seq vector))
+  (loop with winner = (elt seq 0)
+        with loser = winner
+        with max = (funcall f winner)
+        with min = max
+        for i from 1 below (length seq)
+        for elt = (elt seq i)
+        for score = (funcall f elt)
+        when (> score max) do (setf winner elt max score)
+        else when (< score min) do (setf loser elt min score)
+        finally (return (values winner max loser min))))
 
 ;; (defun best-concept (f seq)
 ;;   (let ((sorted (stable-sort (copy-seq seq) f)))
