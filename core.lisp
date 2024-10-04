@@ -1322,90 +1322,77 @@ starting with X or the index of the position of X in the sequence."))
 ;;                   nil
 ;;                   (most-vector 1 (elt seq 0) (funcall f (elt seq 0)))) ))))
 
-(defun most (f seq)
-  (extremum f #'> seq))
-(defun least (f seq)
-  (extremum f #'< seq))
-
-(defgeneric extremum (f order seq)
-  (:documentation "Locate the first element in SEQ that yields the extreme (in terms of ORDER) value when F is applied. The secondary value is the value returned by F for that element."))
-(defmethod extremum :around (f order seq)
-  (if (emptyp seq)
-      (values nil nil)
-      (call-next-method)))
-(defmethod extremum (f order (seq list))
- (loop with winner = (first seq)
-       with max = (funcall f winner)
-       for elt in (rest seq)
-       for score = (funcall f elt)
-       when (funcall order score max) do (setf winner elt max score)
-       finally (return (values winner max))))
-(defmethod extremum (f order (seq vector))
-  (loop with winner = (elt seq 0)
-        with max = (funcall f winner)
-        for i from 1 below (length seq)
-        for elt = (elt seq i)
-        for score = (funcall f elt)
-        when (funcall order score max) do (setf winner elt max score)
-        finally (return (values winner max))))
-
-;;;
-;;; Compare MOST
-;;;
-;; (defun most-least (f seq)
-;;   (labels ((most-least-list (seq winner max loser min)
-;;              (if (endp seq)
-;;                  (values winner max loser min)
-;;                  (let* ((elt (first seq))
-;;                         (score (funcall f elt)))
-;;                    (cond ((> score max) (most-least-list (rest seq) elt score loser min))
-;;                          ((< score min) (most-least-list (rest seq) winner max elt score))
-;;                          (t (most-least-list (rest seq) winner max loser min)))) ))
-;;            (most-least-vector (i winner max loser min)
-;;              (if (= i (length seq))
-;;                  (values winner max loser min)
-;;                  (let* ((elt (elt seq i))
-;;                         (score (funcall f elt)))
-;;                    (cond ((> score max) (most-least-vector (1+ i) elt score loser min))
-;;                          ((< score min) (most-least-vector (1+ i) winner max elt score))
-;;                          (t (most-least-vector (1+ i) winner max loser min)))) )))
-;;     (typecase seq
-;;       (list (if (null seq)
-;;                 nil
-;;                 (let ((starter (funcall f (first seq))))
-;;                   (most-least-list (rest seq) (first seq) starter (first seq) starter))))
-;;       (vector (if (zerop (length seq))
-;;                   nil
-;;                   (let ((starter (funcall f (elt seq 0))))
-;;                     (most-least-vector 1 (elt seq 0) starter (elt seq 0) starter)))) )))
-
-(defgeneric most-least (f seq)
-  (:documentation "Locate the first elements in SEQ that yield the highest/lowest value when F is applied. The values returned by F for those elements are also returned."))
-(defmethod most-least :around (f seq)
+(defgeneric extrema (f order seq)
+  (:documentation "Locate the elements in SEQ that yield the extreme (in terms of ORDER) values both high and low when F is applied. The secondary values are the extreme values returned by F for those elements."))
+(defmethod extrema :around (f order seq)
   (if (emptyp seq)
       (values nil nil nil nil)
       (call-next-method)))
-(defmethod most-least (f (seq list))
-  (loop with winner = (first seq)
-        with loser = winner
-        with max = (funcall f winner)
+(defmethod extrema (f order (seq list))
+ (loop with winners = (make-linked-queue)
+       with losers = (make-linked-queue)
+       with max = (funcall f (first seq))
+       with min = max
+       for elt in seq
+       for score = (funcall f elt)
+       if (= score max)
+         do (enqueue winners elt)
+       else if (> score max)
+         do (make-empty winners)
+            (enqueue winners elt)
+            (setf max score)
+       end
+       if (= score min)
+         do (enqueue losers elt)
+       else if (< score min)
+         do (make-empty losers)
+            (enqueue losers elt)
+            (setf min score)
+       end
+       finally (return (values (elements winners) max (elements losers) min))))
+(defmethod extrema (f order (seq vector))
+  (loop with winners = (make-linked-queue)
+        with losers = (make-linked-queue)
+        with max = (funcall f (elt seq 0))
         with min = max
-        for elt in (rest seq)
+        for elt across seq
         for score = (funcall f elt)
-        when (> score max) do (setf winner elt max score)
-        else when (< score min) do (setf loser elt min score)
-        finally (return (values winner max loser min))))
-(defmethod most-least (f (seq vector))
-  (loop with winner = (elt seq 0)
-        with loser = winner
-        with max = (funcall f winner)
-        with min = max
-        for i from 1 below (length seq)
-        for elt = (elt seq i)
-        for score = (funcall f elt)
-        when (> score max) do (setf winner elt max score)
-        else when (< score min) do (setf loser elt min score)
-        finally (return (values winner max loser min))))
+        if (= score max)
+          do (enqueue winners elt)
+        else if (> score max)
+          do (make-empty winners)
+             (enqueue winners elt)
+             (setf max score)
+        end
+        if (= score min)
+          do (enqueue losers elt)
+        else if (< score min)
+          do (make-empty losers)
+             (enqueue losers elt)
+             (setf min score)
+        end
+        finally (return (values (elements winners) max (elements losers) min))))
+
+(defun most (f seq)
+  (multiple-value-bind (winners max) (extrema f #'> seq)
+    (values (first winners) max)))
+(defun least (f seq)
+  (multiple-value-bind (winners max losers min) (extrema f #'< seq)
+    (declare (ignore winners max))
+    (values (first losers) min)))
+(defun most-least (f seq)
+  (multiple-value-bind (winners max losers min) (extrema f #'> seq)
+    (values (first winners) max (first losers) min)))
+
+(defun mostn (f seq)
+  (multiple-value-bind (winners max) (extrema f #'> seq)
+    (values winners max)))
+(defun leastn (f seq)
+  (multiple-value-bind (winners max losers min) (extrema f #'< seq)
+    (declare (ignore winners max))
+    (values losers min)))
+(defun most-least-n (f seq)
+  (extrema f #'> seq))
 
 ;; (defun best-concept (f seq)
 ;;   (let ((sorted (stable-sort (copy-seq seq) f)))
@@ -1559,110 +1546,6 @@ starting with X or the index of the position of X in the sequence."))
          (loop for elt in seq 
                for i from 0 
                collect (list i elt))))
-
-;; (defun mostn (fn list)
-;;   (if (null list)
-;;       (values nil nil)
-;;       (let ((result (list (car list)))
-;;             (max (funcall fn (car list))))
-;;         (dolist (obj (cdr list))
-;;           (let ((score (funcall fn obj)))
-;;             (cond ((> score max)
-;;                    (setq max score
-;;                          result (list obj)))
-;;                   ((= score max)
-;;                    (push obj result)))))
-;;         (values (nreverse result) max))))
-
-;; (defun mostn (f seq)
-;;   (let* ((first (elt seq 0))
-;;          (results (reduce #'(lambda (winner elt)
-;;                               (let ((score (funcall f elt)))
-;;                                 (destructuring-bind (winners high-score) winner
-;;                                   (cond ((> score high-score) (list (list elt) score))
-;;                                         ((= score high-score) (list (cons elt winners) high-score))
-;;                                         (t winner)))) )
-;;                           seq
-;;                           :initial-value (list '() (funcall f first)))) )
-;;     (values (nreverse (first results)) (second results))))
-
-(defun mostn (f seq)
-  "Locate all elements in SEQ that yield the highest value when F is applied. The secondary value is the value returned by F for those elements."
-  (if (emptyp seq)
-      nil
-      (typecase seq
-        (list (loop with winners = (make-linked-queue)
-                    with max = (funcall f (first seq))
-                    for elt in seq
-                    for score = (funcall f elt)
-                    if (= score max)
-                      do (enqueue winners elt)
-                    else if (> score max)
-                      do (make-empty winners)
-                         (enqueue winners elt)
-                         (setf max score)
-                    end
-                    finally (return (values (elements winners) max))))
-        (vector (loop with winners = (make-linked-queue)
-                      with max = (funcall f (elt seq 0))
-                      for elt across seq
-                      for score = (funcall f elt)
-                      if (= score max)
-                        do (enqueue winners elt)
-                      else if (> score max)
-                        do (make-empty winners)
-                           (enqueue winners elt)
-                           (setf max score)
-                      end
-                      finally (return (values (elements winners) max)))) )))
-
-(defun most-least-n (f seq)
-  "Locate all elements in SEQ that yield the highest/lowest value when F is applied. The values returned by F for those elements are also returned."
-  (if (emptyp seq)
-      nil
-      (typecase seq
-        (list (loop with winners = (make-linked-queue)
-                    with losers = (make-linked-queue)
-                    with max = (funcall f (first seq))
-                    with min = max
-                    for elt in seq
-                    for score = (funcall f elt)
-                    if (= score max)
-                      do (enqueue winners elt)
-                    else if (> score max)
-                      do (make-empty winners)
-                         (enqueue winners elt)
-                         (setf max score)
-                    end
-                    if (= score min)
-                      do (enqueue losers elt)
-                    else if (< score min)
-                      do (make-empty losers)
-                         (enqueue losers elt)
-                         (setf min score)
-                    end
-                    finally (return (values (elements winners) max (elements losers) min))))
-        (vector (loop with winners = (make-linked-queue)
-                      with losers = (make-linked-queue)
-                      with max = (funcall f (elt seq 0))
-                      with min = max
-                      for elt across seq
-                      for score = (funcall f elt)
-                      if (= score max)
-                        do (enqueue winners elt)
-                      else if (> score max)
-                        do (make-empty winners)
-                           (enqueue winners elt)
-                           (setf max score)
-                      end
-                      if (= score min)
-                        do (enqueue losers elt)
-                      else if (< score min)
-                        do (make-empty losers)
-                           (enqueue losers elt)
-                           (setf min score)
-                      end
-                      finally (return (values (elements winners) max (elements losers) min)))) )))
 
 ;;;
 ;;;    PAIP pg. 76
