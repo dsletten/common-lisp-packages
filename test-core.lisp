@@ -778,6 +778,27 @@
    (equal '(4 3 0 0) (multiple-value-list (most-least #'integer-length #(0 1 3 4 7 -1 -4 -7 -8))))
    (equal '(-8 3 -1 0) (multiple-value-list (most-least #'integer-length (reverse #(0 1 3 4 7 -1 -4 -7 -8)))) )))
 
+(deftest test-mostn ()
+  (check
+   (equal (multiple-value-list (mostn #'length '((a b) (a c) (b a) (e g)))) '(((A B) (A C) (B A) (E G)) 2))
+   (equal (multiple-value-list (mostn #'length '((a b) (a c) (a) (e g)))) '(((A B) (A C) (E G)) 2))
+   (equal (multiple-value-list (mostn #'length '((a b) (a b c) (a) (e f g)))) '(((A B C) (E F G)) 3))
+   (equal (multiple-value-list (mostn #'length #("ab" "abc" "a" "efg"))) '(("abc" "efg") 3))
+   (equal (multiple-value-list (mostn #'char-code "Is this not pung?")) '((#\u) 117))
+   (equal (multiple-value-list (mostn #'abs #(-9 8 -7 3 25 0 -28))) '((-28) 28))
+   (equal (multiple-value-list (mostn #'abs #(-9 8 -7 3 25 28 0 -28))) '((28 -28) 28))))
+
+(deftest test-most-least-n ()
+  (check
+   (equal (multiple-value-list (most-least-n #'length '((a b) (a c) (b a) (e g)))) '(((A B) (A C) (B A) (E G)) 2 ((A B) (A C) (B A) (E G)) 2))
+   (equal (multiple-value-list (most-least-n #'length '((a b) (a c) (a) (e g)))) '(((A B) (A C) (E G)) 2 ((A)) 1))
+   (equal (multiple-value-list (most-least-n #'length '((a b) (a c) (a) (e g) (x x x)))) '(((X X X)) 3 ((A)) 1))
+   (equal (multiple-value-list (most-least-n #'abs #(-9 8 -7 3 25 0 -28))) '((-28) 28 (0) 0))
+   (equal (multiple-value-list (most-least-n #'abs #(-9 8 -7 3 25 28 0 -28))) '((28 -28) 28 (0) 0))
+   (equal (multiple-value-list (most-least-n #'integer-length #(0 1 3 4 7 -1 -4 -7 -8))) '((4 7 -7 -8) 3 (0 -1) 0))
+   (equal (multiple-value-list (most-least-n #'char-code "Is this not pung?")) '((#\u) 117 (#\Space  #\Space  #\Space ) 32))
+   (equal (multiple-value-list (most-least-n #'length #((a b) (a c) (a) (e g) (x x x)))) '(((X X X)) 3 ((A)) 1))))
+
 (defclass dude ()
   ((name :reader name :initarg :name)
    (height :reader height :initarg :height)))
@@ -842,27 +863,6 @@
    (equal (multiple-value-list (best-worst #'> (shuffle (vector 1 2 3 4 5)))) '(5 1))
    (equal (multiple-value-list (best-worst #'< (shuffle (vector 1 2 3 4 5)))) '(1 5))
    (equal (multiple-value-list (best-worst #'char< "Is this not pung?")) '(#\Space #\u))))
-
-(deftest test-mostn ()
-  (check
-   (equal (multiple-value-list (mostn #'length '((a b) (a c) (b a) (e g)))) '(((A B) (A C) (B A) (E G)) 2))
-   (equal (multiple-value-list (mostn #'length '((a b) (a c) (a) (e g)))) '(((A B) (A C) (E G)) 2))
-   (equal (multiple-value-list (mostn #'length '((a b) (a b c) (a) (e f g)))) '(((A B C) (E F G)) 3))
-   (equal (multiple-value-list (mostn #'length #("ab" "abc" "a" "efg"))) '(("abc" "efg") 3))
-   (equal (multiple-value-list (mostn #'char-code "Is this not pung?")) '((#\u) 117))
-   (equal (multiple-value-list (mostn #'abs #(-9 8 -7 3 25 0 -28))) '((-28) 28))
-   (equal (multiple-value-list (mostn #'abs #(-9 8 -7 3 25 28 0 -28))) '((28 -28) 28))))
-
-(deftest test-most-least-n ()
-  (check
-   (equal (multiple-value-list (most-least-n #'length '((a b) (a c) (b a) (e g)))) '(((A B) (A C) (B A) (E G)) 2 ((A B) (A C) (B A) (E G)) 2))
-   (equal (multiple-value-list (most-least-n #'length '((a b) (a c) (a) (e g)))) '(((A B) (A C) (E G)) 2 ((A)) 1))
-   (equal (multiple-value-list (most-least-n #'length '((a b) (a c) (a) (e g) (x x x)))) '(((X X X)) 3 ((A)) 1))
-   (equal (multiple-value-list (most-least-n #'abs #(-9 8 -7 3 25 0 -28))) '((-28) 28 (0) 0))
-   (equal (multiple-value-list (most-least-n #'abs #(-9 8 -7 3 25 28 0 -28))) '((28 -28) 28 (0) 0))
-   (equal (multiple-value-list (most-least-n #'integer-length #(0 1 3 4 7 -1 -4 -7 -8))) '((4 7 -7 -8) 3 (0 -1) 0))
-   (equal (multiple-value-list (most-least-n #'char-code "Is this not pung?")) '((#\u) 117 (#\Space  #\Space  #\Space ) 32))
-   (equal (multiple-value-list (most-least-n #'length #((a b) (a c) (a) (e g) (x x x)))) '(((X X X)) 3 ((A)) 1))))
 
 (deftest test-map-> ()
   (check
