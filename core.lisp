@@ -1322,56 +1322,81 @@ starting with X or the index of the position of X in the sequence."))
 ;;                   nil
 ;;                   (most-vector 1 (elt seq 0) (funcall f (elt seq 0)))) ))))
 
-(defgeneric extrema (seq &key test key)
-  (:documentation "Locate the elements in SEQ that yield the extreme (in terms of TEST) values both high and low when KEY is applied. The secondary values are the extreme values returned by KEY for those elements."))
-(defmethod extrema :around (seq &key test key)
+(defclass generator () ())
+(defclass list-generator (generator)
+  ((contents :initarg :contents)))
+(defclass vector-generator (generator)
+  ((contents :initarg :contents)
+   (index :initform 0)))
+
+(defgeneric exhaustedp (generator)
+  (:documentation "Has every element of a generator's sequence been consumed?"))
+(defmethod exhaustedp ((g list-generator))
+  (with-slots (contents) g
+    (null contents)))
+(defmethod exhaustedp ((g vector-generator))
+  (with-slots (contents index) g
+    (= index (length contents))))
+
+(defgeneric current (generator)
+  (:documentation "Retrieve current element of the generator's sequence."))
+(defmethod current :around ((g generator))
+  (if (exhaustedp g)
+      (error "The generator has been exhausted.")
+      (call-next-method)))
+(defmethod current ((g list-generator))
+  (with-slots (contents) g
+    (first contents)))
+(defmethod current ((g vector-generator))
+  (with-slots (contents index) g
+    (elt contents index)))
+
+(defgeneric next (generator)
+  (:documentation "Retrieve next element of the generator's sequence."))
+(defmethod next :around ((g generator))
+  (if (exhaustedp g)
+      (error "The generator has been exhausted.")
+      (call-next-method)))
+(defmethod next ((g list-generator))
+  (with-slots (contents) g
+    (prog1 (current g)
+      (setf contents (rest contents)))) )
+(defmethod next ((g vector-generator))
+  (with-slots (contents index) g
+    (prog1 (current g)
+      (incf index))))
+
+(defun make-generator (seq)
+  (etypecase seq
+    (list (make-instance 'list-generator :contents seq))
+    (vector (make-instance 'vector-generator :contents seq))))
+
+(defun extrema (seq &key (test #'>) (key #'identity))
   (if (emptyp seq)
       (values nil nil nil nil)
-      (call-next-method)))
-(defmethod extrema ((seq list) &key (test #'>) (key #'identity))
-  (loop with winners = (make-linked-queue)
-        with losers = (make-linked-queue)
-        with max = (funcall key (first seq))
-        with min = max
-        for elt in seq
-        for score = (funcall key elt)
-        if (funcall test score max)
-          do (make-empty winners)
-             (enqueue winners elt)
-             (setf max score)
-        else if (not (funcall test max score))
-          do (enqueue winners elt)
-        end
-        if (funcall test min score)
-          do (make-empty losers)
-             (enqueue losers elt)
-             (setf min score)
-        else if (not (funcall test score min))
-          do (enqueue losers elt)
-        end
-        finally (return (values (elements winners) max (elements losers) min))))
-(defmethod extrema ((seq vector) &key (test #'>) (key #'identity))
-  (loop with winners = (make-linked-queue)
-        with losers = (make-linked-queue)
-        with max = (funcall key (elt seq 0))
-        with min = max
-        for elt across seq
-        for score = (funcall key elt)
-        if (funcall test score max)
-          do (make-empty winners)
-             (enqueue winners elt)
-             (setf max score)
-        else if (not (funcall test max score))
-          do (enqueue winners elt)
-        end
-        if (funcall test min score)
-          do (make-empty losers)
-             (enqueue losers elt)
-             (setf min score)
-        else if (not (funcall test score min))
-          do (enqueue losers elt)
-        end
-        finally (return (values (elements winners) max (elements losers) min))))
+      (let ((generator (make-generator seq)))
+        (loop with winners = (make-linked-queue)
+              with losers = (make-linked-queue)
+              with max = (funcall key (current generator))
+              with min = max
+              for elt = (next generator)
+              for score = (funcall key elt)
+              if (funcall test score max)
+                do (make-empty winners)
+                   (enqueue winners elt)
+                   (setf max score)
+              else if (not (funcall test max score))
+                do (enqueue winners elt)
+              end
+              if (funcall test min score)
+                do (make-empty losers)
+                   (enqueue losers elt)
+                   (setf min score)
+              else if (not (funcall test score min))
+                do (enqueue losers elt)
+              end
+              until (exhaustedp generator)
+              finally (return (values (elements winners) max (elements losers) min)))) ))
 
 (defun most-least-n (f seq)
   (extrema seq :key f))
