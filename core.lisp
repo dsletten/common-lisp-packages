@@ -59,7 +59,7 @@
            :transition :transition-1 :transition-n :transition-stream :translate :traverse :tree-find-if :tree-map
            :until :valid-num-p 
            :when-let :when-let* :while :with-gensyms)
-  (:shadow :emptyp))
+  (:shadow :emptyp :next))
 ;  (:shadow :while :until :prefixp :dovector :macroexpand-all)) ; ????
 
 (in-package :core)
