@@ -43,12 +43,12 @@
 	   :if-let :if3 :iffn :in :in-if :inq :is-integer :iterate
            :juxtapose
            :last1 :least :leastn :list-to-string :longerp
-           :macroexpand-all :make-empty-seq :make-identity-matrix :make-range
+           :macroexpand-all :make-empty-seq :make-identity-matrix
            :map-> :map-array :map-array-index :map0-n :map1-n :mapa-b :mapcars :mappend :mapset
            :memoize :mklist :mkstr :most :mostn :most-least :most-least-n :nif
            :partial :partial* :partition :ppmx
            :prefix-generator :prefixp :print-plist :prompt :prompt-read :prune :prune-if :prune-if-not
-           :read-list :read-num :repeat :reread :rmapcar 
+           :range :read-list :read-num :repeat :reread :rmapcar 
            :rotate0 :rotate-list0 :rotate1 :rotate-list1
            :same-shape-tree-p
            :shift0 :shift-list0 :shift1 :shift-list1
@@ -58,7 +58,7 @@
            :take :take-drop :take-while :take-until :transfer
            :transition :transition-1 :transition-n :transition-stream :translate :traverse :tree-find-if :tree-map
            :until :valid-num-p 
-           :when-let :when-let* :while :with-gensyms)
+           :when-let :when-let* :while :with-gensyms :worst :worstn)
   (:shadow :emptyp :next))
 ;  (:shadow :while :until :prefixp :dovector :macroexpand-all)) ; ????
 
@@ -140,7 +140,7 @@
 		     (end   (char char-range 2)))
 		 (if (char< start end)
 		     (concatenate 'string
-				  (coerce (make-range start end) 'string)
+				  (coerce (range start end) 'string)
 				  (expand (subseq char-range 3)))
 		     (error "Inverted range"))))
 	      (t (concatenate 'string (subseq char-range 0 (1- pos))
@@ -1327,7 +1327,7 @@ starting with X or the index of the position of X in the sequence."))
   ((contents :initarg :contents)))
 (defclass vector-generator (generator)
   ((contents :initarg :contents)
-   (index :initform 0)))
+   (index :initform 0 :initarg :index)))
 
 (defun make-generator (seq)
   (etypecase seq
@@ -1357,48 +1357,56 @@ starting with X or the index of the position of X in the sequence."))
     (elt contents index)))
 
 (defgeneric next (generator)
-  (:documentation "Retrieve current element of the generator's sequence and advance to next."))
+  (:documentation "Return new generator advanced to next element."))
 (defmethod next :around ((g generator))
   (if (exhaustedp g)
       (error "The generator has been exhausted.")
       (call-next-method)))
 (defmethod next ((g list-generator))
   (with-slots (contents) g
-    (prog1 (current g)
-      (setf contents (rest contents)))) )
+    (make-instance 'list-generator :contents (rest contents))))
 (defmethod next ((g vector-generator))
-  (with-slots (index) g
-    (prog1 (current g)
-      (incf index))))
+  (with-slots (contents index) g
+    (make-instance 'vector-generator :contents contents :index (1+ index))))
 
+;;;
+;;;    TODO: Use persistent queues
+;;;    
 (defun extrema (seq &key (test #'>) (key #'identity))
-  (flet ((beats (a b)
-           (funcall test a b)))
-    (if (emptyp seq)
-        (values nil nil nil nil)
-        (loop with generator = (make-generator seq)       
-              with winners = (make-linked-queue)          
-              with losers = (make-linked-queue)           
-              with max = (funcall key (current generator))
-              with min = max                              
-              for elt = (next generator)                  
-              for score = (funcall key elt)               
-              if (beats score max)                 
-                do (make-empty winners)                   
-                   (enqueue winners elt)                  
-                   (setf max score)                       
-              else if (not (beats max score))      
-                do (enqueue winners elt)                  
-              end                                         
-              if (beats min score)                 
-                do (make-empty losers)                    
-                   (enqueue losers elt)                   
-                   (setf min score)                       
-              else if (not (beats score min))      
-                do (enqueue losers elt)                   
-              end                                         
-              until (exhaustedp generator)                
-              finally (return (values (elements winners) max (elements losers) min)))) ))
+  (if (emptyp seq)
+      (values nil nil nil nil)
+      (labels ((beats (a b)
+                 (funcall test a b))
+               (find-extrema (generator winners max losers min)
+                 (if (exhaustedp generator)
+                     (values (elements winners) max (elements losers) min)
+                     (let* ((elt (current generator))
+                            (score (funcall key elt)))
+                       (update-winners generator winners max losers min elt score))))
+               (update-winners (generator winners max losers min elt score)
+                 (cond ((beats score max)
+                        (make-empty winners)
+                        (enqueue winners elt)
+                        (update-losers generator winners score losers min elt score))
+                       (t (unless (beats max score)
+                            (enqueue winners elt))
+                          (update-losers generator winners max losers min elt score))))
+               (update-losers (generator winners max losers min elt score)
+                 (cond ((beats min score)
+                        (make-empty losers)
+                        (enqueue losers elt)
+                        (find-extrema (next generator) winners max losers score))
+                       (t (unless (beats score min)
+                            (enqueue losers elt))
+                          (find-extrema (next generator) winners max losers min)))) )
+        (let* ((generator (make-generator seq))
+               (max (funcall key (current generator)))
+               (min max))
+          (find-extrema generator
+                        (make-linked-queue)
+                        max
+                        (make-linked-queue)
+                        min)))) )
 
 (defun most-least-n (f seq)
   (extrema seq :key f))
@@ -1819,21 +1827,44 @@ starting with X or the index of the position of X in the sequence."))
 ;;                 (loop for i from 0 below start by step collect i))
 ;;                (t (error "Mismatched input types.")))) ))
 
-(defun make-range (start &optional end (step 1))
-  (etypecase start
-    (character (typecase end
-                 (character
-                   (if (char> start end)
-                       (loop for i from (char-code start) downto (char-code end) by step collect (code-char i))
-                       (loop for i from (char-code start) to (char-code end) by step collect (code-char i))))
-                 (null (loop for i from 0 below (char-code start) by step collect (code-char i)))
-                 (otherwise (error "Mismatched input types."))))
-    (number (typecase end
-              (number (if (> start end)
-                          (loop for i from start downto end by step collect i)
-                          (loop for i from start to end by step collect i)))
-              (null (loop for i from 0 below start by step collect i))
-              (otherwise (error "Mismatched input types.")))) ))
+(defun range (start &optional end (step 1))
+  (make-range start end step))
+(defgeneric make-range (start end step)
+  (:documentation "Create a list from START to END inclusive by STEP."))
+(defmethod make-range ((start character) (end character) (step integer))
+  (mapa-b #'code-char (char-code start) (char-code end) step))
+(defmethod make-range ((start character) (end null) (step integer))
+  (declare (ignore end))
+  (if (char> start #\0)
+      (make-range #\0 (code-char (1- (char-code start))) step)
+      '()))
+(defmethod make-range ((start character) end step)
+  (error "Mismatched input types."))
+(defmethod make-range ((start number) (end number) (step number))
+  (mapa-b #'identity start end step))
+(defmethod make-range ((start number) (end null) (step number))
+  (declare (ignore end))
+  (if (plusp start)
+      (make-range 0 (1- start) step)
+      '()))
+(defmethod make-range ((start number) end step)
+  (error "Mismatched input types."))
+  
+;; (defun make-range (start &optional end (step 1))
+;;   (etypecase start
+;;     (character (typecase end
+;;                  (character
+;;                    (if (char> start end)
+;;                        (loop for i from (char-code start) downto (char-code end) by step collect (code-char i))
+;;                        (loop for i from (char-code start) to (char-code end) by step collect (code-char i))))
+;;                  (null (loop for i from 0 below (char-code start) by step collect (code-char i)))
+;;                  (otherwise (error "Mismatched input types."))))
+;;     (number (typecase end
+;;               (number (if (> start end)
+;;                           (loop for i from start downto end by step collect i)
+;;                           (loop for i from start to end by step collect i)))
+;;               (null (loop for i from 0 below start by step collect i))
+;;               (otherwise (error "Mismatched input types.")))) ))
 
 ;; (defun make-range (start end &optional (step 1))
 ;;   (cond ((characterp start)
@@ -2981,16 +3012,16 @@ starting with X or the index of the position of X in the sequence."))
             (if (and (numberp step)
                      (or (and (numberp m) (numberp n))
                          (and (characterp m) (characterp n))))
-                `',(make-range m n step)
-                `(make-range ,m ,n ,step))
+                `',(range m n step)
+                `(range ,m ,n ,step))
             (if n
                 (if (or (and (numberp m) (numberp n))
                         (and (characterp m) (characterp n)))
-                    `',(make-range m n)
-                    `(make-range ,m ,n))
+                    `',(range m n)
+                    `(range ,m ,n))
                 (if (or (numberp m) (characterp m))
-                    `',(make-range m)
-                    `(make-range ,m)))) )))
+                    `',(range m)
+                    `(range ,m)))) )))
 
 ;; (set-dispatch-macro-character #\# #\[
 ;;   #'(lambda (stream ch arg)
