@@ -29,23 +29,26 @@
 ;;;;
 ;;;;
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  #+ :sbcl (load "/home/slytobias/lisp/packages/core" :verbose nil)
+  #- :sbcl (load "/home/slytobias/lisp/packages/core.lisp" :verbose nil))
+
 (defpackage :io
-  (:use :common-lisp)
-  (:export :add-column
-           :atime
-;	   "BREAK-LOOP"
-           :copy-file
-           :ctime
+  (:use :common-lisp :core)
+  (:export :add-column :atime
+	   :break-loop
+           :copy-file :ctime
            :file-each-line
-;	   "GET-NUM"
+	   :get-num
            :mtime
            :number-file
-;	   "PROMPT"
+           :print-plist :prompt :prompt-read
            :read-file
            :read-file-as-string
-;	   "READLIST"
+           :read-list
+           :reread           
            :search-file :search-lines-of-file
-;	   "VALID-NUM"
+	   :valid-num-p
            :write-file))
 
 (in-package :io)
@@ -222,20 +225,172 @@
 (defun atime (file)
   #+sbcl (sb-posix:stat-atime (sb-posix:stat file))
   #+clisp (posix:file-stat-atime (posix:file-stat file))
-  #-(or sbcl clisp)
+  #+cmucl (nth-value 9 (unix:unix-stat file))
+  #-(or sbcl clisp cmucl)
   (error "ATIME not implemented"))
 
 (defun ctime (file)
   #+sbcl (sb-posix:stat-ctime (sb-posix:stat file))
   #+clisp (posix:file-stat-ctime (posix:file-stat file))
-  #-(or sbcl clisp)
+  #+cmucl (nth-value 11 (unix:unix-stat file))
+  #-(or sbcl clisp cmucl)
   (error "CTIME not implemented"))
 
 (defun mtime (file)
   #+sbcl (sb-posix:stat-mtime (sb-posix:stat file))
   #+clisp (file-stat-mtime (file-stat file))
-  #-(or sbcl clisp)
+  #+cmucl (nth-value 10 (unix:unix-stat file))
+  #-(or sbcl clisp cmucl)
   (error "MTIME not implemented"))
+
+(defun prompt-read (prompt &rest keys &key (allow-empty t) (trim t) test error)
+  (labels ((validate (response)
+             (cond ((and (string= response "") (not allow-empty)) (fail))
+                   ((null test) response)
+                   ((funcall test response) response)
+                   (t (when error
+                        (funcall error response))
+                      (fail))))
+           (fail ()
+             (apply #'prompt-read prompt keys)))
+    (format *query-io* prompt)
+    (force-output *query-io*)
+    (let ((response (read-line *query-io*)))
+      (if trim
+          (validate (string-trim " " response))
+          (validate response)))) )
+
+;(defun get-num (prompt &optional test)
+(defun get-num (prompt &key test (precision 'double-float))
+  (let ((num (read-num (prompt-read prompt) :test test :precision precision)))
+    (if (null num)
+        (get-num prompt :test test :precision precision)
+        num)))
+
+(defun read-num (s &key test (precision 'double-float))
+  "Attempt to read a number from string S. Apply the TEST validity function if provided. Return NIL if value is not valid."
+  (let* ((*read-default-float-format* precision)
+         (*read-eval* nil)
+         (num (handler-case (read-from-string s nil)
+                (error (e)
+                  (format t "Your input is not so good: ~A~%" e)
+                  (return-from read-num nil)))) )
+    (if (valid-num-p num test)
+        num
+        nil)))
+
+(defun valid-num-p (obj &optional test)
+  (if (numberp obj)
+      (if test
+          (funcall test obj)
+          t)
+      nil))
+
+;; (defun is-integer (x)
+;;   (zerop (nth-value 1 (truncate x))))
+
+;; (defun is-integer (x)
+;;   (multiple-value-bind (_ rem) (truncate x)
+;;     (declare (ignore _))
+;;     (zerop rem)))      
+
+(defun is-integer (x)
+  (and (realp x) (zerop (rem x 1))))
+
+;;;    The number may be constrained by optional min and max
+;;;    args (which are inclusive).
+; (defun get-num (prompt &optional min max)
+;   (format t "~A" prompt)
+;   (or (valid-num (read-from-string (read-line) nil nil) min max)
+;       (get-num prompt min max)) )
+
+; ;;;
+; ;;;    GET-NUM should send in 3 args, but by making MIN and MAX optional
+; ;;;    this can be used by other functions too.
+; ;;;    
+; (defun valid-num (num &optional min max)
+;   (and (numberp num)
+;        (if min (>= num min) t)
+;        (if max (<= num max) t)
+;        num) )
+
+;;;
+;;;    Christopher Stacy
+;;;    
+;; (defun read-a-number (&key stream default)
+;;   (let* ((line (read-line stream))
+;;          (n (let* ((*read-eval* nil))
+;;               (ignore-errors (read-from-string line nil)))))
+;;     (if (numberp n)
+;;         n
+;;       default)))
+
+;;;
+;;;    Matthew Danish
+;;;    
+;; (defun parse-float (string &optional (default 0.0))
+;;   (let* ((*read-eval* nil)
+;; 	 (val (ignore-errors (read-from-string string))))
+;;     (typecase val
+;;       (number val)
+;;       (t default))))
+
+;(defun readlist (&rest args)
+(defun read-list (&rest args)
+  (values (read-from-string
+           (concatenate 'string "(" (apply #'read-line args) ")"))))
+
+(defun prompt (&rest args)
+  (apply #'format *query-io* args)
+  (read *query-io*))
+
+(defun break-loop (fn quit &rest args)
+  (format *query-io* "Entering break-loop.~%")
+  (loop
+   (let ((in (apply #'prompt args)))
+     (if (funcall quit in)
+	 (return)
+	 (format *query-io* "~A~%" (funcall fn in)))) ))
+
+;;;
+;;;    Alternative to backquote???
+;;;    (defmacro foo (x) (reread (format nil "(+ 2 ~A)" x)))
+;;;    vs.
+;;;    (defmacro bar (x) `(+ 2 ,x))
+;;;    
+(defun reread (&rest args)
+  (values (read-from-string (apply #'mkstr args))))
+
+;; (defun print-plist (sym)
+;;   (do ((plist (symbol-plist sym) (cddr plist)))
+;;       ((null plist))
+;;     (format t "Property: ~S~%" (car plist))
+;;     (format t "Value: ~S~%" (cadr plist))))
+
+(defun print-plist (sym)
+  (dotuples ((property value) (symbol-plist sym))
+    (format t "Property: ~S~%" property)
+    (format t "Value: ~S~%" value)))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #|
 ;;;

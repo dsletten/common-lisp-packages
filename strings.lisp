@@ -26,7 +26,6 @@
 ;;;;   Notes:
 ;;;;
 ;;;;
-;(load "/home/slytobias/lisp/packages/test.lisp")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   #+ :sbcl (load "/home/slytobias/lisp/packages/core" :verbose nil)
@@ -34,13 +33,15 @@
 
 (defpackage :strings
   (:use :common-lisp :core)
-;  (:use :common-lisp :core :test)
-  (:export :center :commify :commify-list :elide :english-and-list :english-or-list :get-article
+  (:export :center :commify :commify-list
+           :elide :english-and-list :english-or-list :expand
+           :get-article
            :irregular-plural :join
            :ljust
            :rjust
            :short-ordinal :space-char-p :split
-           :squeeze :string-split :string-substitute))
+           :squeeze :string-split :string-substitute
+           :translate))
 
 (in-package :strings)
 
@@ -560,3 +561,30 @@
 ;;;    
 (defun commify (n)
   (format t "~:D~%" n))
+
+;;;
+;;;    See translate.lisp
+;;;    
+(defun expand (char-range)
+  (let ((pos (position #\- char-range)))
+    (if pos
+	(cond ((zerop pos) (error "Can't start with -"))
+	      ((= 1 pos)
+	       (let ((start (char char-range 0))
+		     (end   (char char-range 2)))
+		 (if (char< start end)
+		     (concatenate 'string
+				  (coerce (range start end) 'string)
+				  (expand (subseq char-range 3)))
+		     (error "Inverted range"))))
+	      (t (concatenate 'string (subseq char-range 0 (1- pos))
+			      (expand (subseq char-range (1- pos)))) ))
+	char-range)))
+
+(defun translate (target in out)
+  (coerce (sublis (mapcar #'cons
+			  (coerce (expand in) 'list)
+			  (coerce (expand out) 'list))
+		  (coerce target 'list))
+	  'string))
+

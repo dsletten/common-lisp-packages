@@ -37,9 +37,9 @@
            :>case :class-template :comment :compose :conc1 :copy-array :cycle
            :defchain :destructure :dohash :doset :dostring :dotuples :dovector
            :drop :drop-until :drop-while :duplicatep
-           :emptyp :ends-with :equalelts :equals :eqls :every-pred :expand :explode
+           :emptyp :ends-with :equalelts :equals :eqls :every-pred :explode
            :filter :filter-split :find-some-if :find-subtree :firsts-rests :for :flatten
-           :get-num :group :group-until :horners
+           :group :group-until :horners
 	   :if-let :if3 :iffn :in :in-if :inq :is-integer :iterate
            :juxtapose
            :last1 :least :leastn :list-to-string :longerp
@@ -47,8 +47,8 @@
            :map-> :map-array :map-array-index :map0-n :map1-n :mapa-b :mapcars :mappend :mapset
            :memoize :mklist :mkstr :most :mostn :most-least :most-least-n :nif
            :partial :partial* :partition :ppmx
-           :prefix-generator :prefixp :print-plist :prompt :prompt-read :prune :prune-if :prune-if-not
-           :range :read-list :read-num :repeat :reread :rmapcar 
+           :prefix-generator :prefixp :prune :prune-if :prune-if-not
+           :range :repeat :rmapcar 
            :rotate0 :rotate-list0 :rotate1 :rotate-list1
            :same-shape-tree-p
            :shift0 :shift-list0 :shift1 :shift-list1
@@ -56,8 +56,8 @@
 ;           :split-if
            :stable-partition :starts-with :stream-partition :suffixp :symb
            :take :take-drop :take-while :take-until :transfer
-           :transition :transition-1 :transition-n :transition-stream :translate :traverse :tree-find-if :tree-map
-           :until :valid-num-p 
+           :transition :transition-1 :transition-n :transition-stream :traverse :tree-find-if :tree-map
+           :until
            :when-let :when-let* :while :with-gensyms :worst :worstn)
   (:shadow :emptyp :next))
 ;  (:shadow :while :until :prefixp :dovector :macroexpand-all)) ; ????
@@ -127,124 +127,6 @@
                  (subseq seq 0 offset)
                  new-seq
                  (subseq seq (min (length seq) (+ offset length)))) ))
-
-;;;
-;;;    See translate.lisp
-;;;    
-(defun expand (char-range)
-  (let ((pos (position #\- char-range)))
-    (if pos
-	(cond ((zerop pos) (error "Can't start with -"))
-	      ((= 1 pos)
-	       (let ((start (char char-range 0))
-		     (end   (char char-range 2)))
-		 (if (char< start end)
-		     (concatenate 'string
-				  (coerce (range start end) 'string)
-				  (expand (subseq char-range 3)))
-		     (error "Inverted range"))))
-	      (t (concatenate 'string (subseq char-range 0 (1- pos))
-			      (expand (subseq char-range (1- pos)))) ))
-	char-range)))
-
-(defun translate (target in out)
-  (coerce (sublis (mapcar #'cons
-			  (coerce (expand in) 'list)
-			  (coerce (expand out) 'list))
-		  (coerce target 'list))
-	  'string))
-
-(defun prompt-read (prompt &rest keys &key (allow-empty t) (trim t) test error)
-  (labels ((validate (response)
-             (cond ((and (string= response "") (not allow-empty)) (fail))
-                   ((null test) response)
-                   ((funcall test response) response)
-                   (t (when error
-                        (funcall error response))
-                      (fail))))
-           (fail ()
-             (apply #'prompt-read prompt keys)))
-    (format *query-io* prompt)
-    (force-output *query-io*)
-    (let ((response (read-line *query-io*)))
-      (if trim
-          (validate (string-trim " " response))
-          (validate response)))) )
-
-;(defun get-num (prompt &optional test)
-(defun get-num (prompt &key test (precision 'double-float))
-  (let ((num (read-num (prompt-read prompt) :test test :precision precision)))
-    (if (null num)
-        (get-num prompt :test test :precision precision)
-        num)))
-
-(defun read-num (s &key test (precision 'double-float))
-  "Attempt to read a number from string S. Apply the TEST validity function if provided. Return NIL if value is not valid."
-  (let* ((*read-default-float-format* precision)
-         (*read-eval* nil)
-         (num (handler-case (read-from-string s nil)
-                (error (e)
-                  (format t "Your input is not so good: ~A~%" e)
-                  (return-from read-num nil)))) )
-    (if (valid-num-p num test)
-        num
-        nil)))
-
-(defun valid-num-p (obj &optional test)
-  (if (numberp obj)
-      (if test
-          (funcall test obj)
-          t)
-      nil))
-
-;; (defun is-integer (x)
-;;   (zerop (nth-value 1 (truncate x))))
-
-;; (defun is-integer (x)
-;;   (multiple-value-bind (_ rem) (truncate x)
-;;     (declare (ignore _))
-;;     (zerop rem)))      
-
-(defun is-integer (x)
-  (and (realp x) (zerop (rem x 1))))
-
-;;;    The number may be constrained by optional min and max
-;;;    args (which are inclusive).
-; (defun get-num (prompt &optional min max)
-;   (format t "~A" prompt)
-;   (or (valid-num (read-from-string (read-line) nil nil) min max)
-;       (get-num prompt min max)) )
-
-; ;;;
-; ;;;    GET-NUM should send in 3 args, but by making MIN and MAX optional
-; ;;;    this can be used by other functions too.
-; ;;;    
-; (defun valid-num (num &optional min max)
-;   (and (numberp num)
-;        (if min (>= num min) t)
-;        (if max (<= num max) t)
-;        num) )
-
-;;;
-;;;    Christopher Stacy
-;;;    
-;; (defun read-a-number (&key stream default)
-;;   (let* ((line (read-line stream))
-;;          (n (let* ((*read-eval* nil))
-;;               (ignore-errors (read-from-string line nil)))))
-;;     (if (numberp n)
-;;         n
-;;       default)))
-
-;;;
-;;;    Matthew Danish
-;;;    
-;; (defun parse-float (string &optional (default 0.0))
-;;   (let* ((*read-eval* nil)
-;; 	 (val (ignore-errors (read-from-string string))))
-;;     (typecase val
-;;       (number val)
-;;       (t default))))
 
 ;;;
 ;;;    Create a list of successive integers from START to END.
@@ -1805,28 +1687,12 @@ starting with X or the index of the position of X in the sequence."))
   (mapa-b fn 1 n))
 
 ;;;
-;;;
-;; (defun make-range (start &optional end (step 1))
-;;   (cond ((characterp start)
-;;          (cond ((characterp end)
-;;                 (mapcar #'code-char (make-range (char-code start)
-;;                                                 (char-code end)
-;;                                                 step)))
-;;                ;;
-;;                ;;    Does it make sense for 1-arg with character?
-;;                ((null end) (mapcar #'code-char (make-range 0
-;;                                                            (1- (char-code start))
-;;                                                            step)))
-;;                (t (error "Mismatched input types."))))
-;;         ((numberp start)
-;;          (cond ((numberp end)
-;;                 (if (> start end)
-;;                     (loop for i from start downto end by step collect i)
-;;                     (loop for i from start to end by step collect i)))
-;;                ((null end)
-;;                 (loop for i from 0 below start by step collect i))
-;;                (t (error "Mismatched input types.")))) ))
-
+;;;    Some may consider this behavior inconsistent.
+;;;    If both START and END are provided, then the endpoints are inclusive.
+;;;    If only START is provided, then it is treated as an exclusive upper bound:
+;;;    (range 2 5) => (2 3 4 5)
+;;;    (range 3) => (0 1 2)
+;;;    
 (defun range (start &optional end (step 1))
   (make-range start end step))
 (defgeneric make-range (start end step)
@@ -1850,36 +1716,6 @@ starting with X or the index of the position of X in the sequence."))
 (defmethod make-range ((start number) end step)
   (error "Mismatched input types."))
   
-;; (defun make-range (start &optional end (step 1))
-;;   (etypecase start
-;;     (character (typecase end
-;;                  (character
-;;                    (if (char> start end)
-;;                        (loop for i from (char-code start) downto (char-code end) by step collect (code-char i))
-;;                        (loop for i from (char-code start) to (char-code end) by step collect (code-char i))))
-;;                  (null (loop for i from 0 below (char-code start) by step collect (code-char i)))
-;;                  (otherwise (error "Mismatched input types."))))
-;;     (number (typecase end
-;;               (number (if (> start end)
-;;                           (loop for i from start downto end by step collect i)
-;;                           (loop for i from start to end by step collect i)))
-;;               (null (loop for i from 0 below start by step collect i))
-;;               (otherwise (error "Mismatched input types.")))) ))
-
-;; (defun make-range (start end &optional (step 1))
-;;   (cond ((characterp start)
-;; 	 (if (characterp end)
-;; 	     (mapcar #'code-char (make-range (char-code start)
-;; 					     (char-code end)
-;;                                           step))
-;; 	     (error "Mismatched input types.")))
-;; 	(t (when (> start end)
-;; 	     (rotatef start end))
-;; 	   (do ((i start (+ i step))
-;; 		(result '()))
-;; 	       ((> i end) (nreverse result))
-;; 	     (push i result)))) )
-
 (defun map-> (fn start test-fn succ-fn)
   (do ((i start (funcall succ-fn i))
        (result '()))
@@ -2095,23 +1931,6 @@ starting with X or the index of the position of X in the sequence."))
         with exemplar = (funcall key (elt seq 0))
         always (funcall test exemplar (funcall key elt))))
 
-;(defun readlist (&rest args)
-(defun read-list (&rest args)
-  (values (read-from-string
-           (concatenate 'string "(" (apply #'read-line args) ")"))))
-
-(defun prompt (&rest args)
-  (apply #'format *query-io* args)
-  (read *query-io*))
-
-(defun break-loop (fn quit &rest args)
-  (format *query-io* "Entering break-loop.~%")
-  (loop
-   (let ((in (apply #'prompt args)))
-     (if (funcall quit in)
-	 (return)
-	 (format *query-io* "~A~%" (funcall fn in)))) ))
-
 (defun mkstr (&rest args)
   (with-output-to-string (s)
     (dolist (a args)
@@ -2119,15 +1938,6 @@ starting with X or the index of the position of X in the sequence."))
 
 (defun symb (&rest args)
   (values (intern (apply #'mkstr args))))
-
-;;;
-;;;    Alternative to backquote???
-;;;    (defmacro foo (x) (reread (format nil "(+ 2 ~A)" x)))
-;;;    vs.
-;;;    (defmacro bar (x) `(+ 2 ,x))
-;;;    
-(defun reread (&rest args)
-  (values (read-from-string (apply #'mkstr args))))
 
 ;; (defun explode (sym)
 ;;   (map 'list #'(lambda (c)
@@ -3082,18 +2892,6 @@ starting with X or the index of the position of X in the sequence."))
                     (destructure ,rest
                                  ,@body)))) )))
 
-
-;; (defun print-plist (sym)
-;;   (do ((plist (symbol-plist sym) (cddr plist)))
-;;       ((null plist))
-;;     (format t "Property: ~S~%" (car plist))
-;;     (format t "Value: ~S~%" (cadr plist))))
-
-(defun print-plist (sym)
-  (dotuples ((property value) (symbol-plist sym))
-    (format t "Property: ~S~%" property)
-    (format t "Value: ~S~%" value)))
-
 ;;;
 ;;;    Display the packages to which each of the symbols in a form belong.
 ;;;    
@@ -3146,13 +2944,19 @@ starting with X or the index of the position of X in the sequence."))
             (indices (array-indices a i)))
         (setf (row-major-aref result i) (apply f elt indices)))) ))
 
-(defun make-identity-matrix (n)
-  (map-array-index #'(lambda (elt i j)
-                       (declare (ignore elt))
-                       (if (= i j)
-                           1d0
-                           0d0))
-                   (make-array (list n n))))
+;; (defun make-identity-matrix (n)
+;;   (map-array-index #'(lambda (elt i j)
+;;                        (declare (ignore elt))
+;;                        (if (= i j)
+;;                            1d0
+;;                            0d0))
+;;                    (make-array (list n n))))
+
+(defun make-identity-matrix (n &optional (zero 0))
+  (let ((a (make-array (list n n) :initial-element 0))
+        (one (case zero (0f0 1f0) (0d0 1d0) (otherwise 1))))
+    (dotimes (i n a)
+      (setf (aref a i i) one))))
 
 (defun sort-symbol-list (symbols)
   (sort (copy-list symbols) #'string-lessp :key #'symbol-name))

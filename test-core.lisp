@@ -1,5 +1,3 @@
-;#!/usr/local/bin/sbcl --script
-
 ;;;;   Hey, Emacs, this is a -*- Mode: Lisp; Syntax: Common-Lisp -*- file!
 ;;;;
 ;;;;   What I like about Lisp is that you can feel the bits between your toes.
@@ -34,11 +32,6 @@
 (use-package :test)
 
 ;;;
-;;;    No test
-;;;
-;print-plist
-
-;;;
 ;;;    Missing
 ;;;
 ;dotuples
@@ -54,69 +47,6 @@
    (equal '(a b c d e) (splice '(a b d e) 2 0 '(c)))
    (equal '(a b c e) (splice '(a b d e) 2 1 '(c)))
    (equal '(a b c) (splice '(a b d e) 2 2 '(c)))) )
-
-;;;
-;;;    Fix!!
-;;;    
-(deftest test-expand ()
-  (check
-   (string= #1="asdf" (expand #1#))
-   (string= "" (expand ""))
-   (string= "abcdef" (expand "a-f"))
-   (string= "23abcdef" (expand "23a-f"))
-   (string= "abcdwxyz" (expand "a-dw-z"))
-   (string= "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" (expand "A-Z0-9"))))
-
-(deftest test-translate ()
-  (check
-   (string= "is this Not puNg?" (translate "Is this not pung?" "nI" "Ni"))
-   (string= "W3 0ught@ t@k3 it 3@sy" (translate "We oughta take it easy" "aeo" "@30"))))
-
-;(defun prompt-read (prompt &rest keys &key (allow-empty t) (trim t))
-;; (prompt-read "This is the real deal: " :allow-empty nil :test #'(lambda (s) (member s '("pung" "foo" "bar") :test #'string-equal)))
-;; (prompt-read "Is this not pung? " :test #'(lambda (s) (every #'alpha-char-p s)) :allow-empty nil)
-;; (prompt-read "Is this not pung? " :test #'(lambda (s) (every #'alpha-char-p s)) :trim nil)
-;; (prompt-read "Enter a letter. " :allow-empty nil :test #'(lambda (s) (and (= (length s) 1) (alpha-char-p (char s 0)))) ) 
-        
-;(defun get-num (prompt &key test (precision 'double-float))
-
-(deftest test-read-num ()
-  (check
-   (handler-case (read-num "1:2")
-     (error (e)
-       (format t "Error was not handled: ~A~%" e)
-       nil)
-     (:no-error (obj)
-       (declare (ignore obj))
-       (format t "Package separator should not signal error.")
-       t))))
-  
-(deftest test-valid-num-p ()
-  (check
-   (valid-num-p 8)
-   (valid-num-p 8d0)
-   (valid-num-p 1/8)
-   (valid-num-p 8 #'is-integer)
-   (valid-num-p 8d0 #'is-integer)
-   (valid-num-p (sqrt -1))
-   (not (valid-num-p "8"))
-   (not (valid-num-p 'eight))
-   (not (valid-num-p 8d0 #'integerp))
-   (not (valid-num-p 1/8 #'is-integer))
-   (not (valid-num-p (sqrt -1) #'realp))))
-   
-(deftest test-is-integer ()
-  (check
-   (is-integer 2)
-   (is-integer 2d0)
-   (is-integer -2)
-   (is-integer -2d0)
-   (is-integer 4/2)
-   (is-integer (sqrt 4))
-   (is-integer (sqrt 4d0))
-   (not (is-integer pi))
-   (not (is-integer (sqrt -1)))
-   (not (is-integer 1/3))))
 
 ;(defun list-to-string (l)
 
@@ -915,6 +845,25 @@
                       (make-instance 'dude :name "Jim" :height 73))))
      (equal (mapcar #'name (bestn #'tallerp dudes)) '("Tom" "Jim")))) )
 
+
+(deftest test-mapa-b ()
+  (check
+   (equal '(NIL T NIL T NIL) (mapa-b #'evenp 1 5))
+   (equal '(T NIL T NIL T NIL) (mapa-b #'evenp 0 5))
+   (equal '(1 2 0 1 2 0 1 2 0 1) (mapa-b (partial* #'mod 3) 1 10))
+   (equal '(0 1 2 0 1 2 0 1 2 0) (mapa-b (partial* #'mod 3) 0 9))
+   (equal (mapcar #'sqrt #[1d0 10d0]) (mapa-b #'sqrt 1d0 10d0))))
+
+(deftest test-map0-n ()
+  (check
+   (equal '(T NIL T NIL T NIL) (map0-n #'evenp 5))
+   (equal '(0 1 2 0 1 2 0 1 2 0) (map0-n (partial* #'mod 3) 9))))
+
+(deftest test-map1-n ()
+  (check
+   (equal '(NIL T NIL T NIL) (map1-n #'evenp 5))
+   (equal '(1 2 0 1 2 0 1 2 0 1) (map1-n (partial* #'mod 3) 10))))
+
 (deftest test-range ()
   (check
    (null (range 0))
@@ -940,25 +889,21 @@
        t)
      (:no-error (obj)
        (declare (ignore obj))
-       nil))
+       (error "STEP of 0 not allowed.")))
    (handler-case (range 1 10 -0.2)
      (error (e)
        (declare (ignore e))
        t)
      (:no-error (obj)
        (declare (ignore obj))
-       nil))
+       (error "Negative STEP not allowed.")))
    (handler-case (range #\a #\m 0.1)
      (error (e)
        (declare (ignore e))
        t)
      (:no-error (obj)
        (declare (ignore obj))
-       nil))
-
-
-
-   ))
+       (error "Fractional STEP not allowed for characters.")))) )
 
 (deftest test-map-> ()
   (check
@@ -972,7 +917,27 @@
    (equal (map-> #'(lambda (i) (list (code-char i) i)) (char-code #\p) #'(lambda (i) (> i (char-code #\z))) #'(lambda (x) (+ x 2))) '((#\p 112) (#\r 114) (#\t 116) (#\v 118) (#\x 120) (#\z 122)))
    (equal (map-> #'(lambda (l) (string-upcase (first l))) #1='("Is" "this" "not" "pung?") #'null #'cdr) (mapcar #'string-upcase #1#))
    (equal (map-> (compose #'string-upcase #'first) #2='("Is" "this" "not" "pung?") #'null #'cdr) (mapcar #'string-upcase #2#))
-   (equal (map-> #'(lambda (x) (log x 2)) 1 #'(lambda (x) (> x 1024)) #'(lambda (x) (* 2 x))) '(0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0))))
+;; Can't do this with Haskell??  (take 10 (iterate (partial * 2) 1)) (1 2 4 8 16 32 64 128 256 512)
+   (equal '(0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0) (map-> #'(lambda (x) (log x 2)) 1 #'(lambda (x) (> x 1024)) #'(lambda (x) (* 2 x))))
+   (equal '(1 2 4 8 16 32 64 128 256 512 1024 2048 4096 8192) (map-> #'identity 1 (partial #'< 10000) (partial #'* 2)))) )
+
+
+;; (map-> #'identity 1 (partial #'< 1000) (partial #'* 2))
+;; (1 2 4 8 16 32 64 128 256 512)
+;; * 
+;; *
+
+;; (let ((current 0)
+;;       (next 1)
+;;       (count 0))
+;;   (labels ((fib (_) (declare (ignore _)) current)
+;;            (succ (i) (declare (ignore i)) (psetf current next next (+ current next)) (incf count))
+;;            (test (_) (declare (ignore _)) (> count 10)))
+;;     (map-> #'fib 0 #'test #'succ)))
+
+
+
+
 
 (deftest test-mapcars ()
   (check
@@ -1001,7 +966,9 @@
 (deftest test-iterate ()
   (check
    (let ((iterator (iterate #'1+ 0)))
-     (equal (loop repeat 5 collect (funcall iterator)) (loop for i from 0 below 5 collect i)))) )
+     (equal (loop for i from 0 below 5 collect i) (loop repeat 5 collect (funcall iterator))))
+   (let ((iterator (iterate (partial #'* 2) 1)))
+     (equal (loop for i from 0 below 10 collect (expt 2 i)) (loop repeat 10 collect (funcall iterator)))) ))
 
 (deftest test-rmapcar ()
   (check
