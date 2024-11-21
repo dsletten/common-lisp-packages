@@ -42,7 +42,7 @@
 	   :get-num
            :mtime
            :number-file
-           :print-plist :prompt :prompt-read
+           :print-plist :prompt :prompt-read :prompt-read-word
            :read-file
            :read-file-as-string
            :read-list
@@ -256,6 +256,32 @@
     (format *query-io* prompt)
     (force-output *query-io*)
     (let ((response (read-line *query-io*)))
+      (if trim
+          (validate (string-trim " " response))
+          (validate response)))) )
+
+(defun read-word (stream)
+  (loop for ch = (read-char stream nil nil)
+        while (member ch '(#\space #\newline #\tab))
+        finally (unless (null ch) (unread-char ch stream)))
+  (with-output-to-string (s)
+    (loop for ch = (read-char stream nil nil)
+          until (or (member ch '(#\space #\newline #\tab)) (null ch))
+          do (write-char ch s))))
+
+(defun prompt-read-word (prompt &rest keys &key (allow-empty t) (trim t) test error)
+  (labels ((validate (response)
+             (cond ((and (string= response "") (not allow-empty)) (fail))
+                   ((null test) response)
+                   ((funcall test response) response)
+                   (t (when error
+                        (funcall error response))
+                      (fail))))
+           (fail ()
+             (apply #'prompt-read-word prompt keys)))
+    (format *query-io* prompt)
+    (force-output *query-io*)
+    (let ((response (read-word *query-io*)))
       (if trim
           (validate (string-trim " " response))
           (validate response)))) )
