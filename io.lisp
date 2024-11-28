@@ -42,10 +42,9 @@
 	   :get-num
            :mtime
            :number-file
-           :print-plist :prompt :prompt-read :prompt-read-word
-           :read-file
-           :read-file-as-string
-           :read-list
+           :print-plist :prompt :prompt-read
+           :read-file :read-file-as-string
+           :read-list :read-word
            :reread           
            :search-file :search-lines-of-file
 	   :valid-num-p
@@ -243,7 +242,7 @@
   #-(or sbcl clisp cmucl)
   (error "MTIME not implemented"))
 
-(defun prompt-read (prompt &rest keys &key (allow-empty t) (trim t) test error)
+(defun prompt-read (prompt &rest keys &key (allow-empty t) (trim t) test error (reader #'read-line))
   (labels ((validate (response)
              (cond ((and (string= response "") (not allow-empty)) (fail))
                    ((null test) response)
@@ -255,7 +254,7 @@
              (apply #'prompt-read prompt keys)))
     (format *query-io* prompt)
     (force-output *query-io*)
-    (let ((response (read-line *query-io*)))
+    (let ((response (funcall reader *query-io*)))
       (if trim
           (validate (string-trim " " response))
           (validate response)))) )
@@ -268,23 +267,6 @@
     (loop for ch = (read-char stream nil nil)
           until (or (member ch '(#\space #\newline #\tab)) (null ch))
           do (write-char ch s))))
-
-(defun prompt-read-word (prompt &rest keys &key (allow-empty t) (trim t) test error)
-  (labels ((validate (response)
-             (cond ((and (string= response "") (not allow-empty)) (fail))
-                   ((null test) response)
-                   ((funcall test response) response)
-                   (t (when error
-                        (funcall error response))
-                      (fail))))
-           (fail ()
-             (apply #'prompt-read-word prompt keys)))
-    (format *query-io* prompt)
-    (force-output *query-io*)
-    (let ((response (read-word *query-io*)))
-      (if trim
-          (validate (string-trim " " response))
-          (validate response)))) )
 
 ;(defun get-num (prompt &optional test)
 (defun get-num (prompt &key test (precision 'double-float))

@@ -21,7 +21,7 @@
 ;;;;
 ;;;;   Example:
 ;;;;
-;;;;   Notes:
+;;;;   Notes: (dolist (test (remove 'test (find-tests))) (funcall test))
 ;;;;
 ;;;;
 (load "/home/slytobias/lisp/packages/core.lisp")
@@ -109,10 +109,10 @@
    (string= "\\a\\" (symbol-name '|\\a\\|))
    (= 3 (length (symbol-name '|\\a\\|)))
    (string= "a;" (symbol-name '|a\;|))
-   (eq (make-symbol "a;") '|a\;|)
+   (eq (intern "a;") '|a\;|)
    (= 2 (length (symbol-name '|a\;|)))
    (string= "a\\;" (symbol-name '|a\\;|))
-   (eq (make-symbol "a\\;") '|a\\;|)
+   (eq (intern "a\\;") '|a\\;|)
    (= 3 (length (symbol-name '|a\\;|)))
    (string= "" (symbol-name '||))
    (string= "" (symbol-name (make-symbol "")))) )
@@ -338,3 +338,307 @@
 ;;  v        v        v
 ;;  =       0.0      -0.0
 
+(deftest test-contagion ()
+  (check
+   (typep (+ 0.1f0 0.2f0) 'single-float)
+   (typep (+ 0.1f0 0.2d0) 'double-float)
+   (typep (+ 0.1d0 0.2f0) 'double-float)
+   (typep (+ 0f0 0.2f0) 'single-float)
+   (typep (+ 0f0 0.2d0) 'double-float)
+   (typep (+ 0d0 0.2f0) 'double-float)
+   (typep (+ 1/10 0.2f0) 'single-float)
+   (typep (+ 1/10 0.2d0) 'double-float)
+   (typep (+ 0.1f0 1/5) 'single-float)
+   (typep (+ 0.1d0 1/5) 'double-float)
+   (typep (+ 1 0.2f0) 'single-float)
+   (typep (+ 1 0.2d0) 'double-float)
+   (typep (+ 0.1f0 1) 'single-float)
+   (typep (+ 0.1d0 1) 'double-float)
+   (typep (+ 0 0.2f0) 'single-float)
+   (typep (+ 0 0.2d0) 'double-float)
+   (typep (+ 0.1f0 0) 'single-float)
+   (typep (+ 0.1d0 0) 'double-float)
+   (typep (+ 0.5 -0.5 1/2) 'single-float))) ; https://www.lispworks.com/documentation/HyperSpec/Body/12_adaa.htm
+
+(deftest test-float ()
+  (check
+   (= 0.1f0 (float 1/10))
+   (= 0.1f0 (float 1/10 1f0))
+   (= (coerce 1/10 'single-float) (float 1/10))
+   (= (coerce 1/10 'double-float) (float 1/10 1d0))
+   (let ((x 0.1f0)) ; CLHS
+     (= x (float (rational x) x)))
+   (let ((x 0.1d0))
+     (= x (float (rational x) x)))
+   (let ((x 0.1f0))
+     (= x (float (rationalize x) x)))
+   (let ((x 0.1d0))
+     (= x (float (rationalize x) x)))) )
+
+;; RATIONAL
+;; RATIONALIZE
+
+(deftest test-coerce ()
+  (check
+   (= 0.1s0 (coerce 1/10 'short-float))
+   (= 0.1f0 (coerce 1/10 'single-float))
+   (= 0.1d0 (coerce 1/10 'double-float))
+   (= 0.1l0 (coerce 1/10 'long-float))
+   (handler-case (coerce 2 'bignum)
+     (type-error (e)
+       (declare (ignore e))
+       t)
+     (:no-error (obj)
+       (declare (ignore obj))
+       (error "Can't make integer something that it's not.")))
+   (handler-case (coerce (expt 3 9999) 'fixnum) ; caught STYLE-WARNING: Lisp error during constant folding:
+                                        ; 5437833951142086247677... can't be converted to type FIXNUM.
+     (type-error (e)
+       (declare (ignore e))
+       t)
+     (:no-error (obj)
+       (declare (ignore obj))
+       (error "Can't make integer something that it's not.")))) )
+
+(deftest test-integer-coercion ()
+  (check
+   (let ((p 9)
+         (q 4))
+     (and (equal (multiple-value-list (truncate p q))
+                 (multiple-value-list (floor p q)))
+          (equal (multiple-value-list (truncate (/ p q)))
+                 (multiple-value-list (floor (/ p q)))) ))
+   (let ((p -9)
+         (q 4))
+     (and (equal (multiple-value-list (truncate p q))
+                 (multiple-value-list (ceiling p q)))
+          (equal (multiple-value-list (truncate (/ p q)))
+                 (multiple-value-list (ceiling (/ p q)))) ))
+   (= 0 (round 0.1d0))
+   (= 0 (round 0.5d0))
+   (= 1 (round 0.8d0))
+   (= 1 (round 1d0))
+   (= 2 (round 1.5d0))
+   (= 2 (round 2.5d0))
+   (let ((xs (loop for x from -100 upto 100 by 0.1d0 collect x)))
+     (every (every-pred #'(lambda (x) (= (- (floor x)) (ceiling (- x))))
+                        #'(lambda (x) (zerop (+ (ceiling x) (floor (- x)))))
+                        #'(lambda (x) (= (truncate x) (* (signum x) (floor (abs x)))) )
+                        #'(lambda (x) (= (truncate (- x)) (- (truncate x))))
+                        #'(lambda (x) (= (truncate x) (- x (rem x 1)))) )
+            xs))
+   (let ((xs (loop for x from -100 upto 100 by 0.1d0 collect x)))
+     (every (every-pred #'(lambda (x) (= (floor x) (ffloor x)))
+                        #'(lambda (x) (= (ceiling x) (fceiling x)))
+                        #'(lambda (x) (= (truncate x) (ftruncate x)))
+                        #'(lambda (x) (= (round x) (fround x))))
+            xs))))
+
+(deftest test-cond ()
+  (check
+   (not (cond))
+   (equal '(:foo) (multiple-value-list (cond ((read-from-string "" nil :foo)))) )
+   (equal '(:foo 0) (multiple-value-list (cond (t (read-from-string "" nil :foo)))) )))
+
+(deftest test-and ()
+  (check
+   (and)
+   (and t)
+   (and t t)
+   (not (and t nil))
+   (not (and nil t))
+   (not (and nil nil))
+   ;;    Short-circuit evaluation
+   (let ((pung "pung")
+         (foo "foo"))
+     (and (string= pung
+                   (with-output-to-string (s)
+                     (and (format s pung)
+                          (format s foo))))
+          (string= (concatenate 'string pung foo)
+                   (with-output-to-string (s)
+                     (and (progn (format s pung) t)
+                          (format s foo)))) ))
+   ;;    Multiple values only from final form
+   (equal '(nil 0) (multiple-value-list (and (read-from-string "" nil nil))))
+   (equal '(nil) (multiple-value-list (and (read-from-string "" nil nil) t)))) )
+
+(deftest test-or ()
+  (check
+   (not (or))
+   (or t)
+   (or t t)
+   (or t nil)
+   (or nil t)
+   (not (or nil nil))
+   ;;    Short-circuit evaluation
+   (let ((pung "pung")
+         (foo "foo"))
+     (or (string= pung
+                  (with-output-to-string (s)
+                    (or (progn (format s pung) t)
+                        (format s foo))))
+          (string= (concatenate 'string pung foo)
+                   (with-output-to-string (s)
+                     (or (format s pung)
+                         (format s foo)))) ))
+   ;;    Multiple values only from final form
+   (equal '(2 2) (multiple-value-list (or (floor 8 3))))
+   (equal '(2) (multiple-value-list (or (floor 8 3) t)))) )
+
+;;;
+;;;    https://www.lispworks.com/documentation/HyperSpec/Body/v_most_p.htm
+;;;    
+(deftest test-bignum ()
+  (check
+   (typep most-positive-fixnum 'fixnum)
+   (typep (1+ most-positive-fixnum) 'bignum)
+   (typep most-negative-fixnum 'fixnum)
+   (typep (1- most-negative-fixnum) 'bignum)
+   (and (>= most-positive-fixnum (1- (expt 2 15)))
+        (>= most-positive-fixnum array-dimension-limit))
+   (<= most-negative-fixnum (- (expt 2 15)))) )
+
+;;;
+;;;    https://docs.oracle.com/cd/E60778_01/html/E60763/index.html
+;;;    
+(deftest test-float-overflow ()
+  (check
+   (handler-case (/ 3 0)
+     (division-by-zero (e)
+       (declare (ignore e))
+       t)
+     (:no-error (obj)
+       (declare (ignore obj))
+       (error "Since when is this allowed?")))
+   (handler-case (/ 3d0 0d0)
+     (division-by-zero (e)
+       (declare (ignore e))
+       t)
+     (:no-error (obj)
+       (declare (ignore obj))
+       (error "Since when is this allowed?")))
+   (handler-case (/ most-positive-double-float least-positive-double-float)
+     (floating-point-overflow (e)
+       (declare (ignore e))
+       t)
+     (:no-error (obj)
+       (declare (ignore obj))
+       (error "Less is more.")))
+   (handler-case (* most-positive-double-float 10d0)
+     (floating-point-overflow (e)
+       (declare (ignore e))
+       t)
+     (:no-error (obj)
+       (declare (ignore obj))
+       (error "Less is more.")))
+   (zerop (/ least-positive-double-float most-positive-double-float)) ; Underflow???
+   (zerop (expt 10d0 -500))))
+
+(deftest test-float-encoding ()
+  (check
+   (= 24 (float-digits 1f0)) ; Includes "hidden" bit. H.O. bit assumed to be 1
+   (= 53 (float-digits 1d0))
+   (let ((x 123.456f0)) ; CLHS
+     (multiple-value-bind (significand exponent sign) (integer-decode-float x)
+       (= x (* (scale-float (float significand x) exponent) sign))))
+   (let ((x 123.456d0))
+     (multiple-value-bind (significand exponent sign) (integer-decode-float x)
+       (= x (* (scale-float (float significand x) exponent) sign))))
+   (multiple-value-bind (significand exponent sign) (integer-decode-float most-positive-single-float)
+     (let ((biased-exponent (+ exponent 23)))
+       (and (= 1 sign)
+            (= 127 biased-exponent)
+            (= most-positive-single-float
+               (coerce (/ (* significand (expt 2 biased-exponent)) (expt 2 23)) 'single-float)))) )
+   (multiple-value-bind (significand exponent sign) (integer-decode-float most-positive-double-float)
+     (let ((biased-exponent (+ exponent 52)))
+       (and (= 1 sign)
+            (= 1023 biased-exponent)
+            (= most-positive-double-float
+               (coerce (/ (* significand (expt 2 biased-exponent)) (expt 2 52)) 'double-float)))) )))
+
+(deftest test-complex ()
+  (check
+   (not (complexp 2))
+   (not (complexp (complex 2)))
+   (not (complexp (complex 2 0)))
+   (not (complexp (complex 2/3 0)))
+   (complexp (complex 2d0))
+   (complexp (complex 2d0 0))
+   (complexp (sqrt -1))
+   (complexp (sqrt (sqrt -1)))
+   (= (complex 0 1) (sqrt -1))
+   (complexp (* (sqrt -1) (sqrt -1)))
+   (not (complexp (* (complex 0 1) (complex 0 1))))
+   (let ((c (complex 1/2 1/3)))
+     (and (rationalp (realpart c))
+          (rationalp (imagpart c))))
+   (let ((c (complex 0.5d0 1/3)))
+     (and (floatp (realpart c))
+          (floatp (imagpart c))))
+   (= 8 (conjugate 8))
+   (let* ((a 9)
+          (b 10)
+          (c (complex a b)))
+     (= (complex (realpart c) (- (imagpart c))) (conjugate c)))
+   (= 5 (abs #c(3 4)))
+   (= 13 (abs #c(12 5)))) )
+
+(deftest test-cons ()
+  (check
+   (let ((unique1 (cons 'a 'b))
+         (unique2 (cons 'a 'b)))
+     (and (eq unique1 (first (cons unique1 unique2)))
+          (eq unique2 (rest (cons unique1 unique2)))) )
+   (let ((l '(a b c d)))
+     (equal l (cons (first l) (rest l))))
+   (eq (car '()) (car '(())))
+   (eq (cdr '()) (cdr '(())))
+   (and (null '()) (consp '(()))) ))
+
+(deftest test-identity ()
+  (check
+   (every #'(lambda (elt) (eql elt (identity elt)))
+          '(a :bar 1 2d0 #\k "foo" (a b c) #(1 2)))) )
+
+(deftest test-atom ()
+  (check
+   (let ((atoms '(x 1 #\g "foo" () #(1 2 3))))
+     (every #'(lambda (obj) (and (atom obj)
+                                 (typep obj 'atom)
+                                 (not (consp obj))
+                                 (not (typep obj 'cons))
+                                 (typep obj '(not cons))))
+            atoms)
+     (notany #'(lambda (obj) (and (consp obj)
+                                  (typep obj 'cons)
+                                  (not (atom obj))
+                                  (not (typep obj 'atom))
+                                  (typep obj '(not atom))))
+             atoms))))
+
+(deftest test-consp ()
+  (check
+   (let ((conses '((a) (()) (a b c d) (a . b))))
+     (every #'(lambda (obj) (and (consp obj)
+                                 (typep obj 'cons)
+                                 (not (atom obj))
+                                 (not (typep obj 'atom))
+                                 (typep obj '(not atom))))
+            conses)
+     (notany #'(lambda (obj) (and (atom obj)
+                                  (typep obj 'atom)
+                                  (not (consp obj))
+                                  (not (typep obj 'cons))
+                                  (typep obj '(not cons))))
+             conses))))
+
+(deftest test-listp ()
+  (check
+   (let ((lists '(() (a) (()) (a b c d) (a . b) (a b c . d))))
+     (every #'(lambda (obj) (and (listp obj)
+                                 (typep obj 'list)
+                                 (typep obj '(or cons null))
+                                 (or (consp obj) (null obj))))
+            lists))))
