@@ -287,28 +287,35 @@
        (declare (ignore obj))
        (error "Only applicable to RATIONAL numbers.")))) ) ; Not specified in CLHS?
 
-(deftest test-numerical-equality ()
+(deftest test-compare-numbers ()
   (check
+   ;;    Trivial cases with single arg
+   (funcall (every-pred #'= #'/= #'< #'<= #'> #'>=) 1)
+
    (= 2 2. 4/2 2.0 2d0 2e0 2f0 2l0 2s0)
    (not (eql 2 2d0))
    (= 3 6/2 9/3 300/100)
    (= 0 -0)
    (= 0.0 -0.0)
    (not (eql 0.0 -0.0))
+
    (not (= 0.1d0 0.1)) ; !!
    (> 0.1 0.1d0)
    (= 0.1d0 (rational 0.1d0))
    ;; (rational 0.1) => 13421773/134217728 = 3602879755583488/36028797018963968
    ;; (rational 0.1d0) => 3602879701896397/36028797018963968
    ;; (- (rational 0.1) (rational 0.1d0)) => 53687091/36028797018963968
+
    (not (= 1 2 3))
    (/= 1 2 3)
    (eq (and (/= 1 2) (/= 1 3) (/= 2 3))
        (/= 1 2 3))
+
    (not (= 1 2 3 1))
    (not (/= 1 2 3 1))
    (eq (and (/= 1 2) (/= 1 3) (/= 1 1) (/= 2 3) (/= 2 1) (/= 3 1))
        (/= 1 2 3 1))
+
    (< 1 2 3 4 5)
    (not (< 1 1 2 2 3 3 4 4 5 5))
    (<= 1 1 2 2 3 3 4 4 5 5)
@@ -474,10 +481,10 @@
    ;;    Short-circuit evaluation
    (let ((pung "pung")
          (foo "foo"))
-     (or (string= pung
-                  (with-output-to-string (s)
-                    (or (progn (format s pung) t)
-                        (format s foo))))
+     (and (string= pung
+                   (with-output-to-string (s)
+                     (or (progn (format s pung) t)
+                         (format s foo))))
           (string= (concatenate 'string pung foo)
                    (with-output-to-string (s)
                      (or (format s pung)
@@ -642,3 +649,106 @@
                                  (typep obj '(or cons null))
                                  (or (consp obj) (null obj))))
             lists))))
+
+;;;
+;;;    https://www.lispworks.com/documentation/HyperSpec/Body/f_eq.htm#eq
+;;;    An implementation is permitted to make ``copies'' of characters and numbers
+;;;    at any time. The effect is that Common Lisp makes no guarantee that eq is true
+;;;    even when both its arguments are ``the same thing'' if that thing is a character
+;;;    or number.
+;;;    
+;; (deftest test-equality ()
+;;   (check
+;;    (not (eq 1d0 1d0))
+;;    (eq :bar (if (eq 1d0 1d0) :foo :bar))
+;;    (not (funcall #'eq 1d0 1d0))
+;;    (not (apply #'eq '(1d0 1d0)))
+;;    (not (funcall #'(lambda (a b) (eq a b)) 1d0 1d0))
+;;    ((lambda (a b) (eq a b)) 1d0 1d0)
+;;    (flet ((foo (a b) (eq a b))) (funcall #'(lambda (a b) (foo a b)) 1d0 1d0))
+;;    (flet ((foo (a b) (eq a b))) (funcall #'foo 1d0 1d0))
+;;    (equal '(t) (multiple-value-list (eq 1d0 1d0)))
+;;    (equal '(t) (multiple-value-list (funcall #'eq 1d0 1d0)))
+;;    (values-list (multiple-value-list (eq 1d0 1d0)))
+;;    (values-list (multiple-value-list (funcall #'eq 1d0 1d0)))
+;;    (equal '(1 2 3 4 5 6 7 8 9 10)
+;;           (loop for i from 1 to 10 when (eq 1d0 1d0) collect i))
+;;    (equal '(nil) (funcall (juxtapose #'eq #'eql #'equal #'equalp) 1d0 1d0))
+;;    (not (and (eq 1d0 1d0) t))
+;;    (or (eq 1d0 1d0) nil)
+;;    (let ((boolean (eq 1d0 1d0)))
+;;      boolean)))
+
+;; (check (eq 1d0 1d0))
+
+(deftest test-compare-characters ()
+  (check
+   ;;    Trivial cases with single arg
+   (funcall (every-pred #'char=
+                        #'char/=
+                        #'char<
+                        #'char<=
+                        #'char>
+                        #'char>=
+                        #'char-equal
+                        #'char-not-equal
+                        #'char-lessp
+                        #'char-greaterp
+                        #'char-not-lessp
+                        #'char-not-greaterp)
+            #\a)   
+
+   (char= #\a #\a)
+   (char= #\a #\a #\a #\a)
+   (not (char= #\a #\A))
+   (char/= #\a #\A)
+
+   (char-equal #\a #\A)
+   (char-equal #\a #\A #\A #\a)
+   (not (char-equal #\a #\B))
+   (char-not-equal #\a #\B)
+
+   (not (char= #\a #\b #\c))
+   (char/= #\a #\b #\c)
+   (eq (and (char/= #\a #\b) (char/= #\a #\c) (char/= #\b #\c))
+       (char/= #\a #\b #\c))
+
+   (not (char= #\a #\b #\c #\a))
+   (not (char/= #\a #\b #\c #\a))
+   (eq (and (char/= #\a #\b)
+            (char/= #\a #\c)
+            (char/= #\a #\a)
+            (char/= #\b #\c)
+            (char/= #\b #\a)
+            (char/= #\c #\a))
+       (char/= #\a #\b #\c #\a))
+
+   (char< #\a #\b #\c #\d #\e)
+   (not (char< #\a #\a #\b #\b #\c #\c #\d #\d #\e #\e))
+   (char<= #\a #\a #\b #\b #\c #\c #\d #\d #\e #\e)
+   (char> #\z #\y #\x #\w #\v)
+   (not (char> #\z #\z #\y #\y #\x #\x #\w #\w #\v #\v))
+   (char>= #\z #\z #\y #\y #\x #\x #\w #\w #\v #\v)
+
+   (not (char-equal #\a #\B #\c))
+   (char-not-equal #\a #\B #\c)
+   (eq (and (char-not-equal #\a #\B) (char-not-equal #\a #\c) (char-not-equal #\B #\c))
+       (char-not-equal #\a #\B #\c))
+
+   (not (char-equal #\A #\b #\c #\a))
+   (not (char-not-equal #\A #\b #\c #\a))
+   (eq (and (char-not-equal #\A #\b)
+            (char-not-equal #\A #\c)
+            (char-not-equal #\A #\a)
+            (char-not-equal #\b #\c)
+            (char-not-equal #\b #\a)
+            (char-not-equal #\c #\a))
+       (char-not-equal #\A #\b #\c #\a))
+
+   (char-lessp #\a #\b #\c #\d #\e)
+   (not (char-lessp #\a #\a #\B #\b #\c #\C #\D #\D #\e #\e))
+   (char-not-greaterp #\a #\a #\b #\b #\C #\c #\D #\D #\E #\e)
+   (char-greaterp #\z #\y #\X #\W #\v)
+   (not (char-greaterp #\Z #\z #\Y #\y #\X #\x #\w #\w #\v #\v))
+   (char-not-lessp #\z #\z #\Y #\y #\x #\X #\w #\W #\v #\v)))
+
