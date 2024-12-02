@@ -44,7 +44,7 @@
            :number-file
            :print-plist :prompt :prompt-read
            :read-file :read-file-as-string
-           :read-list :read-word
+           :read-list :read-num :read-word
            :reread           
            :search-file :search-lines-of-file
 	   :valid-num-p
@@ -111,14 +111,14 @@
 ;;;    
 ;	((not (listen in-stream)) (reverse results)))) )
 
-(defun read-file-as-string (file-name)
-  (with-open-file (in-stream file-name :if-does-not-exist nil)
-    (if in-stream
-        (with-output-to-string (result)
-          (loop for line = (read-line in-stream nil nil)
-                while line
-                do (write-line line result)))
-        (format *error-output* "Error: File does not exist!~%"))))
+;; (defun read-file-as-string (file-name)
+;;   (with-open-file (in-stream file-name :if-does-not-exist nil)
+;;     (if in-stream
+;;         (with-output-to-string (result)
+;;           (loop for line = (read-line in-stream nil nil)
+;;                 while line
+;;                 do (write-line line result)))
+;;         (format *error-output* "Error: File does not exist!~%"))))
 
 ;;;
 ;;;    Edi Weitz

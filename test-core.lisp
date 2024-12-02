@@ -877,7 +877,10 @@
    (equal #[5 1] (range 5 1))
    (equal #[5 1] (range 5 1 1))
    (equal #[5 1 1/5] (range 5 1 1/5))
-   (null (range #\Nul))
+;; Can't do this with Haskell??  (take 10 (iterate (partial * 2) 1)) (1 2 4 8 16 32 64 128 256 512)
+   (equal '(1 2 4 8 16 32 64 128 256 512 1024) (range 1 1024 (partial #'* 2)))
+;; Newton-Raphson
+   (equal #[1 20 3] (range 1 20 (partial #'+ 3)))
    (equal #[#\c] (range #\c)) ; Not what you think!!
    (equal #[#\a #\z] (range #\a #\z))
    (equal #[#\a #\z 3] (range #\a #\z 3))
@@ -917,7 +920,6 @@
    (equal (map-> #'(lambda (i) (list (code-char i) i)) (char-code #\p) #'(lambda (i) (> i (char-code #\z))) #'(lambda (x) (+ x 2))) '((#\p 112) (#\r 114) (#\t 116) (#\v 118) (#\x 120) (#\z 122)))
    (equal (map-> #'(lambda (l) (string-upcase (first l))) #1='("Is" "this" "not" "pung?") #'null #'cdr) (mapcar #'string-upcase #1#))
    (equal (map-> (compose #'string-upcase #'first) #2='("Is" "this" "not" "pung?") #'null #'cdr) (mapcar #'string-upcase #2#))
-;; Can't do this with Haskell??  (take 10 (iterate (partial * 2) 1)) (1 2 4 8 16 32 64 128 256 512)
    (equal '(0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0) (map-> #'(lambda (x) (log x 2)) 1 #'(lambda (x) (> x 1024)) #'(lambda (x) (* 2 x))))
    (equal '(1 2 4 8 16 32 64 128 256 512 1024 2048 4096 8192) (map-> #'identity 1 (partial #'< 10000) (partial #'* 2)))) )
 

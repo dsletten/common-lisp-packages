@@ -1008,16 +1008,16 @@
         (flatten-aux tree '()))) )
 
 
-(defun flatten-q (tree)
-  (labels ((flatten-aux (tree result)
-             (cond ((null tree) (elements result))
-                   ((null (car tree)) (flatten-aux (cdr tree) result))
-                   ((atom (car tree)) (flatten-aux (cdr tree) (enqueue result (car tree))))
-                   (t (destructuring-bind ((head . tail1) . tail2) tree
-                        (flatten-aux (list* head tail1 tail2) result)))) ))
-    (if (atom tree)
-        tree
-        (flatten-aux tree (make-linked-queue)))) )
+;; (defun flatten-q (tree)
+;;   (labels ((flatten-aux (tree result)
+;;              (cond ((null tree) (elements result))
+;;                    ((null (car tree)) (flatten-aux (cdr tree) result))
+;;                    ((atom (car tree)) (flatten-aux (cdr tree) (enqueue result (car tree))))
+;;                    (t (destructuring-bind ((head . tail1) . tail2) tree
+;;                         (flatten-aux (list* head tail1 tail2) result)))) ))
+;;     (if (atom tree)
+;;         tree
+;;         (flatten-aux tree (make-linked-queue)))) )
 
 (defun flatten-q (tree)
   (labels ((flatten-aux (tree result)
@@ -1605,8 +1605,8 @@ starting with X or the index of the position of X in the sequence."))
 ;;;
 ;;;    This seems to be faster than above DO loop version.
 ;;;    
-(defun transition (l)
-  (transition-aux l l))
+;; (defun transition (l)
+;;   (transition-aux l l))
 
 (defun transition-aux (l tail)
   (cond ((endp tail) (list (list l '())))
@@ -1708,6 +1708,16 @@ starting with X or the index of the position of X in the sequence."))
   (error "Mismatched input types."))
 (defmethod make-range ((start number) (end number) (step number))
   (mapa-b #'identity start end step))
+(defmethod make-range ((start number) (end number) (step function))
+  (if (<= start end)
+      (loop with f = (iterate step start)
+            for elt = (funcall f)
+            until (> elt end)
+            collect elt)
+      (loop with f = (iterate step start)
+            for elt = (funcall f)
+            until (< elt end)
+            collect elt)))
 (defmethod make-range ((start number) (end null) (step number))
   (declare (ignore end))
   (if (plusp start)
@@ -1716,11 +1726,11 @@ starting with X or the index of the position of X in the sequence."))
 (defmethod make-range ((start number) end step)
   (error "Mismatched input types."))
   
-(defun map-> (fn start test-fn succ-fn)
-  (do ((i start (funcall succ-fn i))
-       (result '()))
-      ((funcall test-fn i) (nreverse result))
-    (push (funcall fn i) result)))
+;; (defun map-> (fn start test-fn succ-fn)
+;;   (do ((i start (funcall succ-fn i))
+;;        (result '()))
+;;       ((funcall test-fn i) (nreverse result))
+;;     (push (funcall fn i) result)))
 
 (defun map-> (f start test step)
   "Collect repeated application of the function F to START as it is transformed by the STEP function until TEST returns true."
@@ -1753,22 +1763,22 @@ starting with X or the index of the position of X in the sequence."))
 	(push (funcall fn obj) result)))
     (nreverse result)))
 
-(defun mapcars (f &rest lists)
-  "Map the function F over each element of each list argument provided."
-  (loop with result = (make-linked-queue)
-        for list in lists
-        do (loop for elt in list
-                 do (enqueue result (funcall f elt)))
-        finally (return (elements result))))
+;; (defun mapcars (f &rest lists)
+;;   "Map the function F over each element of each list argument provided."
+;;   (loop with result = (make-linked-queue)
+;;         for list in lists
+;;         do (loop for elt in list
+;;                  do (enqueue result (funcall f elt)))
+;;         finally (return (elements result))))
 
 ;; Graham does not handle arbitrary trees
 ;; (rmapcar #'1+ '((1 . 2) (3 . 4) (5 . 6)))
-(defun rmapcar (fn &rest args)
-  (if (some #'atom args)
-      (apply fn args)
-      (apply #'mapcar #'(lambda (&rest args)
-			  (apply #'rmapcar fn args))
-	     args)))
+;; (defun rmapcar (fn &rest args)
+;;   (if (some #'atom args)
+;;       (apply fn args)
+;;       (apply #'mapcar #'(lambda (&rest args)
+;; 			  (apply #'rmapcar fn args))
+;; 	     args)))
 
 (defun rmapcar (fn &rest args)
   (if (some #'atom args)
@@ -1963,33 +1973,33 @@ starting with X or the index of the position of X in the sequence."))
 ;;;
 ;;;    This executes REDUCE every time the composed function is called.
 ;;;    
-(defun compose (&rest fns)
-  (if fns
-      (let ((fn1 (last1 fns))
-            (fns (butlast fns)))
-        #'(lambda (&rest args)
-            (reduce #'funcall fns
-                    :from-end t
-                    :initial-value (apply fn1 args))))
-      #'identity))
+;; (defun compose (&rest fns)
+;;   (if fns
+;;       (let ((fn1 (last1 fns))
+;;             (fns (butlast fns)))
+;;         #'(lambda (&rest args)
+;;             (reduce #'funcall fns
+;;                     :from-end t
+;;                     :initial-value (apply fn1 args))))
+;;       #'identity))
 
 
 ;;;
 ;;;    Same here for > 2 functions...
 ;;;    Same logic for multiple functions.
 ;;;    
-(defun compose (&rest fs)
-  (if (null fs)
-      #'identity
-      (destructuring-bind (f . more) fs
-        (if (null more)
-            f
-            (destructuring-bind (g . more) more
-              (if (null more)
-                  #'(lambda (&rest args) (funcall f (apply g args)))
-                  (destructuring-bind (f* . fs*) (reverse fs)
-                    #'(lambda (&rest args)
-                        (reduce #'(lambda (x f) (funcall f x)) fs* :initial-value (apply f* args)))) )))) ))
+;; (defun compose (&rest fs)
+;;   (if (null fs)
+;;       #'identity
+;;       (destructuring-bind (f . more) fs
+;;         (if (null more)
+;;             f
+;;             (destructuring-bind (g . more) more
+;;               (if (null more)
+;;                   #'(lambda (&rest args) (funcall f (apply g args)))
+;;                   (destructuring-bind (f* . fs*) (reverse fs)
+;;                     #'(lambda (&rest args)
+;;                         (reduce #'(lambda (x f) (funcall f x)) fs* :initial-value (apply f* args)))) )))) ))
 
 ;;;
 ;;;    Clojure-style
@@ -2054,11 +2064,11 @@ starting with X or the index of the position of X in the sequence."))
 ;;          0 microseconds (0.000000 seconds) were spent in system mode
 ;;  1,280,000 bytes of memory allocated.
 ;; NIL
-(defun partial (f &rest args)
-  (if (null args)
-      f
-      #'(lambda (&rest args2)
-          (apply f (append args args2)))) )
+;; (defun partial (f &rest args)
+;;   (if (null args)
+;;       f
+;;       #'(lambda (&rest args2)
+;;           (apply f (append args args2)))) )
 
 ;;;
 ;;;    Clojure style
@@ -2163,16 +2173,16 @@ starting with X or the index of the position of X in the sequence."))
 ;;;    Slightly modified from Graham.
 ;;;    
 ;(defun fif (if then &optional else)
-(defun iffn (if then &optional else)
-  (if else
-      #'(lambda (x)
-	  (if (funcall if x)
-	      (funcall then x)
-	      (funcall else x)))
-      #'(lambda (x)
-	  (if (funcall if x)
-	      (funcall then x)
-              nil))))
+;; (defun iffn (if then &optional else)
+;;   (if else
+;;       #'(lambda (x)
+;; 	  (if (funcall if x)
+;; 	      (funcall then x)
+;; 	      (funcall else x)))
+;;       #'(lambda (x)
+;; 	  (if (funcall if x)
+;; 	      (funcall then x)
+;;               nil))))
 
 (defun iffn (if then &optional (else (constantly nil)))
   #'(lambda (x)
@@ -2197,27 +2207,27 @@ starting with X or the index of the position of X in the sequence."))
 
 ;;;    COMPOSE no required args
 ;;;    EVERY-PRED at least 1
-(defun every-pred (p &rest ps)
-  (if (null ps)
-      p
-      (reduce #'(lambda (result f)
-                  #'(lambda (x)
-                      (and (funcall result x) (funcall f x))))
-;                      (and (funcall f x) (funcall result x))))
-              ps
-;              :from-end t
-              :initial-value p)))
+;; (defun every-pred (p &rest ps)
+;;   (if (null ps)
+;;       p
+;;       (reduce #'(lambda (result f)
+;;                   #'(lambda (x)
+;;                       (and (funcall result x) (funcall f x))))
+;; ;                      (and (funcall f x) (funcall result x))))
+;;               ps
+;; ;              :from-end t
+;;               :initial-value p)))
 
 ;;;
 ;;;    Same approach as COMPOSE...
 ;;;    
-(defun every-pred (p &rest ps)
-  (if (null ps)
-      p
-      (destructuring-bind (p1 . more) ps
-        (if (null more)
-            #'(lambda (x) (and (funcall p x) (funcall p1 x)))
-            (reduce #'every-pred ps :initial-value p)))) )
+;; (defun every-pred (p &rest ps)
+;;   (if (null ps)
+;;       p
+;;       (destructuring-bind (p1 . more) ps
+;;         (if (null more)
+;;             #'(lambda (x) (and (funcall p x) (funcall p1 x)))
+;;             (reduce #'every-pred ps :initial-value p)))) )
 
 ;;;
 ;;;    Back to Graham's way.
@@ -2259,13 +2269,13 @@ starting with X or the index of the position of X in the sequence."))
 ;; 	#'(lambda (x)
 ;; 	    (or (funcall fn x) (funcall chain x)))) ))
 
-(defun some-pred (p &rest ps)
-  (if (null ps)
-      p
-      (destructuring-bind (p1 . more) ps
-        (if (null more)
-            #'(lambda (x) (or (funcall p x) (funcall p1 x)))
-            (reduce #'some-pred ps :initial-value p)))) )
+;; (defun some-pred (p &rest ps)
+;;   (if (null ps)
+;;       p
+;;       (destructuring-bind (p1 . more) ps
+;;         (if (null more)
+;;             #'(lambda (x) (or (funcall p x) (funcall p1 x)))
+;;             (reduce #'some-pred ps :initial-value p)))) )
 
 (defun some-pred (p &rest ps)
   (if (null ps)
@@ -2474,11 +2484,11 @@ starting with X or the index of the position of X in the sequence."))
        (cond ,@(loop for clause in clauses
                      collect (transform-clause clause predicate value)))) ))
 
-(defmacro if3 (test true false uncertain)
-  `(case ,test
-     ((nil) ,false)
-     (? ,uncertain) ; Only matches core::?  !!!
-     (t ,true)))
+;; (defmacro if3 (test true false uncertain)
+;;   `(case ,test
+;;      ((nil) ,false)
+;;      (? ,uncertain) ; Only matches core::?  !!!
+;;      (t ,true)))
 
 ;; (defmacro if3 (test true false uncertain)
 ;;   "Three-valued logic: true, false, uncertain. Uncertainty is expressed as any symbol whose name is \"?\""
@@ -2498,11 +2508,11 @@ starting with X or the index of the position of X in the sequence."))
              ((and (symbolp ,result) (string= "?" ,result)) ,uncertain)
              (t ,true)))) )
 
-(defmacro nif (expr pos zero neg)
-  `(case (truncate (signum ,expr))
-     (1 ,pos)
-     (0 ,zero)
-     (-1 ,neg)))
+;; (defmacro nif (expr pos zero neg)
+;;   `(case (truncate (signum ,expr))
+;;      (1 ,pos)
+;;      (0 ,zero)
+;;      (-1 ,neg)))
 
 ;;;
 ;;;    No good. Only covers rationals, double-precision floats...

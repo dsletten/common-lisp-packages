@@ -58,14 +58,30 @@
                   (sys:command-line-argument (1+ n)))
   #+ :clisp (nth n *args*))
 
+;; (defun get-args ()
+;;   #+ :sbcl (rest sb-ext:*posix-argv*)
+;;   ;;
+;;   ;;    These must come after -- on command line.
+;;   ;;    See os-interface.htm
+;;   ;;    
+;;   #+ :allegro (rest (sys:command-line-arguments))
+;;   #+ :clisp (copy-list *args*))
+
 (defun get-args ()
   #+ :sbcl (rest sb-ext:*posix-argv*)
-  ;;
-  ;;    These must come after -- on command line.
-  ;;    See os-interface.htm
-  ;;    
+  #+ :clisp (rest (ext:argv))
+  #+ :abcl (rest ext:*command-line-argument-list*)
+  #+ :clozure (rest (ccl::command-line-arguments))
+  #+ :lispworks (rest sys:*line-arguments-list*)
   #+ :allegro (rest (sys:command-line-arguments))
-  #+ :clisp (copy-list *args*))
+  #+ :cmu (rest extensions:*command-line-strings*))
+
+   ;; #+gcl si:*command-args*
+   ;; #+ecl (loop for i from 0 below (si:argc) collect (si:argv i))
+
+   ;; nil))
+
+
 
 ;;;
 ;;;    SBCL also POSIX-ENVIRON
@@ -114,6 +130,7 @@
 ;;;    Steve Gonedes
 ;;;
 (defun default-directory ()
+  #+sbcl (sb-posix:getcwd)
   #+cmu (default-directory)
                                         ;  #+:cmu (ext:default-directory)
   #+clozure (ccl::current-directory-name)
