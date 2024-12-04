@@ -32,7 +32,7 @@
 (defpackage :core
   (:shadowing-import-from :collections :intersection :set :subsetp :union)
   (:use :common-lisp :collections)
-  (:export :after :append1 :analyze-tree :approximately= :array-indices
+  (:export :after :append1 :analyze-tree :approximately= :array-indices :as-if
            :before :best :best-index :best-worst :best-worst-n :bestn :build-prefix :build-tree
            :>case :class-template :comment :compose :conc1 :copy-array :cycle
            :defchain :destructure :dohash :doset :dostring :dotuples :dovector
@@ -55,7 +55,7 @@
            :show-symbols :shuffle :singlep :some-pred :sort-symbol-list :splice
 ;           :split-if
            :stable-partition :starts-with :stream-partition :suffixp :symb
-           :take :take-drop :take-while :take-until :transfer
+           :take :take-drop :take-while :take-until :totally :transfer
            :transition :transition-1 :transition-n :transition-stream :traverse :tree-find-if :tree-map
            :until
            :when-let :when-let* :while :with-gensyms :worst :worstn)
@@ -1940,6 +1940,10 @@ starting with X or the index of the position of X in the sequence."))
   (loop for elt across seq
         with exemplar = (funcall key (elt seq 0))
         always (funcall test exemplar (funcall key elt))))
+
+(defun totally (seq) (notany #'not seq))
+
+(defun as-if (seq) (every #'not seq))
 
 (defun mkstr (&rest args)
   (with-output-to-string (s)

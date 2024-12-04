@@ -1564,3 +1564,17 @@
    (equalelts '(1 4 7 10 13) :key (partial* #'mod 3))
    (equalelts #(1 4 7 10 13) :key (partial* #'mod 3))
    (equalelts "147" :key #'(lambda (ch) (mod (digit-char-p ch) 3)))) )
+
+(deftest test-totally ()
+  (check
+   (totally '())
+   (totally '(t))
+   (totally '(t t t t t))
+   (not (totally '(t nil t)))) )
+
+(deftest test-as-if ()
+  (check
+   (as-if '())
+   (as-if '(nil))
+   (as-if '(nil nil nil nil))
+   (not (as-if '(nil t nil)))) )

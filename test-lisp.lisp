@@ -287,6 +287,12 @@
        (declare (ignore obj))
        (error "Only applicable to RATIONAL numbers.")))) ) ; Not specified in CLHS?
 
+;;;
+;;;    Cannot haphazardly apply Boolean algebra:
+;;;    (not (> a b)) == (<= a b)
+;;;      but
+;;;    (not (> a b c d)) != (<= a b c d)
+;;;    
 (deftest test-compare-numbers ()
   (check
    ;;    Trivial cases with single arg
@@ -745,10 +751,110 @@
             (char-not-equal #\c #\a))
        (char-not-equal #\A #\b #\c #\a))
 
-   (char-lessp #\a #\b #\c #\d #\e)
+   (char-lessp #\a #\b #\C #\d #\E)
    (not (char-lessp #\a #\a #\B #\b #\c #\C #\D #\D #\e #\e))
    (char-not-greaterp #\a #\a #\b #\b #\C #\c #\D #\D #\E #\e)
    (char-greaterp #\z #\y #\X #\W #\v)
    (not (char-greaterp #\Z #\z #\Y #\y #\X #\x #\w #\w #\v #\v))
    (char-not-lessp #\z #\z #\Y #\y #\x #\X #\w #\W #\v #\v)))
 
+;;;
+;;;    All binary predicates
+;;;    
+(deftest test-compare-strings ()
+  (check
+   (string= "pung" "pung")
+   (string= "pung" "Is this not pung?" :start2 12 :end2 16)
+   (not (string= "pung" "PUNG"))
+   (string/= "pung" "PUNG")
+
+   (string-equal "pung" "PUNG")
+   (string-equal "Is this not pung?" "PUNG" :start1 12 :end1 16)
+   (not (string-equal "pung" "foo"))
+   (string-not-equal "pung" "foo")
+
+   (string< "foo" "pung")
+   (string> "pung" "foo")
+   (not (string< "pung" "pung"))
+   (string>= "pung" "pung")
+   (not (string> "pung" "pung"))
+   (string<= "pung" "pung")
+
+   (string-lessp "FOO" "pung")
+   (string-greaterp "PUNG" "Foo")
+   (not (string-lessp "Pung" "pUNG"))
+   (string-not-lessp "Pung" "pUNG"))
+   (not (string-greaterp "Pung" "PUNG"))
+   (string-not-greaterp "Pung" "PUNG"))
+
+(deftest test-tailp ()
+  (check
+   (let* ((l1 (list 1 2 3 4 5))
+          (l2 (copy-list l1)))
+     (and (totally (maplist (partial* #'tailp l1) l1))
+          (as-if (maplist (partial* #'tailp l1) l2))))
+   (tailp 'c '(a b . c))))
+
+(deftest test-ldiff ()
+  (check
+   (let* ((l1 (list 1 2 3 4 5))
+          (l2 (copy-list l1)))
+     (and (every (partial #'equal l1)
+                 (maplist #'(lambda (l)
+                              (append (ldiff l1 l) l))
+                          l1))
+          (notany (partial #'equal l1)
+                  (maplist #'(lambda (l)
+                               (append (ldiff l2 l) l))
+                           l1))))
+   (let ((l (list* 1 2 3)))
+     (and (equal '(1 2) (ldiff l 3))
+          (equal '(1) (ldiff l (cdr l)))
+          (equal '() (ldiff l l)))) ))
+
+;;    I ain't typing this all myself...
+;; (loop for i from 2 to 10 do (format t "(eq (~:R #1#) (nth ~D #1#))~%" i (1- i)))
+;; (loop for i from 1 to 10 do (format t "(eq (nth ~D #1#) (elt #1# ~:*~D))~%" (1- i)))
+(deftest test-indexed-list-access ()
+  (check
+   (eq '() (nth 0 '()))
+   (eq 'a (nth 0 '(a b c d)))
+   (eq 'b (nth 1 '(a b c d)))
+   (eq 'd (nth 3 '(a b c d)))
+   (eq '() (nth 10 '(a b c d)))
+
+   (eq (first #1='(1 2 3 4 5 6 7 8 9 10)) (nth 0 #1#))
+   (eq (second #1#) (nth 1 #1#))
+   (eq (third #1#) (nth 2 #1#))
+   (eq (fourth #1#) (nth 3 #1#))
+   (eq (fifth #1#) (nth 4 #1#))
+   (eq (sixth #1#) (nth 5 #1#))
+   (eq (seventh #1#) (nth 6 #1#))
+   (eq (eighth #1#) (nth 7 #1#))
+   (eq (ninth #1#) (nth 8 #1#))
+   (eq (tenth #1#) (nth 9 #1#))
+
+   (eq (car #1#) (first #1#))
+
+   (eq (car #1#) (nth 0 #1#))
+   (eq (cadr #1#) (nth 1 #1#))
+   (eq (caddr #1#) (nth 2 #1#))
+   (eq (cadddr #1#) (nth 3 #1#))
+
+   (eq (cadr #1#) (car (cdr #1#)))
+   (eq (caddr #1#) (car (cdr (cdr #1#))))
+   (eq (cadddr #1#) (car (cdr (cdr (cdr #1#)))) )
+
+   (eq (nth 0 #1#) (elt #1# 0))
+   (eq (nth 1 #1#) (elt #1# 1))
+   (eq (nth 2 #1#) (elt #1# 2))
+   (eq (nth 3 #1#) (elt #1# 3))
+   (eq (nth 4 #1#) (elt #1# 4))
+   (eq (nth 5 #1#) (elt #1# 5))
+   (eq (nth 6 #1#) (elt #1# 6))
+   (eq (nth 7 #1#) (elt #1# 7))
+   (eq (nth 8 #1#) (elt #1# 8))
+   (eq (nth 9 #1#) (elt #1# 9))))
+
+
+   
