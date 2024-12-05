@@ -447,6 +447,15 @@
                         #'(lambda (x) (= (round x) (fround x))))
             xs))))
 
+;;;
+;;;    https://www.lispworks.com/documentation/HyperSpec/Body/f_signum.htm
+;;;    (signum x) ==  (if (zerop x) x (/ x (abs x)))
+;;;    
+(deftest test-signum ()
+  (check
+   (= 0d0 (signum -0d0))
+   (string= "-0.0" (format nil "~F" (signum -0d0)))) )
+
 (deftest test-cond ()
   (check
    (not (cond))
@@ -810,7 +819,9 @@
    (let ((l (list* 1 2 3)))
      (and (equal '(1 2) (ldiff l 3))
           (equal '(1) (ldiff l (cdr l)))
-          (equal '() (ldiff l l)))) ))
+          (equal '() (ldiff l l))))
+   (not (eq #1='(a b c d) (ldiff #1# '(x)))) ; LDIFF returns copy
+   (equal #2='(a b c d) (ldiff #2# '(x)))) )
 
 ;;    I ain't typing this all myself...
 ;; (loop for i from 2 to 10 do (format t "(eq (~:R #1#) (nth ~D #1#))~%" i (1- i)))
@@ -854,7 +865,48 @@
    (eq (nth 6 #1#) (elt #1# 6))
    (eq (nth 7 #1#) (elt #1# 7))
    (eq (nth 8 #1#) (elt #1# 8))
-   (eq (nth 9 #1#) (elt #1# 9))))
+   (eq (nth 9 #1#) (elt #1# 9))
 
+   (let ((l (list 1 2 3 4 5)))
+     (setf (nth 0 l) :one)
+     (setf (cadr l) :two)
+     (setf (third l) :three)
+     (setf (elt l 3) :four)
+     (equal '(:one :two :three :four 5) l))))
 
-   
+(deftest test-tails ()
+  (check
+   (eq '() (cdr '()))
+   (eq '() (rest '()))
+   (eq '() (nthcdr 0 '()))
+   (eq '() (nthcdr 1 '()))
+   (eq '() (nthcdr 2 '()))
+
+   (equal (rest #1='(a b c d e)) (cdr #1#))
+   (equal (rest #1#) (nthcdr 1 #1#))
+   (equal (cdr #1#) (nthcdr 1 #1#))
+   (equal (cddr #1#) (nthcdr 2 #1#))
+   (equal (cdddr #1#) (nthcdr 3 #1#))
+   (equal (cddddr #1#) (nthcdr 4 #1#))
+   (equal (cdr (cddddr #1#)) (nthcdr 5 #1#))
+
+   (let* ((l (loop for i from 1 to 10 collect i))
+          (tails1 (maplist #'identity l))
+          (tails2 (loop for i below (length l) collect (nthcdr i l)))
+          (tails3 (loop for cons on l collect cons)))
+     (and (equal tails1 tails2)
+          (equal tails2 tails3)))
+
+   (let* ((l1 (list 1 2))
+          (l2 (copy-list l1))
+          (l3 (copy-list l1)))
+     (setf (cdr l1) '(:two))
+     (setf (rest l2) '(:two))
+     (handler-case (setf (nthcdr 1 l3) '(:two))
+       (undefined-function (e)
+         (declare (ignore e))
+         t)
+       (:no-error (obj)
+         (declare (ignore obj))
+         (error "#'(SETF NTHCDR) is undefined.")))
+     (equal l1 l2))))
