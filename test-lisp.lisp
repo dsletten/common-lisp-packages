@@ -78,8 +78,15 @@
 ;;;    
 ;;;    p = qd + r <=> r = p - qd
 ;;;    
-;;;    d = (truncate p q) => r = (rem p/q) C/C++/Java/JavaScript/Oz %
-;;;    d = (floor p q) => r = (mod p/q)    Ruby %
+;;;    d = (truncate p q) => r = (rem p q)
+;;;    d = (floor p q) => r = (mod p q)
+;;;    
+;;;    C/C++/Java/JavaScript/Oz/Scala/Io % is REM!
+;;;        Test even: n % 2 == 0
+;;;        Test odd:  n % 2 != 0 (Not n % 2 == 1) -3 % 2 => -1
+;;;
+;;;    Ruby % is MOD
+;;;    Common Lisp/Clojure/Haskell/Prolog: mod, rem
 ;;;    
 (deftest test-mod-rem ()
   (loop for a in '(10 -10)
