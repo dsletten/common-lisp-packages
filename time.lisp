@@ -183,6 +183,11 @@
       (not (eq (compare d2 d1) d2))
       nil))
 
+
+;; (defun day-of-week (day month year)
+;;   (nth-value 6 (decode-universal-time (encode-universal-time 0 0 0 day month year))))
+
+
 (defgeneric day-of-week (date))
 
 ;;;

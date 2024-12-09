@@ -239,19 +239,11 @@
    (not (oddp 2))
    (not (oddp 2.))
    (handler-case (not (oddp 2/3))
-     (type-error (e)
-       (declare (ignore e))
-       t)
-     (:no-error (obj)
-       (declare (ignore obj))
-       (error "Only applicable to integers.")))
+     (type-error () t)
+     (:no-error () (error "Only applicable to integers.")))
    (handler-case (not (oddp pi))
-     (type-error (e)
-       (declare (ignore e))
-       t)
-     (:no-error (obj)
-       (declare (ignore obj))
-       (error "Only applicable to integers.")))) )
+     (type-error () t)
+     (:no-error () (error "Only applicable to integers.")))) )
 
 (deftest test-evenp ()
   (check
@@ -260,19 +252,11 @@
    (not (evenp 3))
    (not (evenp 3.))
    (handler-case (not (evenp 2/3))
-     (type-error (e)
-       (declare (ignore e))
-       t)
-     (:no-error (obj)
-       (declare (ignore obj))
-       (error "Only applicable to integers.")))
+     (type-error () t)
+     (:no-error () (error "Only applicable to integers.")))
    (handler-case (not (evenp pi))
-     (type-error (e)
-       (declare (ignore e))
-       t)
-     (:no-error (obj)
-       (declare (ignore obj))
-       (error "Only applicable to integers.")))) )
+     (type-error () t)
+     (:no-error () (error "Only applicable to integers.")))) )
 
 (deftest test-ratios ()
   (check
@@ -287,12 +271,8 @@
    (= 8 (numerator 8))
    (= 1 (denominator 8))
    (handler-case (denominator 8.0)
-     (type-error (e)
-       (declare (ignore e))
-       t)
-     (:no-error (obj)
-       (declare (ignore obj))
-       (error "Only applicable to RATIONAL numbers.")))) ) ; Not specified in CLHS?
+     (type-error () t)
+     (:no-error () (error "Only applicable to RATIONAL numbers.")))) ) ; Not specified in CLHS?
 
 ;;;
 ;;;    Cannot haphazardly apply Boolean algebra:
@@ -405,20 +385,12 @@
    (= 0.1d0 (coerce 1/10 'double-float))
    (= 0.1l0 (coerce 1/10 'long-float))
    (handler-case (coerce 2 'bignum)
-     (type-error (e)
-       (declare (ignore e))
-       t)
-     (:no-error (obj)
-       (declare (ignore obj))
-       (error "Can't make integer something that it's not.")))
+     (type-error () t)
+     (:no-error () (error "Can't make integer something that it's not.")))
    (handler-case (coerce (expt 3 9999) 'fixnum) ; caught STYLE-WARNING: Lisp error during constant folding:
                                         ; 5437833951142086247677... can't be converted to type FIXNUM.
-     (type-error (e)
-       (declare (ignore e))
-       t)
-     (:no-error (obj)
-       (declare (ignore obj))
-       (error "Can't make integer something that it's not.")))) )
+     (type-error () t)
+     (:no-error () (error "Can't make integer something that it's not.")))) )
 
 (deftest test-integer-coercion ()
   (check
@@ -534,33 +506,17 @@
 (deftest test-float-overflow ()
   (check
    (handler-case (/ 3 0)
-     (division-by-zero (e)
-       (declare (ignore e))
-       t)
-     (:no-error (obj)
-       (declare (ignore obj))
-       (error "Since when is this allowed?")))
+     (division-by-zero () t)
+     (:no-error () (error "Since when is this allowed?")))
    (handler-case (/ 3d0 0d0)
-     (division-by-zero (e)
-       (declare (ignore e))
-       t)
-     (:no-error (obj)
-       (declare (ignore obj))
-       (error "Since when is this allowed?")))
+     (division-by-zero () t)
+     (:no-error () (error "Since when is this allowed?")))
    (handler-case (/ most-positive-double-float least-positive-double-float)
-     (floating-point-overflow (e)
-       (declare (ignore e))
-       t)
-     (:no-error (obj)
-       (declare (ignore obj))
-       (error "Less is more.")))
+     (floating-point-overflow () t)
+     (:no-error () (error "Less is more.")))
    (handler-case (* most-positive-double-float 10d0)
-     (floating-point-overflow (e)
-       (declare (ignore e))
-       t)
-     (:no-error (obj)
-       (declare (ignore obj))
-       (error "Less is more.")))
+     (floating-point-overflow () t)
+     (:no-error () (error "Less is more.")))
    (zerop (/ least-positive-double-float most-positive-double-float)) ; Underflow???
    (zerop (expt 10d0 -500))))
 
@@ -671,6 +627,27 @@
                                  (typep obj '(or cons null))
                                  (or (consp obj) (null obj))))
             lists))))
+
+(deftest test-symbolp ()
+  (check
+   (symbolp 'a)
+   (symbolp '+)
+   (symbolp (intern "FOO"))
+   (symbolp (make-symbol "BAR"))
+   (symbolp (gensym))
+   (symbolp :pung)
+   (not (symbolp "FOO"))
+   (not (symbolp #\x))))
+
+(deftest test-endp ()
+  (check
+   (endp '())
+   (not (endp '(a)))
+   (not (endp '(a b c d)))
+   (not (endp '(a . b)))
+   (handler-case (endp (cdr '(a . b)))
+     (type-error () t)
+     (:no-error () (error "Value is not a list.")))) )
 
 ;;;
 ;;;    https://www.lispworks.com/documentation/HyperSpec/Body/f_eq.htm#eq
@@ -910,10 +887,69 @@
      (setf (cdr l1) '(:two))
      (setf (rest l2) '(:two))
      (handler-case (setf (nthcdr 1 l3) '(:two))
-       (undefined-function (e)
-         (declare (ignore e))
-         t)
-       (:no-error (obj)
-         (declare (ignore obj))
-         (error "#'(SETF NTHCDR) is undefined.")))
+       (undefined-function () t)
+       (:no-error () (error "#'(SETF NTHCDR) is undefined.")))
      (equal l1 l2))))
+
+(deftest test-last ()
+  (check
+   (equal '(c) (last #1='(a b c)))
+   (equal '(y . z) (last #2='(x y . z)))
+   (equal '() (last #1# 0))
+   (equal 'z (last #2# 0))
+
+   (equal (last #1# 1) (last #1#))
+
+   (equal '(b c) (last #1# 2))
+   (equal #1# (last #1# 3))
+   (equal #1# (last #1# 4))
+
+   (equal (nthcdr (1- (length #1#)) #1#) (last #1#))
+   (equal (subseq #1# (1- (length #1#))) (last #1#))))
+
+(deftest test-butlast ()
+  (check
+   (equal '(a b) (butlast #1='(a b c)))
+   (equal '(x) (butlast #2='(x y . z)))
+
+   (equal (butlast #1# 1) (butlast #1#))
+
+   (equal '(a) (butlast #1# 2))
+   (equal '() (butlast #1# 3))
+   (equal '() (butlast #1# 4))
+
+   (equal (ldiff #1# (last #1#)) (butlast #1#))
+   (equal (ldiff #1# (last #1# 2)) (butlast #1# 2))
+
+   (equal (subseq #1# 0 (1- (length #1#))) (butlast #1#))
+
+   (equal (mapcar #'(lambda (elt _) (declare (ignore _)) elt) #1# (nthcdr 1 #1#))
+          (butlast #1#))
+   (equal (mapcar #'(lambda (elt _) (declare (ignore _)) elt) #1# (nthcdr 2 #1#))
+          (butlast #1# 2))))
+
+(deftest test-too-clever ()
+  (check
+   (null (cond))
+   (null (or))
+   (null (list))
+   (null (progn))
+   (null (append))))
+
+(deftest test-list* ()
+  (check
+   ;; CLHS
+   (dolist (x '(0 0d0 3.7 3.7d0 3/4 :x #\x "x" (x)) t)
+     (check
+      (eq x (list* x))))
+   (equal (cons 1 (cons 2 (cons 3 (cons 4 '()))) ) (list* 1 2 3 4 '()))
+   (equal (list 1 2 3 4) (list* 1 2 3 4 '()))
+   (equal (list 1 2 3 4) (list* 1 2 3 '(4)))
+   (equal (list 1 2 3 4) (list* 1 2 '(3 4)))
+   (equal (list 1 2 3 4) (list* 1 '(2 3 4)))
+   (equal (list 1 2 3 4) (list* '(1 2 3 4)))
+   (equal (cons 3 4) (list* 3 4))
+   (equal (cons 2 (cons 3 4)) (list* 2 3 4))
+   (equal (cons 1 (cons 2 (cons 3 4))) (list* 1 2 3 4))))
+
+
