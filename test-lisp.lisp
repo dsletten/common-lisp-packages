@@ -85,7 +85,7 @@
 ;;;        Test even: n % 2 == 0
 ;;;        Test odd:  n % 2 != 0 (Not n % 2 == 1) -3 % 2 => -1
 ;;;
-;;;    Ruby % is MOD
+;;;    Python/Ruby % is MOD
 ;;;    Common Lisp/Clojure/Haskell/Prolog: mod, rem
 ;;;    
 (deftest test-mod-rem ()
@@ -432,6 +432,12 @@
 ;;;    
 (deftest test-signum ()
   (check
+   (eql 1 (signum 8))
+   (eql 0 (signum 0))
+   (eql -1 (signum -3))
+   (eql 1d0 (signum 8d0))
+   (eql 0d0 (signum 0d0))
+   (eql -1d0 (signum -3d0))
    (= 0d0 (signum -0d0))
    (string= "-0.0" (format nil "~F" (signum -0d0)))) )
 
@@ -585,7 +591,9 @@
 (deftest test-identity ()
   (check
    (every #'(lambda (elt) (eql elt (identity elt)))
-          '(a :bar 1 2d0 #\k "foo" (a b c) #(1 2)))) )
+          '(a :bar 1 2d0 #\k "foo" (a b c) #(1 2)))
+   (every #'(lambda (elt) (eq elt (identity elt)))
+          '(a :bar "foo" (a b c) #(1 2)))) )
 
 (deftest test-atom ()
   (check
@@ -952,4 +960,83 @@
    (equal (cons 2 (cons 3 4)) (list* 2 3 4))
    (equal (cons 1 (cons 2 (cons 3 4))) (list* 1 2 3 4))))
 
+(deftest test-append ()
+  (check
+   (null (append))
+   (null (append '()))
+   ;; CLHS
+   (dolist (x '(0 0d0 3.7 3.7d0 3/4 :x #\x "x" (x)) t)
+     (check
+      (and (eq x (append x))
+           (eq x (append '() '() '() '() x)))) )
+   (equal '(a b c d e) (append '() '(a b c d e)))
+   (equal '(a b c d e) (append '(a) '(b c d e)))
+   (equal '(a b c d e) (append '(a b) '(c d e)))
+   (equal '(a b c d e) (append '(a b c) '(d e)))
+   (equal '(a b c d e) (append '(a b c d) '(e)))
+   (equal '(a b c d e) (append '(a b c d e) '()))
+   (equal '(a b c :d :e 7 2 3) (append '(a b c) '(:d :e) '(7 2 3)))
+   (equal '(a b c . d) (append '(a) '(b) '(c) 'd))
+   (let ((l1 '(1 2 3))
+         (l2 '(4 5)))
+     (eq l2 (nthcdr (length l1) (append l1 l2)))) ))
 
+(deftest test-revappend ()
+  (check
+   (equal '(4 3 2 1 5 6 7 8) (revappend '(1 2 3 4) '(5 6 7 8)))
+   (equal (reverse #1='(a b c d e f)) (revappend #1# '()))) )
+
+(deftest test-make-list ()
+  (check
+   (null (make-list 0))
+   (let ((n 3))
+     (= n (length (make-list n))))
+   (let ((obj 'pung))
+     (every (partial #'eq obj) (make-list 5 :initial-element obj)))) )
+
+(deftest test-copy-list ()
+  (check
+   (let ((l (list 1 2 3 4 5)))
+     (and (equal l (copy-list l))
+          (not (eq l (copy-list l))) ; Lists are different
+          (every #'eq l (copy-list l)))) )) ; Elements are the same
+
+(deftest test-length ()
+  (check
+   (equal 0 (length '()))
+   (equal 1 (length '(a)))
+   (equal 10 (length (loop for i from 1 to 10 collect i)))
+   (equal 0 (length (vector)))
+   (equal 1 (length (vector 1)))
+   (equal 10 (length (apply #'vector (loop for i from 1 to 10 collect i))))
+   (equal 0 (length ""))
+   (equal 1 (length "M"))
+   (equal 17 (length "Is this not pung?"))))
+
+(deftest test-reverse ()
+  (check
+   (equal '() (reverse '()))
+   (equal '(a) (reverse '(a)))
+   (equal (loop for i from 10 downto 1 collect i)
+          (reverse (loop for i from 1 to 10 collect i)))
+   (equals #() (reverse (vector)))
+   (equals #(1) (reverse (vector 1)))
+   (equals (coerce (loop for i from 10 downto 1 collect i) 'vector)
+           (reverse (apply #'vector (loop for i from 1 to 10 collect i))))
+   (equal "" (reverse ""))
+   (equal "M" (reverse "M"))
+   (equal "?gnup ton siht sI"
+          (reverse "Is this not pung?"))))
+
+(defun foo (x)
+  (+ x 9))
+
+(deftest test-function-vs-symbol-function ()
+  (flet ((foo (x) (* x 2)))
+    (let ((foo #'(lambda (x) (- x 17))))
+      (check
+       (= 6 (foo 3))
+       (= 6 (funcall #'foo 3))
+       (= 12 (funcall 'foo 3))
+       (= 12 (funcall (symbol-function 'foo) 3))
+       (= -14 (funcall foo 3)))) ))
