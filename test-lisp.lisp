@@ -276,9 +276,9 @@
 
 ;;;
 ;;;    Cannot haphazardly apply Boolean algebra:
-;;;    (not (> a b)) == (<= a b)
+;;;    (not (> a b)) ≡ (<= a b)
 ;;;      but
-;;;    (not (> a b c d)) != (<= a b c d)
+;;;    (not (> a b c d)) ≢(<= a b c d)
 ;;;    
 (deftest test-compare-numbers ()
   (check
@@ -453,7 +453,7 @@
 
 ;;;
 ;;;    https://www.lispworks.com/documentation/HyperSpec/Body/f_signum.htm
-;;;    (signum x) ==  (if (zerop x) x (/ x (abs x)))
+;;;    (signum x) ≡ (if (zerop x) x (/ x (abs x)))
 ;;;    
 (deftest test-signum ()
   (check
@@ -1065,3 +1065,112 @@
        (= 12 (funcall 'foo 3))
        (= 12 (funcall (symbol-function 'foo) 3))
        (= -14 (funcall foo 3)))) ))
+
+;;;
+;;;    SOME and NOTEVERY (i.e., some not) are existence claims.
+;;;    
+;;;    Touretzky (?) 215 页:
+;;;    (some <PRED> <SEQ>) ≈ (find-if <PRED> <SEQ>)
+;;;    - FIND-IF always returns an elt of <SEQ> when true
+;;;    "Notevery not"
+;;;    
+(deftest test-some ()
+  (check
+   (not (some #'evenp '()))
+   (some #'evenp '(1 2 3 4 5))
+   (some (complement #'oddp) '(1 2 3 4 5))
+   (notevery (complement #'evenp) '(1 2 3 4 5))
+   (some (complement #'evenp) '(1 2 3 4 5))
+   (eq t (some #'evenp '(1 2 3 4 5)))
+   (= 2 (find-if #'evenp '(1 2 3 4 5)))
+   (flet ((f (l) (if (every #'evenp l) l nil)))
+     (equal (find-if #'f #1='((1 2 3) (4 5 6) (6 8) (2 4)))
+            (some #'f #1#)))
+   (equal '(6 8) (find-if (partial #'every #'evenp) '((1 2 3) (4 5 6) (6 8) (2 4)))) ; FIND-IF preferable here
+   (some #'char= "asdf" "abcd")
+   (some #'< '(1 2 3) '(3 2 1))
+   (some #'< '(1 2 3) '(3 2))
+   (not (some #'< '(1 2 3) '()))
+   (some #'< '(1 2) '(3 2 1))
+   (not (some #'< '() '(3 2 1)))
+   (some #'numberp '(x :a #\a "foo" 8 (error "Can't get here")))) )
+
+;;;
+;;;    (every <PRED> <SEQ>) ≈ (null (remove-if <PRED> <SEQ>))
+;;;    "Notany not"
+;;;    
+(deftest test-every ()
+  (check
+   (every #'evenp '())
+   (every #'evenp '(2 4 6 8))
+   (every (complement #'oddp) '(2 4 6 8))
+   (notany (complement #'evenp) '(2 4 6 8))
+   (not (every #'evenp '(1 2 3 4 5)))
+   (every #'symbolp #1='(x :a y :foo bar))
+   (eq (null (remove-if #'symbolp #1#)) ; Touretzky ex. 7.27
+       (every #'symbolp #1#))
+   (every #'char-equal "asdf" "ASDF")
+   (every #'< '(1 2 3) '(4 5 6) '(7 8 9))
+   (every #'< '(1 2 3) '()) ; !! Not an issue for Clojure:
+   (every #'< '() '(4 5 6)) ; !!   every only applied to 1 sequence.
+   (every #'char= "asdf" "asdfg") ; !!
+   (not (every #'symbolp '(x :a y 8 (error "Can't get here")))) ))
+
+;;;
+;;;    CLHS says (https://www.lispworks.com/documentation/HyperSpec/Body/f_everyc.htm):
+;;;    (notany <PRED> <SEQ>+) ≡ (not (some <PRED> <SEQ>+))
+;;;    
+;;;                           ≡ (every (complement <PRED>) <SEQ>+)
+;;;    (notany <PRED> <SEQ>) ≈ (null (remove-if-not <PRED> <SEQ>))
+;;;    "Not some" "Every not"
+;;;    
+(deftest test-notany ()
+  (check
+   (notany #'evenp '())
+   (notany #'evenp '(1 3 5 7 9))
+   (notany (complement #'oddp) '(1 3 5 7 9))
+   (every (complement #'evenp) '(1 3 5 7 9))
+   (notany #'numberp #1='(x :a y :foo bar))
+   (eq (null (remove-if-not #'numberp #1#))
+       (notany #'numberp #1#))
+   (notany #'char= "asdf" "ASDF")
+   (notany #'< '(7 8 9) '(4 5 6) '(1 2 3))
+   (notany #'< '(1 2 3) '()) ; !! Not an issue for Clojure:
+   (notany #'< '() '(4 5 6)) ; !!   every only applied to 1 sequence.
+   (not (notany #'numberp '(x :a y 8 (error "Can't get here")))) ))
+
+;;;
+;;;    CLHS says (https://www.lispworks.com/documentation/HyperSpec/Body/f_everyc.htm):
+;;;    (notevery <PRED> <SEQ>+) ≡ (not (every <PRED> <SEQ>+))
+;;;    
+;;;                             ≡ (some (complement <PRED>) <SEQ>+)
+;;;    The 2nd equivalence above is not strict. In other words, NOTEVERY cannot truly
+;;;    be expressed in terms of SOME. In particular, NOTEVERY always returns T or NIL
+;;;    whereas SOME may return some other non-nil value to represent true.
+;;;    
+;;;    Touretzky (?) 215 页:
+;;;    (notevery <PRED> <SEQ>) ≈ (find-if (complement <PRED>) <SEQ>)
+;;;    - FIND-IF-NOT always returns an elt of <SEQ> when true
+;;;    "Some not"
+;;;    
+(deftest test-notevery ()
+  (check
+   (not (notevery #'evenp '()))
+   (notevery #'evenp '(1 2 3 4 5))
+   (notevery (complement #'oddp) '(1 2 3 4 5))
+   (some (complement #'evenp) '(1 2 3 4 5))
+   (notevery (complement #'evenp) '(1 2 3 4 5))
+   (eq t (notevery #'evenp '(1 2 3 4 5)))
+   (= 2 (find-if (complement #'oddp) '(1 2 3 4 5)))
+   (= 2 (find-if-not #'oddp '(1 2 3 4 5)))
+   (flet ((f (l) (if (some #'oddp l) l nil)))
+     (and (find-if-not #'f #1='((1 2 3) (4 5 6) (6 8) (2 4)))
+          (notevery #'f #1#))) ; Does not return element
+   (equal '(6 8) (find-if-not (partial #'some #'oddp) '((1 2 3) (4 5 6) (6 8) (2 4))))
+   (notevery #'char= "asdf" "abcd")
+   (notevery #'< '(1 2 3) '(3 2 1))
+   (notevery #'< '(1 2 3) '(3 2))
+   (not (notevery #'< '(1 2 3) '()))
+   (notevery #'< '(1 2) '(3 2 1))
+   (not (notevery #'< '() '(3 2 1)))
+   (notevery #'symbolp '(x :a #\a "foo" 8 (error "Can't get here")))) )
