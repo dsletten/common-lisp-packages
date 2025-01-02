@@ -1174,3 +1174,56 @@
    (notevery #'< '(1 2) '(3 2 1))
    (not (notevery #'< '() '(3 2 1)))
    (notevery #'symbolp '(x :a #\a "foo" 8 (error "Can't get here")))) )
+
+(deftest test-member ()
+  (check
+   (let ((list (loop for i from 1 to 20 collect i)))
+     (totally (maplist #'(lambda (tail)
+                           (eq tail ; EQ !!
+                               (member (first tail) list)))
+                       list)))
+   (not (member 5 #1='(a b c d)))
+   (equal #2='((1 . 2) (3 . 4)) (member 2 #2# :key #'cdr))
+   (equal (rest #2#) (member 2 #2# :test-not #'= :key #'cdr)) ; CLHS
+   (not (member '(b) #3='((a) (b) (c))))
+   (equal (rest #3#) (member '(b) #3# :test #'equal))
+   (not (member '#:c #1#))
+   (equal '(c d) (member "C" #1# :key #'symbol-name :test #'equal))
+   (equal '(c d) (member '#:c #1# :test #'(lambda (s1 s2) (equal (symbol-name s1) (symbol-name s2)))) )))
+
+(deftest test-remove ()
+  (check
+   (equal '(1 2 3) (remove 4 #1='(1 2 3 4)))
+   (equal #1# (remove 9 #1#))
+   (equal '(a (b c) d) (remove 'c '(a (b c) c d)))
+   (equal '(3 4 5) (remove 3 '(1 2 3 4 5) :test #'>)) ; (> 3 elt)
+   (equal '(1 1 0 -1) (remove 1 #2='(1 2 3 2 1 0 -1) :test #'<)) ; (< 1 elt)
+   ;; PAIP 61 页 argues that this is clearer here
+   (equal '(1 1 0 -1) (remove-if #'(lambda (elt) (> elt 1)) #2#))
+   (equal '(1 1 0 -1) (remove-if (partial* #'> 1) #2#))
+   (equal '(1 1 0 -1) (loop for elt in #2# unless (> elt 1) collect elt))
+   (let ((l #3='(a b c d e)))
+     (remove 'c l)
+     (equal #3# l))
+   (let ((l #3#))
+     (remove 'q l)
+     (equal #3# l))
+   (equal '("pung") (remove 3 '("pung" "foo" "bar" "baz") :key #'length))
+   (equal '("pung") (remove-if #'(lambda (elt) (= (length elt) 3)) '("pung" "foo" "bar" "baz"))) ; Better?
+   (equal '(2 3 4) (remove 1 #4='(1 2 1 3 1 4)))
+   (equal '(2 1 3 1 4) (remove 1 #4# :count 1))
+   (equal '(2 3 1 4) (remove 1 #4# :count 2))
+   (equal '(1 2 1 3 4) (remove 1 #4# :from-end t :count 1))
+   (equal '(1 2 3 4) (remove 1 #4# :from-end t :count 2))))
+   
+(deftest test-mapcar ()
+  (check
+   (equal '(2 4 6 8) (mapcar (partial #'* 2) '(1 2 3 4)))
+   (equal '(t nil t nil) (mapcar #'< '(1 2 3 4) '(3 2 5 4)))
+   (equal '(1111 2222 3333 4444) (mapcar #'+ '(1 2 3 4) '(10 20 30 40) '(100 200 300 400) '(1000 2000 3000 4000)))
+   (equal '((a 1) (b 2) (c 3)) (mapcar #'list '(a b c) '(1 2 3)))
+   (equal '((a . 1) (b . 2) (c . 3)) (mapcar #'cons '(a b c) '(1 2 3)))
+   (equal #1='(1 2 3 4 5 6) (mapcar #'identity #1#))
+   (= (length #1#) (length (mapcar #'1+ #1#)))) )
+
+
