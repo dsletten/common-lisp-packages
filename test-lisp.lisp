@@ -81,7 +81,7 @@
 ;;;    d = (truncate p q) => r = (rem p q)
 ;;;    d = (floor p q) => r = (mod p q)
 ;;;    
-;;;    C/C++/Java/JavaScript/Oz/Scala/Io % is REM!
+;;;    C/C++/Java/JavaScript/Scala/Io % is REM! (Oz mod!!)
 ;;;        Test even: n % 2 == 0
 ;;;        Test odd:  n % 2 != 0 (Not n % 2 == 1) -3 % 2 => -1
 ;;;
@@ -1095,6 +1095,37 @@
    (not (some #'< '() '(3 2 1)))
    (some #'numberp '(x :a #\a "foo" 8 (error "Can't get here")))) )
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Sidebar: compare SOME vs. FIND-IF
+;; (defun some1 (fn l)
+;;   (cond ((endp l) nil)
+;; 	((funcall fn (first l)))
+;; 	(t (some1 fn (rest l)))) )
+
+;; (defun find-if1 (fn l)
+;;   (cond ((endp l) nil)
+;; 	((funcall fn (first l)) (first l))
+;; 	(t (find-if1 fn (rest l)))) )
+
+;; ;;;
+;; ;;;    Abstraction
+;; ;;;    
+;; (defun traverse (l test xform)
+;;   (cond ((endp l) nil)
+;; 	((funcall test (first l)) (funcall xform (first l)))
+;; 	(t (traverse (rest l) test xform))))
+
+;; (defun some2 (fn l)
+;;   (traverse l fn fn))
+
+;; (defun find-if2 (fn l)
+;;   (traverse l fn #'identity))
+
+
+;; SOME -> FIND-IF:
+;; (some f seq) -> (some #'(lambda (elt) (and (funcall f elt) elt)) seq)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ;;;
 ;;;    (every <PRED> <SEQ>) ≈ (null (remove-if <PRED> <SEQ>))
 ;;;    "Notany not"
@@ -1226,4 +1257,152 @@
    (equal #1='(1 2 3 4 5 6) (mapcar #'identity #1#))
    (= (length #1#) (length (mapcar #'1+ #1#)))) )
 
+(deftest test-subst ()
+  (check
+   (equal '(b (b c (b))) (subst 'b 'a '(a (b c (a)))) )
+   (equal '((is this . pung) not . pung) (subst 'pung 'nil '((is this) not)))
+   (equal '((the hatter) (the hare) and (the dormouse)) ; Touretzky 193 页
+          (subst 'the 'a '((a hatter) (a hare) and (a dormouse))))
+   ;;
+   ;;    Test must be applicable to _any_ subtree.
+   ;;    Not: (subst 'x pi (list 2 3 (list pi)) :test #'=) <-- Error for NIL CDR
+   (equal '(2 3 (x)) (subst 'x pi (list 2 3 (list pi)) :test #'(lambda (old elt) (and (numberp elt) (= old elt)))) )))
 
+(deftest test-push ()
+  (check
+   (let* ((x (list 1 2 3))
+          (y x))
+     (push 0 x)
+     (eq y (rest x)))) )
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/v_lambda.htm
+;;;    
+(deftest test-lambda-list-keywords ()
+  (check
+   (subsetp '(&allow-other-keys &aux &body &environment &key &optional &rest &whole)
+            lambda-list-keywords)
+   (notany #'keywordp lambda-list-keywords)))
+
+(deftest test-optional-parameters ()
+  (flet ((f (a &optional b (c 3) (d 4 e))
+           (list a b c d e)))
+    (check
+     (equal '(1 nil 3 4 nil) (f 1))
+     (equal '(1 2 3 4 nil) (f 1 2))
+     (equal '(1 2 3d0 4 nil) (f 1 2 3d0))
+     (equal '(1 2 3d0 4d0 t) (f 1 2 3d0 4d0)))) )
+
+(deftest test-keyword-parameters ()
+  (flet ((f (&key x (y 99) (z #\Z z-supplied-p))
+           (list x y z z-supplied-p))
+         (g (&key ((:x x)) ((:y y) 99) ((:z z) #\Z z-supplied-p)) ; Identical to F
+           (list x y z z-supplied-p))
+         (h (&key ((epsilon x) 8)) ; Invoked as EPSILON (Thus not really "keyword" parameter). Parameter is X.
+           (list x)))
+    (check
+     (equal '(nil 99 #\Z nil) (f))
+     (equal '(nil 12 #\Z nil) (f :y 12))
+     (equal '(7 12 #\Z nil) (f :y 12 :x 7))
+     (equal '(7 12 #\p t) (f :y 12 :z #\p :x 7))
+
+     (equal '(nil 99 #\Z nil) (g))
+     (equal '(nil 12 #\Z nil) (g :y 12))
+     (equal '(7 12 #\Z nil) (g :y 12 :x 7))
+     (equal '(7 12 #\p t) (g :y 12 :z #\p :x 7))
+
+     (equal '(8) (h))
+     (equal '(9) (h 'epsilon 9)))) ; Not :EPSILON!
+  (flet ((f (&key ((:long-descriptive-external-name x)))
+           (list x)))
+    (check
+     (equal '(nil) (f))
+     (equal '(99) (f :long-descriptive-external-name 99))))
+  ;; https://www.lispworks.com/documentation/HyperSpec/Body/03_dad.htm
+  (flet ((f (&key x) (list x)))
+    (check
+     (equal '(3) (f :x 3))
+     (equal '(2) (f :x 2 :x 3))
+     (equal '(1) (f :x 1 :x 2 :x 3))))
+  (check
+   (string= "aaaa" (make-string 4 :initial-element #\a)) ; Keyword arg evaluated just like any other. Usually transparent since keyword is self-evaluating object.
+   (let ((initial-element :initial-element))
+     (string= "aaaa" (make-string 4 initial-element #\a))))
+  ;; https://www.lispworks.com/documentation/HyperSpec/Body/03_dadaa.htm
+  (check
+   (= 1 ((lambda (&key x) x) :x 1 :y 2 :allow-other-keys t)) ; Caller asserts
+   (= 1 ((lambda (&key x &allow-other-keys) x) :x 1 :y 2)) ; Callee allows
+   ((lambda (&key) t) :allow-other-keys nil)
+   (handler-case ((lambda (&key) t) :allow-other-keys nil :b 9)
+     (error () t)
+     (:no-error () (error "Unknown &KEY argument: :B")))) )
+
+(deftest test-mix-optional-keyword-parameters ()
+  (flet ((f (a &optional b (c 3) &rest d &key e)
+           (list a b c d e)))
+    (check
+     (equal '(10 :e 13 () nil) (f 10 :e 13))
+     (equal '(10 :e 13 (14 15 16 17 :allow-other-keys t) nil)
+            (f 10 :e 13 14 15 16 17 :allow-other-keys t))
+     (handler-case (equal '(10 :e 13 (14 15 16) nil) (f 10 :e 13 14 15 16))
+       (error () t)
+       (:no-error () (error "Odd number of &KEY arguments")))
+     (equal '(10 :e 13 (:e 14) 14) (f 10 :e 13 :e 14)))) )
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_assocc.htm
+;;;    (assoc item alist :test fn) ≡ (find item alist :test fn :key #'car)
+;;;    Except when `item' is NIL.
+;;;    
+(deftest test-assoc ()
+  (check
+   (equal '(jane 21) (assoc 'jane #1='((joe 22) (jane 21) (john 12))))
+   (equal '(john 19) (assoc 'john (cons '(john 19) #1#)))
+   (null (assoc 'tetsuo #1#))
+
+   (equal '(jane . 21) (assoc 'jane #2='((joe . 22) (jane . 21) (john . 12))))
+   (equal '(john . 19) (assoc 'john (acons 'john 19 #2#)))
+   (null (assoc 'tetsuo #2#))
+
+   (null (assoc 2d0 #3='((1 one) (2 two) (3 three))))
+   (equal '(2 two) (assoc 2d0 #3# :test #'=))
+   (null (assoc 1d0 #3# :key #'float))
+   (equal '(1 one) (assoc 1d0 #3# :key (partial* #'float 1d0)))) )
+   
+(deftest test-pairlis ()
+  (check
+   (let* ((keys '(a b c))
+          (values '(1 2 3))
+          (alist (pairlis keys values))) ; (... (a . 1) ...)
+     (every #'(lambda (key) (assoc key alist)) keys))
+   (let* ((keys '(a b c))
+          (values '(1 2 3))
+          (alist (pairlis keys (mapcar #'list values)))) ; (... (a 1) ...)
+     (every #'(lambda (key) (assoc key alist)) keys))
+   (let* ((alist '((a . 1) (b . 2) (c . 3)))
+          (new-alist (pairlis '(d e) '(4 5) alist)))
+     (tailp alist new-alist))))
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_acons.htm
+;;;    (acons key datum alist) ≡ (cons (cons key datum) alist)
+;;;    
+(deftest test-acons ()
+  (check
+   (let ((alist (pairlis '(a b c) '(1 2 3))))
+     (and (null (assoc 'd alist))
+          (equal '(d . 4) (assoc 'd (acons 'd 4 alist)))) )
+   (let ((alist (pairlis '(a b c) '(1 2 3))))
+     (and (null (assoc 'd alist))
+          (equal '(d 4) (assoc 'd (acons 'd '(4) alist)))) )
+   (let ((alist (pairlis '(a b c) '(1 2 3)))) ; Shadow
+     (equal '(a . 4) (assoc 'a (acons 'a '4 alist)))) ))
+
+;;;
+;;;    No REMF/REMPROP for association lists as with property lists.
+;;;    Instead:
+;;;    - Remove all key/value pairs
+;;;    (remove 'b (pairlis '(a b c b d b) '(1 2 3 4 5 6)) :key #'car)
+;;;    - Remove first key/value pair
+;;;    (let ((alist (pairlis '(a b c b d b) '(1 2 3 4 5 6))))
+;;;      (remove (assoc 'b alist) alist))
