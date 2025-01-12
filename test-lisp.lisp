@@ -1349,6 +1349,13 @@
        (:no-error () (error "Odd number of &KEY arguments")))
      (equal '(10 :e 13 (:e 14) 14) (f 10 :e 13 :e 14)))) )
 
+(deftest test-keywordp ()
+  (check
+   (and (symbolp 'pung) (not (keywordp 'pung)))
+   (and (symbolp '&optional) (not (keywordp '&optional)))
+   (and (symbolp ':pung) (keywordp ':pung))
+   (and (symbolp :pung) (keywordp ':pung))))
+
 ;;;
 ;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_assocc.htm
 ;;;    (assoc item alist :test fn) ≡ (find item alist :test fn :key #'car)
@@ -1406,3 +1413,58 @@
 ;;;    - Remove first key/value pair
 ;;;    (let ((alist (pairlis '(a b c b d b) '(1 2 3 4 5 6))))
 ;;;      (remove (assoc 'b alist) alist))
+
+(deftest test-copy-alist ()
+  (let* ((a (pairlis '(a b c) '(1 2 3)))
+         (b (copy-list a))
+         (c (copy-alist a)))
+    (check
+     (equal a b)
+     (equal a c))
+
+    (setf (cdr (assoc 'b c)) 2d0)
+    (check
+     (not (equal a c))
+     (eql (cdr (assoc 'b a)) 2)
+     (eql (cdr (assoc 'b c)) 2d0))
+
+    (setf (cdr (assoc 'a b)) 1d0)
+    (check
+     (equal a b)
+     (eql (cdr (assoc 'a a)) 1d0)
+     (eql (cdr (assoc 'a b)) 1d0)
+     (eql (cdr (assoc 'a c)) 1))))
+
+;; Alist A:
+;;    [*|*]------->[*|*]------->[*|*]--->NIL
+;;     |            |            |
+;;     v            v            v
+;;  +>[*|*]--->3 +>[*|*]--->2 +>[*|*]--->1d0
+;;  |  |         |  |         |  |
+;;  |  v         |  v         |  v
+;;  |  C         |  B         |  A
+;;  |            |            |
+;; [*|*]------->[*|*]------->[*|*]--->NIL
+;; Alist B:
+
+;; Alist C:
+;; [*|*]------->[*|*]------->[*|*]--->NIL
+;;  |            |            |
+;;  v            v            v
+;; [*|*]--->3   [*|*]--->2d0 [*|*]--->1
+;;  |            |            |
+;;  v            v            v
+;;  C            B            A
+
+(deftest test-rassoc ()
+  (let ((a (pairlis '(a b c) '(1 2 3))))
+    (check
+     (equal '(a . 1) (rassoc 1 a))
+     (equal '(b . 2) (rassoc 2 a))
+     (equal '(c . 3) (rassoc 3 a))))
+  (let ((a '((a 1) (b 2) (c 3))))
+    (check
+     (null (rassoc 1 a))
+     (equal '(a 1) (rassoc 1 a :key #'car))
+     (equal '(b 2) (rassoc 2 a :key #'car))
+     (equal '(c 3) (rassoc 3 a :key #'car)))) )
