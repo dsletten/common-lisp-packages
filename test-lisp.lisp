@@ -470,7 +470,33 @@
   (check
    (not (cond))
    (equal '(:foo) (multiple-value-list (cond ((read-from-string "" nil :foo)))) )
-   (equal '(:foo 0) (multiple-value-list (cond (t (read-from-string "" nil :foo)))) )))
+   (equal '(:foo 0) (multiple-value-list (cond (t (read-from-string "" nil :foo)))) )
+   (flet ((gtest (x y) ; Touretzky ex. 4.21
+            (cond ((> x y) t)
+                  ((zerop x) t)
+                  ((zerop y) t)
+                  (t nil))))
+     (check
+      (gtest 9 4)
+      (gtest 9d0 4d0)
+      (gtest 9 4d0)
+      (not (gtest 4 9))
+      (gtest 9 0)
+      (gtest 0 4)
+      (gtest 0d0 0d0)))
+   (flet ((gtest (x y)
+            (cond ((> x y)) ; Predicate is result
+                  ((zerop x))
+                  ((zerop y))
+                  (t nil))))
+     (check
+      (gtest 9 4)
+      (gtest 9d0 4d0)
+      (gtest 9 4d0)
+      (not (gtest 4 9))
+      (gtest 9 0)
+      (gtest 0 4)
+      (gtest 0d0 0d0)))) )
 
 (deftest test-and ()
   (check
@@ -1468,3 +1494,42 @@
      (equal '(a 1) (rassoc 1 a :key #'car))
      (equal '(b 2) (rassoc 2 a :key #'car))
      (equal '(c 3) (rassoc 3 a :key #'car)))) )
+
+(deftest test-sublis ()
+  (check
+   (equal '(john loves jane (who loves bill))
+          (sublis '((mary . john) (john . jane) (jane . bill)) ; (<OLD> . <NEW>)
+                  '(mary loves john (who loves jane))))
+   (equal '(b c c) (sublis '((a . b) (b . c)) '(a b c))) ; Parallel
+   (equal '(c c c) (subst 'c 'b (subst 'b 'a '(a b c)))) ; Sequential
+   (string= "bac aabcb acb"
+            (coerce (sublis '((#\a . #\b) (#\b . #\a))
+                            (coerce "abc bbaca bca" 'list))
+                    'string))))
+
+(deftest test-setf ()
+  (check
+   (let ((x 8)
+         (y 8))
+     (setq x 9)
+     (setf y 9)
+     (= x y))
+   (let ((x 8)
+         (y 8))
+     (declare (special x))
+     (declare (special y))
+     (set 'x 9)
+     (setf (symbol-value 'y) 9)
+     (= x y))
+   (let ((l1 #1=(list 1 2 3))
+         (l2 #1#))
+     (rplaca l1 :foo)
+     (setf (car l2) :foo)
+     (equal l1 l2))
+   (let ((x 1)
+         (y 2)
+         (z 3))
+     (setf x :one y :two z :three)
+     (and (eq x :one)
+          (eq y :two)
+          (eq z :three)))) )
