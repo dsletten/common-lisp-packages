@@ -989,6 +989,7 @@
 
 (deftest test-too-clever ()
   (check
+   (null (setf))
    (null (cond))
    (null (or))
    (null (list))
@@ -1532,4 +1533,42 @@
      (setf x :one y :two z :three)
      (and (eq x :one)
           (eq y :two)
-          (eq z :three)))) )
+          (eq z :three)))
+   (let* ((x 10)
+          (y x))
+     (setf x 9)
+     (= y 10))))
+
+(deftest test-rest-property-list ()
+  (flet ((pung (&rest args &key foo bar)
+           (and (eq foo (getf args :foo))
+                (eq bar (getf args :bar))))
+         (foo (&rest args)
+           (list (getf args :foo) (getf args :bar))))
+    (check
+     (pung :foo 8 :bar 9)
+     (handler-case (pung 2 :foo 8 :bar 9)
+       (error () t)
+       (:no-error () (error "Odd number of &KEY arguments")))
+     (equal '(8 nil) (foo :foo 8))
+     (handler-case (equal '(8 nil) (foo 2 :foo 8))
+       (error () t)
+       (:no-error () (error "malformed property list")))) ))
+
+(deftest test-getf ()
+  (check
+   (let ((plist (list 'joe 22 'jane 21 'john 12)))
+     (and (= 22 (getf plist 'joe))
+          (null (getf plist 'bruno))
+          (= 26 (getf plist 'bruno 26))))
+   (let ((plist (list 'joe 22 'jane 21 'john 12)))
+     (setf (getf plist 'joe) 40
+           (getf plist 'horkimer) 92)
+     (and (= 40 (getf plist 'joe))
+          (= 92 (getf plist 'horkimer))))
+   (let ((plist '()))
+     (incf (getf plist 'count 0))
+     (and (equal '(count 1) plist)
+          (= 1 (getf plist 'count)))) ))
+
+
