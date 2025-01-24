@@ -1561,6 +1561,10 @@
      (and (= 22 (getf plist 'joe))
           (null (getf plist 'bruno))
           (= 26 (getf plist 'bruno 26))))
+   (let ((plist (list :joe 22 :jane 21 :john 12))) ; Practical Common Lisp 306 页
+     (destructuring-bind (&key joe bruno &allow-other-keys) plist
+       (and (= 22 joe)
+            (null bruno))))
    (let ((plist (list 'joe 22 'jane 21 'john 12)))
      (setf (getf plist 'joe) 40
            (getf plist 'horkimer) 92)
@@ -1571,4 +1575,22 @@
      (and (equal '(count 1) plist)
           (= 1 (getf plist 'count)))) ))
 
-
+(deftest test-get-properties ()
+  (let ((plist (list 'joe 22 'jane 21 'john 12)))
+    (check
+     (multiple-value-bind (indicator value tail) (get-properties plist '(bruno sam joe))
+       (and (eq 'joe indicator)
+            (= 22 value)
+            (equal '(joe 22 jane 21 john 12) tail)))
+     (multiple-value-bind (indicator value tail) (get-properties plist '(bruno sam jane))
+       (and (eq 'jane indicator)
+            (= 21 value)
+            (equal '(jane 21 john 12) tail)))
+     (multiple-value-bind (indicator value tail) (get-properties plist '(bruno sam john))
+       (and (eq 'john indicator)
+            (= 12 value)
+            (equal '(john 12) tail)))
+     (multiple-value-bind (indicator value tail) (get-properties plist '(bruno sam))
+       (and (null indicator)
+            (null value)
+            (null tail)))) ))

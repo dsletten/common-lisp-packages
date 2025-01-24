@@ -281,7 +281,7 @@
          (*read-eval* nil)
          (num (handler-case (read-from-string s nil)
                 (error (e)
-                  (format t "Your input is not so good: ~A~%" e)
+                  (format *error-output* "Your input is not so good: ~A~%" e)
                   (return-from read-num nil)))) )
     (if (valid-num-p num test)
         num
