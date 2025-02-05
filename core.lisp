@@ -40,7 +40,7 @@
            :emptyp :ends-with :equalelts :equals :eqls :every-pred :explode
            :filter :filter-split :find-some-if :find-subtree :firsts-rests :for :flatten
            :group :group-until :horners
-	   :if-let :if3 :iffn :in :in-if :inq :is-integer :iterate
+	   :if-let :if3 :iffn :in :in-if :inq :integralp :iterate
            :juxtapose
            :last1 :least :leastn :list-to-string :longerp
            :macroexpand-all :make-empty-seq :make-identity-matrix
@@ -65,6 +65,17 @@
 (in-package :core)
 
 (proclaim '(inline last1 singlep append1 conc1 mklist))
+
+;; (defun integralp (x)
+;;   (zerop (nth-value 1 (truncate x))))
+
+;; (defun integralp (x)
+;;   (multiple-value-bind (_ rem) (truncate x)
+;;     (declare (ignore _))
+;;     (zerop rem)))      
+
+(defun integralp (x)
+  (and (realp x) (zerop (rem x 1))))
 
 (defmacro comment (&body body)
   (declare (ignore body)))

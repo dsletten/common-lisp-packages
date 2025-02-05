@@ -68,8 +68,11 @@
             for sym = (gensym)
             collect `(let ((,sym ,f)) (report-result ,sym ',f) ,sym))))
 
+;; (defun combine-results (&rest args)
+;;   (every #'identity args))
+
 (defun combine-results (&rest args)
-  (every #'identity args))
+  (totally args))
 
 ;; (defmacro combine-results (&body forms)
 ;;   (with-gensyms (result)

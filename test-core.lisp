@@ -36,6 +36,25 @@
 ;;;
 ;dotuples
 
+(deftest test-integralp ()
+  (check
+   (integralp 2)
+   (integralp 2.)
+   (integralp 2.0)
+   (integralp 2d0)
+   (integralp -2)
+   (integralp -2.)
+   (integralp -2.0)
+   (integralp -2d0)
+   (integralp 4/2)
+   (integralp (+ 1/4 1/4 1/4 1/4))
+   (integralp (* 11 1/11))
+   (integralp (sqrt 4))
+   (integralp (sqrt 4d0))
+   (not (integralp pi))
+   (not (integralp (sqrt -1)))
+   (not (integralp 1/3))))
+
 ;;;
 ;;;    Fix the list implementation!!
 ;;;    

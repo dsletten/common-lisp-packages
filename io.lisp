@@ -294,17 +294,6 @@
           t)
       nil))
 
-;; (defun is-integer (x)
-;;   (zerop (nth-value 1 (truncate x))))
-
-;; (defun is-integer (x)
-;;   (multiple-value-bind (_ rem) (truncate x)
-;;     (declare (ignore _))
-;;     (zerop rem)))      
-
-(defun is-integer (x)
-  (and (realp x) (zerop (rem x 1))))
-
 ;;;    The number may be constrained by optional min and max
 ;;;    args (which are inclusive).
 ; (defun get-num (prompt &optional min max)

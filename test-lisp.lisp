@@ -73,8 +73,8 @@
 ;;;    TODO: Fix LOOP
 ;;;
 ;;;    p       r
-;;;    - = d + -
-;;;    q       q
+;;;    - = q + -
+;;;    d       d
 ;;;    
 ;;;    p = qd + r <=> r = p - qd
 ;;;    
@@ -1302,6 +1302,10 @@
      (push 0 x)
      (eq y (rest x)))) )
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;;    Parameter passing
+;;;    
 ;;;
 ;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/v_lambda.htm
 ;;;    
@@ -1315,10 +1319,10 @@
   (flet ((f (a &optional b (c 3) (d 4 e))
            (list a b c d e)))
     (check
-     (equal '(1 nil 3 4 nil) (f 1))
-     (equal '(1 2 3 4 nil) (f 1 2))
-     (equal '(1 2 3d0 4 nil) (f 1 2 3d0))
-     (equal '(1 2 3d0 4d0 t) (f 1 2 3d0 4d0)))) )
+     (equal '(1 nil 3   4   nil) (f 1))
+     (equal '(1 2   3   4   nil) (f 1 2))
+     (equal '(1 2   3d0 4   nil) (f 1 2 3d0))
+     (equal '(1 2   3d0 4d0 t)   (f 1 2 3d0 4d0)))) )
 
 (deftest test-keyword-parameters ()
   (flet ((f (&key x (y 99) (z #\Z z-supplied-p))
@@ -1376,12 +1380,124 @@
        (:no-error () (error "Odd number of &KEY arguments")))
      (equal '(10 :e 13 (:e 14) 14) (f 10 :e 13 :e 14)))) )
 
+;;;
+;;;    &REST parameter can capture keyword args too -> ad hoc property list.
+;;;    But stray args can upset alignment of property list.
+;;;    
+(deftest test-&rest-property-list ()
+  (flet ((pung (&rest args &key foo bar)
+           (and (eq foo (getf args :foo))
+                (eq bar (getf args :bar))))
+         (foo (&rest args)
+           (list (getf args :foo) (getf args :bar))))
+    (check
+     (pung :foo 8 :bar 9)
+
+     (handler-case (pung 2 :foo 8 :bar 9)
+       (error () t)
+       (:no-error () (error "Odd number of &KEY arguments")))
+
+     (equal '(8 nil) (foo :foo 8))
+
+     (handler-case (equal '(8 nil) (foo 2 :foo 8))
+       (error () t)
+       (:no-error () (error "malformed property list")))) ))
+
 (deftest test-keywordp ()
   (check
    (and (symbolp 'pung) (not (keywordp 'pung)))
    (and (symbolp '&optional) (not (keywordp '&optional)))
    (and (symbolp ':pung) (keywordp ':pung))
-   (and (symbolp :pung) (keywordp ':pung))))
+   (and (symbolp :pung) (keywordp :pung))))
+
+(deftest test-setf ()
+  (check
+   (let ((x 8)
+         (y 8))
+     (setq x 9)
+     (setf y 9)
+     (= x y))
+   (let ((x 8)
+         (y 8))
+     (declare (special x))
+     (declare (special y))
+     (set 'x 9)
+     (setf (symbol-value 'y) 9)
+     (= x y))
+   (let ((l1 #1=(list 1 2 3))
+         (l2 #1#))
+     (rplaca l1 :foo)
+     (setf (car l2) :foo)
+     (equal l1 l2))
+   (let ((x 1)
+         (y 2)
+         (z 3))
+     (setf x :one y :two z :three)
+     (and (eq x :one)
+          (eq y :two)
+          (eq z :three)))
+   (let* ((x 10)
+          (y x))
+     (setf x 9)
+     (= y 10))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;;    Association lists (alists) / Property lists (plists)
+;;;    
+;;;    Both represent a map/table/dictionary, e.g.:
+;;;
+;;;    +-+-+
+;;;    |a|1|
+;;;    |-|-|
+;;;    |b|2|
+;;;    |-|-|
+;;;    |c|3|
+;;;    +-+-+
+
+;;;
+;;;    Alist:
+;;;    ((a . 1) (b . 2) (c . 3)) ; Same number of CONS cells as plist
+;;;    
+;;;    [*|*]------->[*|*]------->[*|*]--->NIL 
+;;;     |            |            |           
+;;;     v            v            v           
+;;;    [*|*]--->1   [*|*]--->2   [*|*]--->3   
+;;;     |            |            |           
+;;;     v            v            v           
+;;;     A            B            C           
+
+;;;
+;;;    Alternatively:
+;;;    ((a 1) (b 2) (c 3))
+;;;                                                                         
+;;;    [*|*]------------------>[*|*]------------------>[*|*]--->NIL         
+;;;     |                       |                       |                   
+;;;     v                       v                       v                   
+;;;    [*|*]--->[*|*]--->NIL   [*|*]--->[*|*]--->NIL   [*|*]--->[*|*]--->NIL
+;;;     |        |              |        |              |        |          
+;;;     v        v              v        v              v        v
+;;;     A        1              B        2              C        3          
+
+;;;
+;;;    Plist:
+;;;    (a 1 b 2 c 3)
+;;;    
+;;;    [*|*]--->[*|*]--->[*|*]--->[*|*]--->[*|*]--->[*|*]--->NIL
+;;;     |        |        |        |        |        |          
+;;;     v        v        v        v        v        v          
+;;;     A        1        B        2        C        3          
+;;; 
+;;;    Another way to visualize:
+;;;    
+;;;    [ * | * ]  >[ * | * ]  >[ * | * ]
+;;;      |   |   /   |   |   /   |   |
+;;;      v   V  /    v   V  /    v   V
+;;;      A  [*|*]    B  [*|*]    C  [*|*]--->NIL    
+;;;          |           |           |     
+;;;          v           v           v     
+;;;          1           2           3     
+;;; 
 
 ;;;
 ;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_assocc.htm
@@ -1496,84 +1612,65 @@
      (equal '(b 2) (rassoc 2 a :key #'car))
      (equal '(c 3) (rassoc 3 a :key #'car)))) )
 
-(deftest test-sublis ()
-  (check
-   (equal '(john loves jane (who loves bill))
-          (sublis '((mary . john) (john . jane) (jane . bill)) ; (<OLD> . <NEW>)
-                  '(mary loves john (who loves jane))))
-   (equal '(b c c) (sublis '((a . b) (b . c)) '(a b c))) ; Parallel
-   (equal '(c c c) (subst 'c 'b (subst 'b 'a '(a b c)))) ; Sequential
-   (string= "bac aabcb acb"
-            (coerce (sublis '((#\a . #\b) (#\b . #\a))
-                            (coerce "abc bbaca bca" 'list))
-                    'string))))
-
-(deftest test-setf ()
-  (check
-   (let ((x 8)
-         (y 8))
-     (setq x 9)
-     (setf y 9)
-     (= x y))
-   (let ((x 8)
-         (y 8))
-     (declare (special x))
-     (declare (special y))
-     (set 'x 9)
-     (setf (symbol-value 'y) 9)
-     (= x y))
-   (let ((l1 #1=(list 1 2 3))
-         (l2 #1#))
-     (rplaca l1 :foo)
-     (setf (car l2) :foo)
-     (equal l1 l2))
-   (let ((x 1)
-         (y 2)
-         (z 3))
-     (setf x :one y :two z :three)
-     (and (eq x :one)
-          (eq y :two)
-          (eq z :three)))
-   (let* ((x 10)
-          (y x))
-     (setf x 9)
-     (= y 10))))
-
-(deftest test-rest-property-list ()
-  (flet ((pung (&rest args &key foo bar)
-           (and (eq foo (getf args :foo))
-                (eq bar (getf args :bar))))
-         (foo (&rest args)
-           (list (getf args :foo) (getf args :bar))))
-    (check
-     (pung :foo 8 :bar 9)
-     (handler-case (pung 2 :foo 8 :bar 9)
-       (error () t)
-       (:no-error () (error "Odd number of &KEY arguments")))
-     (equal '(8 nil) (foo :foo 8))
-     (handler-case (equal '(8 nil) (foo 2 :foo 8))
-       (error () t)
-       (:no-error () (error "malformed property list")))) ))
-
 (deftest test-getf ()
   (check
    (let ((plist (list 'joe 22 'jane 21 'john 12)))
-     (and (= 22 (getf plist 'joe))
-          (null (getf plist 'bruno))
-          (= 26 (getf plist 'bruno 26))))
+     (check
+      (= 22 (getf plist 'joe))
+      (null (getf plist 'bruno))
+      (= 26 (getf plist 'bruno 26))))
    (let ((plist (list :joe 22 :jane 21 :john 12))) ; Practical Common Lisp 306 页
      (destructuring-bind (&key joe bruno &allow-other-keys) plist
-       (and (= 22 joe)
-            (null bruno))))
+       (check
+        (= 22 joe)
+        (null bruno))))
    (let ((plist (list 'joe 22 'jane 21 'john 12)))
      (setf (getf plist 'joe) 40
            (getf plist 'horkimer) 92)
-     (and (= 40 (getf plist 'joe))
-          (= 92 (getf plist 'horkimer))))
+     (check
+      (= 40 (getf plist 'joe))
+      (= 92 (getf plist 'horkimer))))
    (let ((plist '()))
      (incf (getf plist 'count 0))
-     (and (equal '(count 1) plist)
-          (= 1 (getf plist 'count)))) ))
+     (check
+      (equal '(count 1) plist)
+      (= 1 (getf plist 'count))))
+   (let ((plist1 '(a 1 b 2 c 3 d)) ; Odd number of elts "OK" as long as last "key" is not accessed
+         (plist2 '(a 1 b 2 c 3)))
+     (check
+      (= (getf plist1 'a) (getf plist2 'a))
+      (= (getf plist1 'b) (getf plist2 'b))
+      (= (getf plist1 'c) (getf plist2 'c))
+      (null (getf plist2 'd))
+      (handler-case (getf plist1 'd) 
+        (error () t)
+        (:no-error () (error "malformed property list")))) )
+   (let ((plist '(c 9 a 1 b 2 c 3))) ; Duplicate key shadowed
+     (check
+      (= 9 (getf plist 'c))
+      (progn (setf (getf plist 'c) 12)
+             (check
+              (equal '(c 12 a 1 b 2 c 3) plist)
+              (= 12 (getf plist 'c)))) ))
+   (let* ((b #\b)
+          (four 4d0)
+          (five 5)
+          (big (expt 3 99))
+          (plist (list "a" 1 b 2 '(c) 3 four 4 five 5 big 6)))
+     (check
+      (null (getf plist "a")) ; Test is EQ. Use symbols for keys.
+      ;;            (null (getf plist #\b)) ; Implementation-dependent
+      (null (getf plist '(c)))
+      ;;            (null (getf plist 4d0)) ; Implementation-dependent
+      ;;            (null (getf plist 5)) ; Implementation-dependent
+      ;;            (null (getf plist (expt 3 99))) ; Implementation-dependent
+      ) )))
+
+;;;
+;;;    No RASSOC for property lists
+;;;
+;; (defun regetf (plist key)
+;;   (getf (reverse plist) key))
 
 (deftest test-get-properties ()
   (let ((plist (list 'joe 22 'jane 21 'john 12)))
@@ -1594,3 +1691,156 @@
        (and (null indicator)
             (null value)
             (null tail)))) ))
+
+(deftest test-remf ()
+  (check
+   (let* ((plist1 (list 'joe 22 'jane 21 'john 12))
+          (plist2 plist1))
+     (check
+      (remf plist1 'joe)
+      (null (remf plist1 'joe)) ; Already gone
+      (= 4 (length plist1))
+      (= 6 (length plist2)) ; Implementation-dependent?
+      (eq :foo (getf plist1 'joe :foo))
+      (= 22 (getf plist2 'joe :foo)) ; Implementation-dependent?
+
+      (remf plist1 'john)
+      (= 2 (length plist1))
+      (= 4 (length plist2)) ; Implementation-dependent?
+      (/= 6 (length plist2)) ; Guaranteed? Tail is destructively modified.
+      (eq :foo (getf plist1 'john :foo))
+      (eq :foo (getf plist2 'john :foo))
+
+      (null (remf plist1 'tony))))
+   (let ((plist (list 'joe 27 'joe 22 'jane 21 'john 12)))
+     (check
+      (= 27 (getf plist 'joe))
+
+      (remf plist 'joe)
+      (= 22 (getf plist 'joe))
+
+      (remf plist 'joe)
+      (eq :foo (getf plist 'joe :foo))
+      
+      (null (remf plist 'joe)))) ; Already gone
+   (let ((plist (list 'c 9 'a 1 'b 2 'c 3))) ; Duplicate key shadowed
+     (check
+      (= 9 (getf plist 'c)) ; Shadowed
+      (remf plist 'c)
+      (equal '(a 1 b 2 c 3) plist)
+      (= 3 (getf plist 'c)) ; Unshadowed
+
+      (remf plist 'c)
+      (equal '(a 1 b 2) plist)
+      (eq :foo (getf plist 'c :foo)) ; Removed
+
+      (null (remf plist 'c)))) ))
+
+(deftest test-symbol-plist ()
+  (let ((symbol (make-symbol "KID-CHARLEMAGNE"))
+        (plist (list :gas-in-the-car t 'people-down-the-hall-know-who-you-are 'maybe)))
+    (check
+     (null (symbol-plist symbol))
+     (progn (setf (symbol-plist symbol) plist)
+            (eq (symbol-plist symbol) plist))
+     (eq t (get symbol :gas-in-the-car))
+     (eq 'maybe (get symbol 'people-down-the-hall-know-who-you-are))
+     (not (boundp symbol)))) ) ; Existence of symbol property list has nothing to do with whether symbol names a bound variable.
+
+(deftest test-get ()
+  (let ((symbol (make-symbol "BABS")))
+    (check
+     (null (get symbol 'spouse))
+     (null (get symbol 'hotel))
+     (null (get symbol 'divorce))
+
+     (setf (get symbol 'spouse) 'clean-willy
+           (get symbol 'hotel) 'bon-marché
+           (get symbol 'divorce) 'haitian)
+     (eq 'clean-willy (get symbol 'spouse))
+     (eq 'bon-marché (get symbol 'hotel))
+     (eq 'haitian (get symbol 'divorce))
+
+     ;;    https://www.lispworks.com/documentation/HyperSpec/Body/f_get.htm
+     ;;    (get x y) ≡ (getf (symbol-plist x) y)
+     (every #'(lambda (indicator)
+                (eq (getf (symbol-plist symbol) indicator)
+                    (get symbol indicator)))
+            '(spouse hotel divorce)))) )
+
+;;;
+;;;    GETF:REMF::GET:REMPROP
+;;;    (GET:GETF::REMPROP:REMF) ???
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_rempro.htm
+;;;    (remprop x y) ≡ (remf (symbol-plist x) y)
+;;;    
+(deftest test-remprop ()
+  (let ((symbol (make-symbol "SANTA-ANA-WINDS"))
+        (plist (list 'kid :will-live-and-learn 'i-am-the-only-one t 'you-gotta :shake-it-baby)))
+    (setf (symbol-plist symbol) plist)
+    (check
+      (remprop symbol 'kid)
+      (null (remprop symbol 'kid)) ; Already gone
+      (= 4 (length (symbol-plist symbol)))
+      (eq :foo (get symbol 'kid :foo)))
+   (let ((symbol (make-symbol "GREEN-EARRINGS"))
+         (plist (list 'flies-on-me :no 'flies-on-me :yes 'design 'rare)))
+     (setf (symbol-plist symbol) plist)
+     (check
+      (eq :no (get symbol 'flies-on-me))
+
+      (remprop symbol 'flies-on-me)
+      (eq :yes (get symbol 'flies-on-me))
+
+      (remprop symbol 'flies-on-me)
+      (eq :foo (get symbol 'flies-on-me :foo))
+      
+      (null (remprop symbol 'flies-on-me)))) ; Already gone
+   (let ((symbol (make-symbol "BODHISATTVA"))
+         (plist (list 'sparkle :china 'shine :japan 'sell-my-house-in-town t 'sparkle :india))) ; Duplicate key shadowed
+     (setf (symbol-plist symbol) plist)
+     (check
+      (eq :china (get symbol 'sparkle)) ; Shadowed
+      (remprop symbol 'sparkle)
+      (equal '(shine :japan sell-my-house-in-town t sparkle :india) (symbol-plist symbol))
+      (eq :india (get symbol 'sparkle)) ; Unshadowed
+
+      (remprop symbol 'sparkle)
+      (equal '(shine :japan sell-my-house-in-town t) (symbol-plist symbol))
+      (eq :foo (get symbol 'sparkle :foo)) ; Removed
+
+      (null (remprop symbol 'sparkle)))) ))
+
+;;;
+;;;    Older versions of Lisp had PUT/PUTPROP functions to set values on plists.
+;;;    Unnecessary in Common Lisp: (SETF (GET ...))
+;;;
+;; (defun put (object property value)
+;;   (setf (get object property) value))
+
+;;;
+;;;    https://www.lispworks.com/documentation/HyperSpec/Body/f_get.htm
+;;;    There is no way using GET to distinguish an absent property from one whose value is default.
+;;;    ?????
+;; (defun hasprop (symbol prop)
+;;   (let ((flag (list 'pung)))
+;;     (not (eq (get symbol prop flag) flag)))) ; Retrieved property couldn't possibly be EQ to fresh CONS
+
+;; (defun hasprop (symbol prop)
+;;   (and (get-properties (symbol-plist symbol) (list prop)) t))
+
+;;;
+;;;    Application of alist
+;;;    
+(deftest test-sublis ()
+  (check
+   (equal '(john loves jane (who loves bill))
+          (sublis '((mary . john) (john . jane) (jane . bill)) ; (<OLD> . <NEW>)
+                  '(mary loves john (who loves jane))))
+   (equal '(b c c) (sublis '((a . b) (b . c)) '(a b c))) ; Parallel
+   (equal '(c c c) (subst 'c 'b (subst 'b 'a '(a b c)))) ; Sequential
+   (string= "bac aabcb acb"
+            (coerce (sublis '((#\a . #\b) (#\b . #\a))
+                            (coerce "abc bbaca bca" 'list))
+                    'string))))
