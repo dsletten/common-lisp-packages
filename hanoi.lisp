@@ -23,7 +23,19 @@
 ;;;;   Example:
 ;;;;
 ;;;;   Notes:
+;;;;   ~/lisp/books/Winston/3e/ch05.lisp
 ;;;;
+;;;;   ~/io/io/samples/misc/Hanoi.io
+;;;;   ~/logo/mswlogo/EXAMPLES/MISC/HANOI.LGO
+;;;;   ~/dylan/opendylan-2024.1/sources/examples/console/towers-of-hanoi/hanoi.dylan
+;;;;   ~/java/books/JustJava/CDROM/goodies/jikes/jikesos/jt/derek/src/Hanoi.java
+;;;;   ~/lisp/books/Art/abc/ex/hanoi/hanoi.cmd
+;;;;   ~/lisp/books/Tatar/ch05/tower-of-hanoi.lisp
+;;;;   ~/lisp/xlisp/LSP/HANOI.LSP
+;;;;   ~/lisp/pclisp/HANOI.L  (Same as above)
+;;;;   ~/serval/recovery/WebServer/javascript/Objects/MyNa/wroxcod6/ch4code/hanoi1.js
+;;;;   ~/lisp/ACL2/acl2/books/misc/hanoi.lisp
+;;;;   ~/lisp/lelisp/llib/hanoi.ll
 ;;;;
 (load "/home/slytobias/lisp/packages/core.lisp")
 (load "/home/slytobias/lisp/packages/test.lisp")

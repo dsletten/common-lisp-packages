@@ -1517,7 +1517,28 @@
    (null (assoc 2d0 #3='((1 one) (2 two) (3 three))))
    (equal '(2 two) (assoc 2d0 #3# :test #'=))
    (null (assoc 1d0 #3# :key #'float))
-   (equal '(1 one) (assoc 1d0 #3# :key (partial* #'float 1d0)))) )
+   (equal '(1 one) (assoc 1d0 #3# :key (partial* #'float 1d0)))
+
+   ;;
+   ;;    Modify existing entry
+   ;;    
+   (let* ((keys '(a b c))
+          (values '(1 2 3))
+          (alist (pairlis keys values)))
+     (check
+      (handler-case (setf (assoc 'a alist) 5)
+        (undefined-function () t)
+        (:no-error () (error "The function (SETF ASSOC) is undefined.")))
+
+      (= 3 (cdr (assoc 'c alist)))
+      (progn
+        (setf (cdr (assoc 'c alist)) 99)
+        (= 99 (cdr (assoc 'c alist))))
+        
+      (= 1 (cdr (assoc 'a alist)))
+      (progn
+        (rplacd (assoc 'a alist) 12)
+        (= 12 (cdr (assoc 'a alist)))) ))))
    
 (deftest test-pairlis ()
   (check
@@ -1536,6 +1557,8 @@
 ;;;
 ;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_acons.htm
 ;;;    (acons key datum alist) ≡ (cons (cons key datum) alist)
+;;;
+;;;    Add new key/value or shadow existing key. Can't tell, doesn't detect.
 ;;;    
 (deftest test-acons ()
   (check
@@ -1844,3 +1867,81 @@
             (coerce (sublis '((#\a . #\b) (#\b . #\a))
                             (coerce "abc bbaca bca" 'list))
                     'string))))
+
+
+;;;
+;;;    :KEY is only applied to elements of <SEQUENCE> _not_ to <ITEM> with FIND
+;;;    https://www.lispworks.com/documentation/HyperSpec/Body/f_find_.htm
+;;;    
+;;;    (find <ITEM> <SEQUENCE> &key from-end test test-not start end key)
+;;;    
+;; (find '(1) '(1 (1) 2 (2)))
+;; NIL
+;; (find '(1) '(1 (1) 2 (2)) :test #'equal)
+;; (1)
+;; (find '(1) '((1) (2)) :key #'car)
+;; NIL
+;; (find '(1) '((1) (1 2)) :key #'car)
+;; NIL
+;; (find '(1) '((1) ((1) 2)) :key #'car)
+;; NIL
+;; (find '(1) '((1) ((1) 2)) :key #'car :test #'equal)
+;; ((1) 2)
+
+
+;;;
+;;;    17.2.1 Satisfying a Two-Argument Test
+;;;    https://www.lispworks.com/documentation/HyperSpec/Body/17_ba.htm
+;;;
+;;;    "The function designated by the :key argument is never called on O itself."
+;;;                                                     ^^^^^^^^^^^^^^^^^^^^^^^^
+;;;
+;;;     (17.2.2 Satisfying a One-Argument Test
+;;;      https://www.lispworks.com/documentation/HyperSpec/Body/17_bb.htm)
+
+
+;;;
+;;;    :KEY is applied to both <ITEM> and elt of <PLACE> for ADJOIN/PUSHNEW
+;;;            ^^^^^^^^^^      ^^^^^^
+;;;    https://www.lispworks.com/documentation/HyperSpec/Body/m_pshnew.htm
+;;;    If :key is supplied, it is used to extract the part to be tested from
+;;;    both item and the list element, as for adjoin.
+;;;
+;;;    https://www.lispworks.com/documentation/HyperSpec/Body/f_adjoin.htm
+;;;    (adjoin <ITEM> <LIST> &key key test test-not)
+;;;    
+;;;    But ADJOIN documentation is weaselly:
+;;;    The test, test-not, and key affect how it is determined whether item is the same
+;;;    as an element of list. For details, see
+;;;    Section 17.2.1 (Satisfying a Two-Argument Test).
+;;;
+;;;    Obviously the CONS (b . 12) is not present in the alist. FIRST is applied to
+;;;    both <ITEM> and each elt of <LIST>...
+;; (adjoin (cons 'b 12) (pairlis '(a b c) '(1 2 3)) :key #'first)
+;; ((C . 3) (B . 2) (A . 1))
+;; (adjoin (cons 'd 12) (pairlis '(a b c) '(1 2 3)) :key #'first)
+;; ((D . 12) (C . 3) (B . 2) (A . 1))
+
+;;;
+;;;     CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_adjoin.htm
+;;;     (adjoin item list :key fn) ≡ (if (member (fn item) list :key fn) list (cons item list))
+;;;     
+(deftest test-adjoin ()
+  (check
+   (let ((l '(a b c)))
+     (check
+      (equal l (adjoin 'a l))
+      (equal (cons 'd l) (adjoin 'd l))))
+   (let ((l '("foo" "bar" "baz")))
+     (check
+      (equal (cons "baz" l) (adjoin "baz" l))
+      (equal l (adjoin "baz" l :test #'string=))
+      (equal (cons "BAZ" l) (adjoin "BAZ" l))
+      (equal l (adjoin "BAZ" l :test #'string-equal))
+      (equal l (adjoin "BAZ" l :test #'string= :key #'string-downcase))))
+   (let ((l '((1 x) (2 y) (3d0 z))))
+     (check
+      (equal (cons '(2 :y) l) (adjoin '(2 :y) l))
+      (equal l (adjoin '(2 :y) l :key #'first)) ; :KEY applied to <ITEM> _and_ each elt of <LIST>
+      (equal (cons '(3 :z) l) (adjoin '(3 :z) l :key #'first))
+      (equal l (adjoin '(3 :z) l :key #'first :test #'=)))) ))
