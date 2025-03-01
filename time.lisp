@@ -37,6 +37,7 @@
            :month :month-length :month-names
            :precedesp
            :short-day-names :short-month-names
+           :valid-day-p
            :year :yyyy-mm-dd))
 
 (in-package :time)
@@ -134,6 +135,9 @@
   (cond ((zerop (mod year 400)) t)
         ((zerop (mod year 100)) nil)
         (t (zerop (mod year 4)))) )
+
+(defun valid-day-p (day month year)
+  (<= 1 day (month-length month year)))
 
 ;; (deftype month () '(integer 1 12)) ; Should be 0-11? See above.
 ;; (deftype day (m y) `(integer 1 ,(month-length m y)))

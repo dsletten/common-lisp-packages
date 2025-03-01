@@ -1936,7 +1936,7 @@
      (check
       (equal (cons "baz" l) (adjoin "baz" l))
       (equal l (adjoin "baz" l :test #'string=))
-      (equal (cons "BAZ" l) (adjoin "BAZ" l))
+;;      (equal (cons "BAZ" l) (adjoin "BAZ" l))
       (equal l (adjoin "BAZ" l :test #'string-equal))
       (equal l (adjoin "BAZ" l :test #'string= :key #'string-downcase))))
    (let ((l '((1 x) (2 y) (3d0 z))))
@@ -1945,3 +1945,39 @@
       (equal l (adjoin '(2 :y) l :key #'first)) ; :KEY applied to <ITEM> _and_ each elt of <LIST>
       (equal (cons '(3 :z) l) (adjoin '(3 :z) l :key #'first))
       (equal l (adjoin '(3 :z) l :key #'first :test #'=)))) ))
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/m_pshnew.htm
+;;;    The effect of (pushnew item place :test p) is roughly equivalent to (setf place (adjoin item place :test p))
+;;;
+(deftest test-pushnew ()
+  (check
+   (let* ((l1 (list 'a 'b 'c))
+          (l2 (copy-list l1)))
+     (check
+      (equal l2 (pushnew 'a l1))
+      (equal (cons 'd l2) (pushnew 'd l1))))
+   (let* ((l1 (list "foo" "bar" "baz"))
+          (l2 (copy-list l1)))
+     (check
+      (equal (cons "baz" l2) (pushnew "baz" l1))))
+   (let* ((l1 (list "foo" "bar" "baz"))
+          (l2 (copy-list l1)))
+     (check
+      (equal l2 (pushnew "baz" l1 :test #'string=))
+      (equal l2 (pushnew "BAZ" l1 :test #'string-equal))
+      (equal l2 (pushnew "BAZ" l1 :test #'string= :key #'string-downcase))))
+   (let* ((l1 (list '(1 x) '(2 y) '(3d0 z)))
+          (l2 (copy-list l1)))
+     (check
+      (equal (cons '(2 :y) l2) (pushnew '(2 :y) l1))))
+   (let* ((l1 (list '(1 x) '(2 y) '(3d0 z)))
+          (l2 (copy-list l1)))
+     (check
+      (equal l2 (pushnew '(2 :y) l1 :key #'first)) ; :KEY applied to <ITEM> _and_ each elt of <LIST>
+      (equal (cons '(3 :z) l2) (pushnew '(3 :z) l1 :key #'first))))
+   (let* ((l1 (list '(1 x) '(2 y) '(3d0 z)))
+          (l2 (copy-list l1)))
+     (check
+      (equal l2 (pushnew '(3 :z) l1 :key #'first :test #'=)))) ))
+

@@ -66,14 +66,6 @@
 
 (proclaim '(inline last1 singlep append1 conc1 mklist))
 
-;; (defun integralp (x)
-;;   (zerop (nth-value 1 (truncate x))))
-
-;; (defun integralp (x)
-;;   (multiple-value-bind (_ rem) (truncate x)
-;;     (declare (ignore _))
-;;     (zerop rem)))      
-
 (defun integralp (x)
   (and (realp x) (zerop (rem x 1))))
 
