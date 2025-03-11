@@ -240,10 +240,10 @@
    (not (oddp 2.))
    (handler-case (not (oddp 2/3))
      (type-error () t)
-     (:no-error () (error "Only applicable to integers.")))
+     (:no-error (_) (error "Only applicable to integers.")))
    (handler-case (not (oddp pi))
      (type-error () t)
-     (:no-error () (error "Only applicable to integers.")))) )
+     (:no-error (_) (error "Only applicable to integers.")))) )
 
 (deftest test-evenp ()
   (check
@@ -253,10 +253,10 @@
    (not (evenp 3.))
    (handler-case (not (evenp 2/3))
      (type-error () t)
-     (:no-error () (error "Only applicable to integers.")))
+     (:no-error (_) (error "Only applicable to integers.")))
    (handler-case (not (evenp pi))
      (type-error () t)
-     (:no-error () (error "Only applicable to integers.")))) )
+     (:no-error (_) (error "Only applicable to integers.")))) )
 
 (deftest test-ratios ()
   (check
@@ -272,7 +272,7 @@
    (= 1 (denominator 8))
    (handler-case (denominator 8.0)
      (type-error () t)
-     (:no-error () (error "Only applicable to RATIONAL numbers.")))) ) ; Not specified in CLHS?
+     (:no-error (_) (error "Only applicable to RATIONAL numbers.")))) ) ; Not specified in CLHS?
 
 ;;;
 ;;;    Cannot haphazardly apply Boolean algebra:
@@ -386,11 +386,11 @@
    (= 0.1l0 (coerce 1/10 'long-float))
    (handler-case (coerce 2 'bignum)
      (type-error () t)
-     (:no-error () (error "Can't make integer something that it's not.")))
+     (:no-error (_) (error "Can't make integer something that it's not.")))
    (handler-case (coerce (expt 3 9999) 'fixnum) ; caught STYLE-WARNING: Lisp error during constant folding:
                                         ; 5437833951142086247677... can't be converted to type FIXNUM.
      (type-error () t)
-     (:no-error () (error "Can't make integer something that it's not.")))) )
+     (:no-error (_) (error "Can't make integer something that it's not.")))) )
 
 ;;  TODO: Fix LOOP
 (deftest test-integer-coercion ()
@@ -564,16 +564,16 @@
   (check
    (handler-case (/ 3 0)
      (division-by-zero () t)
-     (:no-error () (error "Since when is this allowed?")))
+     (:no-error (_) (error "Since when is this allowed?")))
    (handler-case (/ 3d0 0d0)
      (division-by-zero () t)
-     (:no-error () (error "Since when is this allowed?")))
+     (:no-error (_) (error "Since when is this allowed?")))
    (handler-case (/ most-positive-double-float least-positive-double-float)
      (floating-point-overflow () t)
-     (:no-error () (error "Less is more.")))
+     (:no-error (_) (error "Less is more.")))
    (handler-case (* most-positive-double-float 10d0)
      (floating-point-overflow () t)
-     (:no-error () (error "Less is more.")))
+     (:no-error (_) (error "Less is more.")))
    (zerop (/ least-positive-double-float most-positive-double-float)) ; Underflow???
    (zerop (expt 10d0 -500))))
 
@@ -706,7 +706,7 @@
    (not (endp '(a . b)))
    (handler-case (endp (cdr '(a . b)))
      (type-error () t)
-     (:no-error () (error "Value is not a list.")))) )
+     (:no-error (_) (error "Value is not a list.")))) )
 
 ;;;
 ;;;    https://www.lispworks.com/documentation/HyperSpec/Body/f_eq.htm#eq
@@ -947,7 +947,7 @@
      (setf (rest l2) '(:two))
      (handler-case (setf (nthcdr 1 l3) '(:two))
        (undefined-function () t)
-       (:no-error () (error "#'(SETF NTHCDR) is undefined.")))
+       (:no-error (_) (error "#'(SETF NTHCDR) is undefined.")))
      (equal l1 l2))))
 
 (deftest test-last ()
@@ -1366,7 +1366,7 @@
    ((lambda (&key) t) :allow-other-keys nil)
    (handler-case ((lambda (&key) t) :allow-other-keys nil :b 9)
      (error () t)
-     (:no-error () (error "Unknown &KEY argument: :B")))) )
+     (:no-error (_) (error "Unknown &KEY argument: :B")))) )
 
 (deftest test-mix-optional-keyword-parameters ()
   (flet ((f (a &optional b (c 3) &rest d &key e)
@@ -1377,7 +1377,7 @@
             (f 10 :e 13 14 15 16 17 :allow-other-keys t))
      (handler-case (equal '(10 :e 13 (14 15 16) nil) (f 10 :e 13 14 15 16))
        (error () t)
-       (:no-error () (error "Odd number of &KEY arguments")))
+       (:no-error (_) (error "Odd number of &KEY arguments")))
      (equal '(10 :e 13 (:e 14) 14) (f 10 :e 13 :e 14)))) )
 
 ;;;
@@ -1395,13 +1395,13 @@
 
      (handler-case (pung 2 :foo 8 :bar 9)
        (error () t)
-       (:no-error () (error "Odd number of &KEY arguments")))
+       (:no-error (_) (error "Odd number of &KEY arguments")))
 
      (equal '(8 nil) (foo :foo 8))
 
      (handler-case (equal '(8 nil) (foo 2 :foo 8))
        (error () t)
-       (:no-error () (error "malformed property list")))) ))
+       (:no-error (_) (error "malformed property list")))) ))
 
 (deftest test-keywordp ()
   (check
@@ -1528,7 +1528,7 @@
      (check
       (handler-case (setf (assoc 'a alist) 5)
         (undefined-function () t)
-        (:no-error () (error "The function (SETF ASSOC) is undefined.")))
+        (:no-error (_) (error "The function (SETF ASSOC) is undefined.")))
 
       (= 3 (cdr (assoc 'c alist)))
       (progn
@@ -1667,7 +1667,7 @@
       (null (getf plist2 'd))
       (handler-case (getf plist1 'd) 
         (error () t)
-        (:no-error () (error "malformed property list")))) )
+        (:no-error (_) (error "malformed property list")))) )
    (let ((plist '(c 9 a 1 b 2 c 3))) ; Duplicate key shadowed
      (check
       (= 9 (getf plist 'c))
@@ -1981,3 +1981,142 @@
      (check
       (equal l2 (pushnew '(3 :z) l1 :key #'first :test #'=)))) ))
 
+;;;
+;;;    "Set" operations. Questionable for CONS-based sets.
+;;;    A more sophisticated implementation should probably be used in most cases...
+;;;
+;;;    https://en.wikipedia.org/wiki/Algebra_of_sets
+;;;    https://en.wikipedia.org/wiki/List_of_set_identities_and_relations
+;;;    https://en.wikipedia.org/wiki/Complement_(set_theory)#Relative_complement
+;;;    
+(flet ((set-equal (a b &rest keys)
+         (and (apply #'subsetp a b keys)
+              (apply #'subsetp b a keys)))
+       (random-subset (a)
+         (loop for elt in a
+               when (zerop (random 2)) collect elt))
+       (∪ (a b &rest keys) (apply #'union a b keys))
+       (∩ (a b &rest keys) (apply #'intersection a b keys)))
+  (deftest test-intersection ()
+    (check
+     (let* ((u (loop for i from 1 to 100 collect i))
+            (a (random-subset u))
+            (b (random-subset u))
+            (c (random-subset u)))
+       (check
+        (every (compose #'null (partial #'∩ '())) #1=(list a b c u)) ; Empty set
+        (every (compose #'null (partial* #'∩ '())) #1#)
+        (every #'(lambda (set) (set-equal set (∩ set u))) #1#) ; Universal set
+        (every #'(lambda (set) (set-equal set (∩ u set))) #1#)
+        (every #'(lambda (set) (set-equal set (∩ set set))) #1#) ; Self
+        (every #'(lambda (set1 set2) (set-equal (∩ set1 set2) (∩ set2 set1))) ; Commutative
+               (list a a b)
+               (list b c c))
+        (set-equal (∩ a (∩ b c)) (∩ (∩ a b) c)))) ; Associative
+     (let ((a '(a a a)) ; Pathological "sets"
+           (b '(b b b b)))
+       (check
+        (null (∩ '() a))
+        (set-equal a (∩ a a))
+        (set-equal b (∩ b b))
+        (set-equal (∩ a b) (∩ b a))))
+     (let ((a '(1 3 5 7))
+           (b '(3d0 6d0 8d0)))
+       (check
+        (null (∩ a b))
+        (set-equal '(3) (∩ a b :test #'=) :test #'=)
+        (set-equal '(3) (∩ a b :key (partial* #'coerce 'double-float)) :key (partial* #'coerce 'double-float))))
+     (let ((a '("A" "B" "C" "D"))
+           (b '("d" "c" "a" "b")))
+       (check
+        (null (∩ a b))
+        (set-equal a (∩ a b :test #'string-equal) :test #'string-equal)
+        (set-equal a (∩ a b :key #'string-downcase :test #'string=) :key #'string-downcase :test #'string=)
+        (set-equal a (∩ a b :test #'equalp) :test #'equalp)
+        (set-equal a (∩ a b :key #'string-downcase :test #'equal) :key #'string-downcase :test #'equal)))) )
+
+  (deftest test-union ()
+    (check
+     (let* ((u (loop for i from 1 to 100 collect i))
+            (a (random-subset u))
+            (b (random-subset u))
+            (c (random-subset u)))
+       (check
+        (every #'(lambda (set) (set-equal set (∪ '() set))) #1#) ; Empty set
+        (every #'(lambda (set) (set-equal set (∪ set '()))) #1#)
+        (every #'(lambda (set) (set-equal u (∪ set u))) #1#) ; Universal set
+        (every #'(lambda (set) (set-equal u (∪ u set))) #1#)
+        (every #'(lambda (set) (set-equal set (∪ set set))) #1#) ; Self
+        (every #'(lambda (set1 set2) (set-equal (∪ set1 set2) (∪ set2 set1))) ; Commutative
+               (list a a b)
+               (list b c c))
+        (set-equal (∪ a (∪ b c)) (∪ (∪ a b) c)))) ; Associative
+     (let ((a '(a a a)) ; Pathological "sets"
+           (b '(b b b b)))
+       (check
+        (set-equal a (∪ '() a))
+        (set-equal (∪ a a) (∪ a a))
+        (set-equal (∪ b b) (∪ b b))
+        (set-equal (∪ a b) (∪ b a))))
+     (let ((a '(1 3 5 7))
+           (b '(3d0 6d0 8d0)))
+       (check
+        (set-equal (append a b) (∪ a b))
+        (set-equal '(1 3 5 7 6 8) (∪ a b :test #'=) :test #'=)
+        (set-equal '(1 3 5 7 6 8) (∪ a b :key (partial* #'coerce 'double-float)) :key (partial* #'coerce 'double-float))
+        (not (set-equal (append a b) (∪ a b :test #'=)))
+        (or (not (member 3 (∪ a b :test #'=)))
+            (not (member 3d0 (∪ a b :test #'=)))) ))
+     (let ((a '("A" "B" "C" "D"))
+           (b '("d" "c" "a" "b")))
+       (check
+        (set-equal (append a b) (∪ a b))
+        (set-equal a (∪ a b :test #'string-equal) :test #'string-equal)
+        (set-equal a (∪ a b :key #'string-downcase :test #'string=) :key #'string-downcase :test #'string=)
+        (set-equal a (∪ a b :test #'equalp) :test #'equalp)
+        (set-equal a (∪ a b :key #'string-downcase :test #'equal) :key #'string-downcase :test #'equal)))
+     (set-equal '((x 5) (y 6) (z 2)) (∪ '((x 5) (y 6)) '((z 2) (x 4)) :key #'car) :key #'car))) ; CLHS example
+
+  ;;    TODO: Fix LOOP result value
+  (deftest test-set-difference ()
+    (check
+     (loop repeat 10
+           for u = (loop for i from 1 to 100 collect i)
+           for a = (random-subset u)
+           for b = (random-subset u)
+           for c = (random-subset u)
+           do (check
+               (set-equal (set-difference c (∩ a b))
+                          (∪ (set-difference c a) (set-difference c b)))
+               (set-equal (set-difference c (∪ a b))
+                          (∩ (set-difference c a) (set-difference c b)))
+               (set-equal (set-difference c (set-difference b a))
+                          (∪ (∩ c a) (set-difference c b)))
+               (set-equal (set-difference c (set-difference c a))
+                          (∩ c a))
+               (set-equal (∩ (set-difference b a) c)
+                          (set-difference (∩ b c) a))
+               (set-equal (∩ (set-difference b a) c)
+                          (∩ b (set-difference c a)))
+               (set-equal (∪ (set-difference b a) c)
+                          (set-difference (∪ b c) (set-difference a c)))
+               (null (set-difference a a))
+               (null (set-difference '() a))
+               (set-equal a (set-difference a '()))
+               (null (set-difference a u))
+               (if (subsetp a b) (subsetp (set-difference c b) (set-difference c a)) t)))) ))
+
+(deftest test-subsetp ()
+  (check
+   (subsetp '() '())
+   (subsetp '() #1='(a b c))
+   (subsetp #1# #1#)
+   (subsetp #1# (reverse #1#))
+   (not (subsetp '("pung" "bar") #2='("pung" "foo" "bar" "baz")))
+   (subsetp '("pung" "bar") #2# :test #'string=)
+   (not (subsetp '("PUNG" "Bar") #2# :test #'string=))
+   (subsetp '("PUNG" "Bar") #2# :test #'string-equal)
+   (subsetp '("PUNG" "Bar") #2# :test #'string= :key #'string-downcase)
+   (handler-case (subsetp '(d) '(a b . c))
+     (type-error () t)
+     (:no-error (_) (error "Arguments must be proper lists")))) )
