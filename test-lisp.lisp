@@ -1988,6 +1988,8 @@
 ;;;    https://en.wikipedia.org/wiki/Algebra_of_sets
 ;;;    https://en.wikipedia.org/wiki/List_of_set_identities_and_relations
 ;;;    https://en.wikipedia.org/wiki/Complement_(set_theory)#Relative_complement
+;;;
+;;;    REMOVE-DUPLICATES (DELETE-DUPLICATES): Arbitrary list -> set
 ;;;    
 (flet ((set-equal (a b &rest keys)
          (and (apply #'subsetp a b keys)
@@ -1996,7 +1998,8 @@
          (loop for elt in a
                when (zerop (random 2)) collect elt))
        (∪ (a b &rest keys) (apply #'union a b keys))
-       (∩ (a b &rest keys) (apply #'intersection a b keys)))
+       (∩ (a b &rest keys) (apply #'intersection a b keys))
+       (∆ (a b &rest keys) (apply #'set-exclusive-or a b keys)))
   (deftest test-intersection ()
     (check
      (let* ((u (loop for i from 1 to 100 collect i))
@@ -2071,6 +2074,8 @@
            (b '("d" "c" "a" "b")))
        (check
         (set-equal (append a b) (∪ a b))
+        (set-equal (remove-duplicates (append a b) :test #'string-equal)
+                   (∪ a b :test #'string-equal) :test #'string-equal)
         (set-equal a (∪ a b :test #'string-equal) :test #'string-equal)
         (set-equal a (∪ a b :key #'string-downcase :test #'string=) :key #'string-downcase :test #'string=)
         (set-equal a (∪ a b :test #'equalp) :test #'equalp)
@@ -2104,7 +2109,16 @@
                (null (set-difference '() a))
                (set-equal a (set-difference a '()))
                (null (set-difference a u))
-               (if (subsetp a b) (subsetp (set-difference c b) (set-difference c a)) t)))) ))
+               (if (subsetp a b) (subsetp (set-difference c b) (set-difference c a)) t)))) )
+  (deftest test-set-exclusive-or ()
+    (check
+     (loop repeat 10
+           for u = (loop for i from 1 to 100 collect i)
+           for a = (random-subset u)
+           for b = (random-subset u)
+           do (check
+               (set-equal (set-difference (∪ a b) (∩ a b)) (∆ a b))
+               (set-equal (∪ (set-difference a b) (set-difference b a)) (∆ a b)))) )))
 
 (deftest test-subsetp ()
   (check
@@ -2120,3 +2134,68 @@
    (handler-case (subsetp '(d) '(a b . c))
      (type-error () t)
      (:no-error (_) (error "Arguments must be proper lists")))) )
+
+;;;
+;;;    Unusual :TEST functions can lead beyond normal set-theoretic concepts.
+;;;    What does this mean?
+;;;    (subsetp '(1 2 3) '(1 2 3 4 5) :test #'<) => T
+
+;; (subsetp '(1d0 2d0 3d0) '(1 2 3 4 5) :test #'(lambda (a b) (print (list a b)) (< a b)))
+
+;; (1.0d0 1) 
+;; (1.0d0 2) 
+;; (2.0d0 1) 
+;; (2.0d0 2) 
+;; (2.0d0 3) 
+;; (3.0d0 1) 
+;; (3.0d0 2) 
+;; (3.0d0 3) 
+;; (3.0d0 4) 
+;; T
+
+;;;    Evidently, each element of the first list is compared to see if the :TEST is true
+;;;    for some element of the second list.
+
+;; (subsetp '(1.1d0 2.1d0 3.1d0) '(1 2 3 4 5) :test #'(lambda (a b) (print (list a b)) (< a b)))
+
+;; (1.1d0 1) 
+;; (1.1d0 2) 
+;; (2.1d0 1) 
+;; (2.1d0 2) 
+;; (2.1d0 3) 
+;; (3.1d0 1) 
+;; (3.1d0 2) 
+;; (3.1d0 3) 
+;; (3.1d0 4) 
+;; T
+
+;;;
+;;;    Rare maps
+;;;
+;; (apropos 'map :cl)
+;; MAP (fbound)
+;; MAP-INTO (fbound)
+;; MAPC (fbound)
+;; MAPCAN (fbound)
+;; MAPCAR (fbound)
+;; MAPCON (fbound)
+;; MAPHASH (fbound)
+;; MAPL (fbound)
+;; MAPLIST (fbound)
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_mapc_.htm
+;;;    (mapcon f x1 ... xn) ≡ (apply #'nconc (maplist f x1 ... xn))
+;;;    (mapcan f x1 ... xn) ≡ (apply #'nconc (mapcar f x1 ... xn))
+;;;
+(deftest test-maps ()
+  (check
+   (let ((a (list 1 2 3))
+         (b (list 4 5 6)))
+     (check
+      (equal '((1 4) (2 5) (3 6)) (mapcar #'list a b))
+      (equal '(1 4 2 5 3 6) (mapcan #'list a b))
+      (equal '(((1 2 3) (4 5 6)) ((2 3) (5 6)) ((3) (6))) (maplist #'list a b))
+      (equal '((1 2 3) (4 5 6) (2 3) (5 6) (3) (6)) (mapcon #'list a b))))
+   (equal (remove-if-not #'numberp #1='(a 1 b c 3 4 d 5))
+          (mapcan #'(lambda (elt) (if (numberp elt) (list elt) '())) #1#)))) ; Old school filter idiom!!

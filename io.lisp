@@ -275,13 +275,13 @@
         (get-num prompt :test test :precision precision)
         num)))
 
-(defun read-num (s &key test (precision 'double-float))
+(defun read-num (s &key test (precision 'double-float) (verbose t))
   "Attempt to read a number from string S. Apply the TEST validity function if provided. Return NIL if value is not valid."
   (let* ((*read-default-float-format* precision)
          (*read-eval* nil)
          (num (handler-case (read-from-string s nil)
                 (error (e)
-                  (format *error-output* "Your input is not so good: ~A~%" e)
+                  (when verbose (format *error-output* "Your input is not so good: ~A~%" e))
                   (return-from read-num nil)))) )
     (if (valid-num-p num test)
         num
