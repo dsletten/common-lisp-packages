@@ -334,8 +334,9 @@
 
 ;(defun readlist (&rest args)
 (defun read-list (&rest args)
-  (values (read-from-string
-           (concatenate 'string "(" (apply #'read-line args) ")"))))
+  (let ((*read-eval* nil))
+    (values (read-from-string
+             (concatenate 'string "(" (apply #'read-line args) ")")))) )
 
 (defun prompt (&rest args)
   (apply #'format *query-io* args)

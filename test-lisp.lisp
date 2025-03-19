@@ -2195,7 +2195,189 @@
      (check
       (equal '((1 4) (2 5) (3 6)) (mapcar #'list a b))
       (equal '(1 4 2 5 3 6) (mapcan #'list a b))
-      (equal '(((1 2 3) (4 5 6)) ((2 3) (5 6)) ((3) (6))) (maplist #'list a b))
-      (equal '((1 2 3) (4 5 6) (2 3) (5 6) (3) (6)) (mapcon #'list a b))))
+      (equal '((1 :P) (2 :Q) (3 :R) (4 :S) (5 :T))
+             (mapcar #'list '(1 2 3 4 5) '(:p :q :r :s :t)))
+      (equal '(1 :P 2 :Q 3 :R 4 :S 5 :T)
+             (mapcan #'list '(1 2 3 4 5) '(:p :q :r :s :t)))
+
+      (equal '(((1 2 3) (4 5 6)) ((2 3) (5 6)) ((3) (6)))
+             (maplist #'list a b))
+      (equal '((1 2 3) (4 5 6) (2 3) (5 6) (3) (6))
+             (mapcon #'list a b))
+      (equal '((1 2 3 4 5) (2 3 4 5) (3 4 5) (4 5) (5))
+             (maplist #'identity '(1 2 3 4 5)))
+      (equal '((1 2 3 4 5) (2 3 4 5) (3 4 5) (4 5) (5))
+             (mapcon #'list '(1 2 3 4 5))) ; Too much CONSing
+      (equal '((1 2 3 4 5) (2 3 4 5) (3 4 5) (4 5) (5))
+             (loop for cons on '(1 2 3 4 5)
+                   collect cons))
+      ;; (mapcon #'identity '(1 2 3 4 5)) ; Whoops! List surgery causes infinite loop...
+      (equal '(1 2 3 4 5 2 3 4 5 3 4 5 4 5 5)
+             (mapcon #'copy-list '(1 2 3 4 5)))) )
    (equal (remove-if-not #'numberp #1='(a 1 b c 3 4 d 5))
           (mapcan #'(lambda (elt) (if (numberp elt) (list elt) '())) #1#)))) ; Old school filter idiom!!
+
+(deftest test-mapcar ()
+  (check
+   (equal '(2 3 4 5 6) (mapcar #'1+ '(1 2 3 4 5)))
+   (equal '(#\A #\B #\C) (mapcar #'char-upcase '(#\a #\b #\c)))
+   (equals '(#(1 :P) #(2 :Q) #(3 :R) #(4 :S) #(5 :T))
+           (mapcar #'vector '(1 2 3 4 5) '(:p :q :r :s :t)))
+   (let ((l '(a b c d e))) ; "Chain" together successive elements
+     (equal '((a b) (b c) (c d) (d e))
+            (mapcar #'list l (rest l)))) ))
+
+(deftest test-maplist ()
+  (check
+   (equal '((1 2 3 4 5) (2 3 4 5) (3 4 5) (4 5) (5))
+          (maplist #'identity '(1 2 3 4 5)))
+   (equal (loop for l on '(1 2 3 4 5) collect l)
+          (maplist #'identity '(1 2 3 4 5)))
+   (equal '(2 3 4 5 6)
+          (maplist #'(lambda (l) (1+ (first l))) '(1 2 3 4 5)))
+   (equal (loop for n in '(1 2 3 4 5) collect (1+ n))
+          (maplist #'(lambda (l) (1+ (first l))) '(1 2 3 4 5)))
+   (equal '(2 3 4 5 6)
+          (maplist (compose #'1+ #'first) '(1 2 3 4 5)))
+   (equal '(#\A #\B #\C)
+          (maplist #'(lambda (l) (char-upcase (first l))) '(#\a #\b #\c)))
+   (equal '(#\A #\B #\C)
+          (maplist (compose #'char-upcase #'first) '(#\a #\b #\c)))) )
+
+(deftest test-map ()
+  (check
+   (equals '#(1.4142135 2.0 2.4494898 2.828427)
+           (map 'vector #'sqrt #(2 4 6 8)))
+   (equal '(1.4142135 2.0 2.4494898 2.828427)
+          (map 'list #'sqrt #(2 4 6 8)))
+   (equals '#(1 3 3 5)
+           (map 'vector #'+ '(1 2 3 4) #(0 1 0 1)))
+   (equal '("CCC" "aa" "t")
+          (map 'list #'(lambda (ch n) (make-string n :initial-element ch)) "Cat" '(3 2 1)))
+   (flet ((scale (alpha x) (* alpha x)))
+     (equals #(2.759386672047811d0 0.8635113660339563d0 2.81095652724814d0 0.9000423886947357d0 0.6632763486385608d0)
+             (map 'vector (partial #'scale 3.4d0) #(0.8115843153081796d0 0.2539739311864577d0 0.8267519197788646d0 0.26471834961609875d0 0.19508127901134142d0))))
+   (flet ((rot-13 (ch)
+            (cond ((char<= #\A (char-upcase ch) #\M) (code-char (+ (char-code ch) 13)))
+                  ((char<= #\N (char-upcase ch) #\Z) (code-char (- (char-code ch) 13)))
+                  (t ch))))
+     (string= "Gur dhvpx oebja sbk whzcf bire gur ynml qbt."
+              (map 'string #'rot-13 "The quick brown fox jumps over the lazy dog.")))) )
+
+(deftest test-side-effect-mapping ()
+  (check
+   (let ((dummy '())) ; CLHS example
+     (mapl #'(lambda (x) (push x dummy)) '(1 2 3 4)) ; Push successive CONSes
+     (equal '((4) (3 4) (2 3 4) (1 2 3 4)) dummy))
+   (let* ((s (make-string-output-stream))
+          (*standard-output* s))
+     (equal '(#\I #\s #\  #\t #\h #\i #\s #\  #\n #\o #\t #\  #\p #\u #\n #\g #\?)
+            (mapc (compose #'write-char #'char-upcase) (coerce "Is this not pung?" 'list)))
+     (string= "IS THIS NOT PUNG?" (get-output-stream-string s)))
+   ;;
+   ;;    Two equivalents
+   ;;    
+   (let* ((s (make-string-output-stream))
+          (*standard-output* s))
+     (loop for ch across "Is this not pung?"
+           do (write-char (char-upcase ch)))
+     (string= "IS THIS NOT PUNG?" (get-output-stream-string s)))
+   (let* ((s (make-string-output-stream))
+          (*standard-output* s))
+     (loop for ch in (coerce "Is this not pung?" 'list)
+           do (write-char (char-upcase ch)))
+     (string= "IS THIS NOT PUNG?" (get-output-stream-string s)))
+   (let* ((s (make-string-output-stream))
+          (*standard-output* s))
+     (map nil (compose #'print #'sqrt) '(2 4 6 8))
+     (string= "
+1.4142135 
+2.0 
+2.4494898 
+2.828427 "
+              (get-output-stream-string s)))) )
+
+;;;
+;;;    NIL and () are "interchangeable" except in the sense that () is not
+;;;    valid syntax for a symbol:
+;;;    ✔ COMMON-LISP:NIL
+;;;    vs.
+;;;    ✘ COMMON-LISP:()
+;;;    
+(deftest test-nil ()
+  (check
+   ;;  NIL is a symbol.
+   (symbolp 'nil)
+   (string= "NIL" (symbol-name 'nil))
+   (string= "NIL" (symbol-name '()))
+   (string= "COMMON-LISP" (package-name (symbol-package 'nil)))
+   ;;  NIL is a boolean value.
+   (typep 'nil 'boolean)
+   ;;  NIL is a list. The only object that is both a symbol and a list.
+   (listp 'nil)
+   (listp '())
+   ;;  NIL represents the empty list: ()
+   (zerop (length 'nil))
+   (null 'nil)
+   (null '())
+   ;;  NIL marks the end of a CONS cell chain for a proper list.
+   ;;  It is omitted from printed representation.
+   (null (last '(a b c d) 0))
+   (null (rest (rest (rest (rest '(a b c d)))) ))
+   (null (cddddr '(a b c d)))
+   (equal '(a b c d) '(a b c d . ()))
+   ;;  NIL is an atom. The only list that is not a CONS.
+   (atom 'nil)
+   ;;  NIL is a constant variable whose value is itself.
+   (eq nil nil)
+   (eq 'nil nil)
+   (eq nil 'nil)
+   (eq 'nil 'nil)
+   ;;  The CAR and CDR of NIL are both defined to be NIL. (Controversial in Common Lisp.)
+   (eq nil (car nil))
+   (eq nil (cdr nil))
+   (eq nil (car (car nil)))
+   (eq nil (cdr (cdr nil)))
+   ;;  NIL is a value of type NULL
+   ;;  CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/t_nil.htm
+   ;;  The type containing the object nil is the type null, not the type nil.
+   (typep nil 'null)
+   ;;  NIL is a type (not a class).
+   ;;  The type nil contains no objects and so is also called the empty type.
+   ;;  The type nil is a subtype of every type. No object is of type nil. 
+   (not (typep nil 'nil))
+;;   (null (typep nil 'nil)) ;; !!
+   (find-class 'null)
+   (not (find-class 'nil nil))))
+
+
+
+;; [*|*]--->[*|*]--->[*|*]--->NIL
+;;  |        |        |
+;;  v        v        v
+;;  EQ      NIL      NIL
+
+;; [*|*]--->[*|*]------------------>[*|*]--->NIL
+;;  |        |                       |
+;;  v        v                       v
+;;  EQ      [*|*]--->[*|*]--->NIL   NIL
+;;           |        |
+;;           v        v
+;;          QUOTE    NIL
+
+;; [*|*]--->[*|*]--->[*|*]--->NIL
+;;  |        |        |
+;;  v        v        v
+;;  EQ      NIL      [*|*]--->[*|*]--->NIL
+;;                    |        |
+;;                    v        v
+;;                   QUOTE    NIL
+
+;; [*|*]--->[*|*]------------------>[*|*]--->NIL
+;;  |        |                       |
+;;  v        v                       v
+;;  EQ      [*|*]--->[*|*]--->NIL   [*|*]--->[*|*]--->NIL
+;;           |        |              |        |
+;;           v        v              v        v
+;;          QUOTE    NIL            QUOTE    NIL
+   
