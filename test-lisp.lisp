@@ -1297,10 +1297,35 @@
 
 (deftest test-push ()
   (check
+   (let ((l '()))
+     (push 1 l)
+     (push 2 l)
+     (push 3 l)
+     (equal '(3 2 1) l))
+   (let ((l (mapcar #'list '(1 2 3))))
+     (push :one (first l))
+     (push :two (second l))
+     (push :three (third l))
+     (equal '((:one 1) (:two 2) (:three 3)) l))
    (let* ((x (list 1 2 3))
           (y x))
      (push 0 x)
      (eq y (rest x)))) )
+
+(deftest test-pop ()
+  (check
+   (let ((l (list 1 2 3)))
+     (check
+      (eql 1 (pop l))
+      (eql 2 (pop l))
+      (eql 3 (pop l))
+      (null l)))
+   (let ((l (mapcar #'list '(:one :two :three) '(1 2 3))))
+     (check
+      (eql :one (pop (first l)))
+      (eql :two (pop (second l)))
+      (eql :three (pop (third l)))
+      (equal '((1) (2) (3)) l)))) )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -2319,16 +2344,19 @@
    ;;  NIL represents the empty list: ()
    (zerop (length 'nil))
    (null 'nil)
+   (null ())
    (null '())
    ;;  NIL marks the end of a CONS cell chain for a proper list.
-   ;;  It is omitted from printed representation.
+   ;;  It is omitted from the printed representation.
    (null (last '(a b c d) 0))
    (null (rest (rest (rest (rest '(a b c d)))) ))
    (null (cddddr '(a b c d)))
    (equal '(a b c d) '(a b c d . ()))
    ;;  NIL is an atom. The only list that is not a CONS.
    (atom 'nil)
-   ;;  NIL is a constant variable whose value is itself.
+   (not (consp nil))
+   (not (consp ()))
+   ;;  NIL is a constant variable whose value is itself. See diagrams below.
    (eq nil nil)
    (eq 'nil nil)
    (eq nil 'nil)
@@ -2349,8 +2377,6 @@
 ;;   (null (typep nil 'nil)) ;; !!
    (find-class 'null)
    (not (find-class 'nil nil))))
-
-
 
 ;; [*|*]--->[*|*]--->[*|*]--->NIL
 ;;  |        |        |
@@ -2381,3 +2407,223 @@
 ;;           v        v              v        v
 ;;          QUOTE    NIL            QUOTE    NIL
    
+(deftest test-constants ()
+  (check
+   (constantp t)
+   (constantp nil)
+   (constantp pi)
+   (constantp :k)
+   (progn
+     (defconstant syzygy 99)
+     (and (constantp syzygy)
+          (handler-case (makunbound 'syzygy)
+            (error () t)
+            (:no-error (_) (error "Maybe this is implementation-specific?")))) )))
+
+;;;
+;;;    (rplaca l obj) ≡ (setf (first l) obj)
+;;;    
+(deftest test-rplaca ()
+  (check
+   (let ((l (list 1 (list 2 5/2) 3 4)))
+     (check
+      (equal '(1d0 (2 5/2) 3 4) (rplaca l 1d0))
+      (equal '(2d0 5/2) (rplaca (second l) 2d0))
+      (equal '(1d0 (2d0 5/2) 3 4) l)
+      (equal '(2.5d0) (rplaca (cdadr l) 2.5d0))
+      (equal '(1d0 (2d0 2.5d0) 3 4) l)
+      (equal '(3d0 4) (rplaca (cddr l) 3d0))
+      (equal '(1d0 (2d0 2.5d0) 3d0 4) l)))
+   (let ((l (list 1 (list 2 5/2) 3 4)))
+     (check
+      (progn (setf (first l) 1d0)
+             (equal '(1d0 (2 5/2) 3 4) l))
+      (progn (setf (first (second l)) 2d0)
+             (equal '(1d0 (2d0 5/2) 3 4) l))
+      (progn (setf (second (second l)) 2.5d0)
+             (equal '(1d0 (2d0 2.5d0) 3 4) l))
+      (progn (setf (third l) 3d0)
+             (equal '(1d0 (2d0 2.5d0) 3d0 4) l))))
+   (handler-case (let ((l (list)))
+                   (rplaca l :foo))
+     (error () t)
+     (:no-error (_) (error "Argument to RPLACA must be CONS.")))) )
+
+;;;
+;;;    (rplacd l obj) ≡ (setf (rest l) obj)
+;;;    
+(deftest test-rplacd ()
+  (check
+   (let ((l (list 1 (list 2 5/2) 3 4)))
+     (check
+      (equal '(2 2.5d0) (rplacd (second l) (list 2.5d0)))
+      (equal '(1 (2 2.5d0) 3 4) l)
+      (equal '((2 2.5d0) 3d0 4) (rplacd (cdr l) (list 3d0 4)))
+      (equal '(1 (2 2.5d0) 3d0 4) l)))
+   (let ((l (list 1 (list 2 5/2) 3 4)))
+     (check
+      (progn (setf (rest (second l)) (list 2.5d0))
+             (equal '(1 (2 2.5d0) 3 4) l))
+      (progn (setf (rest (rest l)) (list 3d0 4))
+             (equal '(1 (2 2.5d0) 3d0 4) l))))
+   (handler-case (let ((l (list)))
+                   (rplacd l :foo))
+     (error () t)
+     (:no-error (_) (error "Argument to RPLACD must be CONS.")))) )
+
+(deftest test-incf ()
+  (check
+   (let ((x 8))
+     (check
+      (= (1+ 8) (incf x) x)
+      (= 20 (incf x 11) x)
+      (= 16 (incf x -4) x)))
+   (let ((l (list 1d0 2d0 3d0)))
+     (check
+      (= 3d0 (incf (second l)) (second l))
+      (= 3.1d0 (incf (third l) 0.1d0) (third l))))
+   (let ((a (vector 1/2 1/3 1/4 1/5)))
+     (check
+      (= 6/5 (incf (aref a 3)) (aref a 3))
+      (= 3/4 (incf (aref a 2) 1/2) (aref a 2)))) ))
+
+(deftest test-decf ()
+  (check
+   (let ((x 8))
+     (check
+      (= (1- 8) (decf x) x)
+      (= -4 (decf x 11) x)
+      (= 0 (decf x -4) x)))
+   (let ((l (list 1d0 2d0 3d0)))
+     (check
+      (= 1d0 (decf (second l)) (second l))
+      (= 2.9d0 (decf (third l) 0.1d0) (third l))))
+   (let ((a (vector 1/2 1/3 1/4 1/5)))
+     (check
+      (= -4/5 (decf (aref a 3)) (aref a 3))
+      (= -1/4 (decf (aref a 2) 1/2) (aref a 2)))) ))
+
+;;;
+;;;    Ruby comparison:
+;;;    (rotatef p q r)             vs. p, q, r = q, r, p
+;;;    (rotatef a b) (rotatef b a) vs. a, b, c, d = b, a, d, c
+;;;    Alternatively: (psetf a b b a c d d c)
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/m_rotate.htm#rotatef
+;;;    The effect of (rotatef place1 place2 ... placen) is roughly equivalent to
+;;;    (psetf place1 place2
+;;;           place2 place3
+;;;           ...
+;;;           placen place1)
+;;;    except that the latter would evaluate any subforms of each place twice, whereas rotatef evaluates them once.
+;;;    
+(deftest test-rotatef ()
+  (check
+   (let ((x 1) ; Swap variables
+         (y 2))
+     (rotatef x y)
+     (and (= x 2)
+          (= y 1)))
+   (let ((l (list 1 2 3 4)))
+     (rotatef (first l) (second l) (third l) (fourth l))
+     (equal '(2 3 4 1) l))
+   (let ((l1 (list 'pung 'foo))
+         (l2 (list 'bar 'baz)))
+     (rotatef (first l1) (first l2))
+     (and (equal '(bar foo) l1)
+          (equal '(pung baz) l2)))
+   ;;  All the same rotation
+   (equalelts (list (let ((a 1) (b 2) (c 3)) (rotatef a b c) (list a b c))
+                    (let ((a 1) (b 2) (c 3)) (rotatef b c a) (list a b c))
+                    (let ((a 1) (b 2) (c 3)) (rotatef c a b) (list a b c))))
+   ;;  A different equivalence
+   (equalelts (list (let ((a 1) (b 2) (c 3)) (rotatef a c b) (list a b c))
+                    (let ((a 1) (b 2) (c 3)) (rotatef c b a) (list a b c))
+                    (let ((a 1) (b 2) (c 3)) (rotatef b a c) (list a b c))))
+   ;;  Two separate rotations required
+   (equalelts (list (let ((a 2) (b 2) (c 3) (d 4)) (psetf a b b a c d d c) (list a b c d))
+                    (let ((a 2) (b 2) (c 3) (d 4)) (psetf b a a b d c c d) (list a b c d))
+                    (let ((a 2) (b 2) (c 3) (d 4)) (rotatef a b) (rotatef c d) (list a b c d))))
+   (let ((a (vector 1 2 3 4 5 6)))
+     (rotatef (aref a 1) (aref a 3) (aref a 5)) ; Perl: @a[1, 3, 5] = @a[5, 1, 3];
+     (equals #(1 4 3 6 5 2) a))
+   (let* ((l1 (list 1 2 3 4))
+          (l2 (cons 0 l1)))
+     (rotatef (first l1) (second l1)) ; Destructive change affects shared structure
+     (and (equal '(2 1 3 4) l1)
+          (equal '(0 2 1 3 4) l2)))) )
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/m_shiftf.htm
+;;;    The effect of (shiftf place1 place2 ... placen newvalue) is roughly equivalent to
+;;;    (let ((var1 place1)   
+;;;          (var2 place2)   
+;;;          ...             
+;;;          (varn placen)   
+;;;          (var0 newvalue))
+;;;      (setf place1 var2)  
+;;;      (setf place2 var3)  
+;;;      ...                 
+;;;      (setf placen var0)  
+;;;      var1)               
+;;;    except that the latter would evaluate any subforms of each place twice, whereas shiftf evaluates them once.
+;;;
+;;;    (rotatef p1 p2 ... pn2) and (shiftf p1 p2 ... pn p1) have same side effects.
+;;;    (Different return values.)
+;;;    
+(deftest test-shiftf ()
+  (check
+   (let ((x 1) ; Swap variables
+         (y 2))
+     (= 1 (shiftf x y x))
+     (and (= x 2)
+          (= y 1)))
+   (let ((x 1)
+         (y 2))
+     (= 1 (shiftf x y 3))
+     (and (= x 2)
+          (= y 3)))
+   (let ((l (list 1 2 3 4)))
+     (= 1 (shiftf (first l) (second l) (third l) (fourth l) :one))
+     (equal '(2 3 4 :one) l))
+   (let ((l1 (list 'pung 'foo))
+         (l2 (list 'bar 'baz)))
+     (equal 'pung (shiftf (first l1) (first l2) :pung))
+     (and (equal '(bar foo) l1)
+          (equal '(:pung baz) l2)))
+   ;;  All the same shift (Just use ROTATEF???)
+   (equalelts (list (let ((a 1) (b 2) (c 3)) (shiftf a b c a) (list a b c))
+                    (let ((a 1) (b 2) (c 3)) (shiftf b c a b) (list a b c))
+                    (let ((a 1) (b 2) (c 3)) (shiftf c a b c) (list a b c))))
+   ;;  A different equivalence
+   (equalelts (list (let ((a 1) (b 2) (c 3)) (shiftf a c b a) (list a b c))
+                    (let ((a 1) (b 2) (c 3)) (shiftf c b a c) (list a b c))
+                    (let ((a 1) (b 2) (c 3)) (shiftf b a c b) (list a b c))))
+   ;;  Two separate shifts required
+   (equalelts (list (let ((a 2) (b 2) (c 3) (d 4)) (psetf a b b a c d d c) (list a b c d))
+                    (let ((a 2) (b 2) (c 3) (d 4)) (psetf b a a b d c c d) (list a b c d))
+                    (let ((a 2) (b 2) (c 3) (d 4)) (shiftf a b a) (shiftf c d c) (list a b c d))))
+   (let ((a (vector 1 2 3 4 5 6)))
+     (= 2 (shiftf (aref a 1) (aref a 3) (aref a 5) :two))
+     (equals #(1 4 3 6 5 :two) a))
+   (let* ((l1 (list 1 2 3 4))
+          (l2 (cons 0 l1)))
+     (= 1 (shiftf (first l1) (second l1) :one)) ; Destructive change affects shared structure
+     (and (equal '(2 :one 3 4) l1)
+          (equal '(0 2 :one 3 4) l2)))
+   (flet ((fibonacci (n) ; Cycle local variables
+            (let ((current 0)
+                  (next 1))
+              (dotimes (i n current)
+                (shiftf current next (+ current next)))) ))
+     (check
+         (= 0 (fibonacci 0))
+         (= 1 (fibonacci 1))
+         (= 1 (fibonacci 2))
+         (= 5 (fibonacci 5)) 
+         (= 55 (fibonacci 10)) 
+         (= 610 (fibonacci 15)) 
+         (= 6765 (fibonacci 20))
+         (= 453973694165307953197296969697410619233826 (fibonacci 201)))) ))
+
+
