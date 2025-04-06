@@ -708,13 +708,6 @@
      (type-error () t)
      (:no-error (_) (error "Value is not a list.")))) )
 
-;;;
-;;;    https://www.lispworks.com/documentation/HyperSpec/Body/f_eq.htm#eq
-;;;    An implementation is permitted to make ``copies'' of characters and numbers
-;;;    at any time. The effect is that Common Lisp makes no guarantee that eq is true
-;;;    even when both its arguments are ``the same thing'' if that thing is a character
-;;;    or number.
-;;;    
 ;; (deftest test-equality ()
 ;;   (check
 ;;    (not (eq 1d0 1d0))
@@ -738,6 +731,223 @@
 ;;      boolean)))
 
 ;; (check (eq 1d0 1d0))
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_eq.htm
+;;;    Returns true if its arguments are the same, identical object; otherwise, returns false.
+;;;
+;;;    An implementation is permitted to make ``copies'' of characters and numbers at any time.   
+;;;    The effect is that Common Lisp makes no guarantee that eq is true even when both its       
+;;;    arguments are ``the same thing'' if that thing is a character or number.                   
+;;;                                                                                               
+;;;    Most Common Lisp operators use eql rather than eq to compare objects,                      
+;;;    or else they default to eql and only use eq if specifically requested to do so.            
+;;;    However, the following operators are defined to use eq rather than eql                     
+;;;    in a way that cannot be overridden by the code which employs them:                         
+;;;                                                                                               
+;;;    catch           getf     throw                                                             
+;;;    get             remf                                                                       
+;;;    get-properties  remprop                                                                    
+;;;
+(deftest test-eq ()
+  (check
+   (eq 'a 'a)
+   (not (eq (make-symbol "FOO") (make-symbol "FOO")))
+
+   (not (eq 3 3d0))
+   (or (eq 3 3) (not (eq 3 3)))
+   (let ((x 3))
+     (or (eq x x) (not (eq x x)))) ; CLHS literally says this!!
+   (or (eq 3d0 3d0) (not (eq 3d0 3d0)))
+   (or (eq #c(3 -4) #c(3 -4)) (not (eq #c(3 -4) #c(3 -4))))
+
+   (or (eq #\A #\A) (not (eq #\A #\A)))
+
+   (not (eq (cons 'a 'b) (cons 'a 'b)))
+   (or (eq '(a . b) '(a . b)) (not (eq '(a . b) '(a . b))))
+   (let ((x '(a . b)))
+     (eq x x))
+
+   (not (eq "pung" (copy-seq "pung")))
+   (or (eq "pung" "pung") (not (eq "pung" "pung")))
+   (let ((x "pung"))
+     (eq x x))))
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_eql.htm
+;;;    The value of eql is true of two objects, x and y, in the folowing cases:                                        
+;;;                                                                                                                    
+;;;    1. If x and y are eq.                                                                                           
+;;;    2. If x and y are both numbers of the same type and the same value.                                             
+;;;    3. If they are both characters that represent the same character.                                               
+;;;                                                                                                                    
+;;;    Otherwise the value of eql is false.                                                                            
+;;;                                                                                                                    
+;;;    If an implementation supports positive and negative zeros as distinct values, then (eql 0.0 -0.0) returns false.
+;;;    Otherwise, when the syntax -0.0 is read it is interpreted as the value 0.0, and so (eql 0.0 -0.0) returns true. 
+;;;
+;;;    eql is the same as eq, except that if the arguments are characters or numbers of the same type then their values are compared.       
+;;;    Thus eql tells whether two objects are conceptually the same, whereas eq tells whether two objects are implementationally identical. 
+;;;    It is for this reason that eql, not eq, is the default comparison predicate for operators that take sequences as arguments.          
+;;;                                                                                                                                         
+;;;    eql may not be true of two floats even when they represent the same value. = is used to compare mathematical values.                 
+;;;                                                                                                                                         
+;;;    Two complex numbers are considered to be eql if their real parts are eql and their imaginary parts are eql.                          
+;;;    For example, (eql #C(4 5) #C(4 5)) is true and (eql #C(4 5) #C(4.0 5.0)) is false.                                                   
+;;;    Note that while (eql #C(5.0 0.0) 5.0) is false, (eql #C(5 0) 5) is true.                                                             
+;;;    In the case of (eql #C(5.0 0.0) 5.0) the two arguments are of different types, and so cannot satisfy eql.                            
+;;;    In the case of (eql #C(5 0) 5), #C(5 0) is not a complex number, but is automatically reduced to the integer 5.                      
+;;;
+(deftest test-eql ()
+  (check
+   (eql 'a 'a)
+   (not (eql (make-symbol "FOO") (make-symbol "FOO")))
+
+   (eql 3 3)
+   (let ((x 3))
+     (eql x x))
+   (not (eql 3 3.0))
+   (eql 3.0 3.0)
+   (eql 3d0 3d0)
+   (or (eql 3d0 3s0) (not (eql 3d0 3s0)))
+   (eql #c(3 -4) #c(3 -4))
+   (not (eql #c(3 -4.0) #c(3 -4)))
+
+   (multiple-value-bind (significand exponent sign) (integer-decode-float -0d0)
+     (declare (ignore significand exponent))
+     (if (minusp sign)
+         (not (eql 0d0 -0d0))
+         (eql 0d0 -0d0))) ; CLISP
+
+   (not (eql (cons 'a 'b) (cons 'a 'b)))
+   (or (eql '(a . b) '(a . b)) (not (eql '(a . b) '(a . b))))
+   (let ((x (cons 'a 'b)))
+     (eql x x))
+   (let ((x '(a . b)))
+     (eql x x))
+
+   (eql #\A #\A)
+
+   (or (eql "Foo" "Foo") (not (eql "Foo" "Foo")))
+   (not (eql "Foo" (copy-seq "Foo")))
+   (not (eql "FOO" "foo"))))
+
+(defclass foo ()
+  ((bar :initform "pung")))
+
+;;;
+;;;    EQUAL pathnames??
+;;;    
+(deftest test-equal ()
+  (check
+   (equal 'a 'a) ; EQ
+   (not (equal (make-symbol "FOO") (make-symbol "FOO")))
+
+   (equal 3 3) ; EQL
+   (not (equal 3 3d0))
+   (equal 3d0 3d0)
+   (equal #c(3 -4) #c(3 -4))
+   
+   (equal #\a #\a) ; EQL
+   (not (equal #\a #\A))
+
+   (equal "Foo" "Foo") ; Elts compared by EQL
+   (equal "Foo" (copy-seq "Foo"))
+   (not (equal "FOO" "foo"))
+
+   (equal (cons 'a 'b) (cons 'a 'b)) ; CARs EQUAL and CDRs EQUAL
+   (equal '(a . b) '(a . b))
+   (equal '(1 4/2 3d0) (copy-list '(1 4/2 3d0)))
+
+   (not (equal (make-hash-table) (make-hash-table))) ; EQ
+   (not (equal #(1 2 3) #(1 2 3)))
+   (not (equal (make-instance 'foo) (make-instance 'foo)))) )
+
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_equalp.htm
+;;;    Returns true if x and y are equal, or if they have components that are of the same type as each other
+;;;    and if those components are equalp.
+;;;
+;;;    Type          Behavior                    
+;;;    number        uses =                      
+;;;    character     uses char-equal             
+;;;    cons          descends                    
+;;;    bit vector    descends                    
+;;;    string        descends                    
+;;;    pathname      same as equal               
+;;;    structure     descends, as described above
+;;;    Other array   descends                    
+;;;    hash table    descends, as described above
+;;;    Other object  uses eq                     
+;;;
+(deftest test-equalp ()
+  (check
+   (equalp 'a 'a) ; EQ
+   (not (equalp (make-symbol "FOO") (make-symbol "FOO")))
+
+   (equalp 3 3)
+   (equalp 3 3d0)
+   (equal 3d0 3d0)
+   (equalp #c(3 -4) #c(3 -4))
+   (equalp #c(3 -4d0) #c(3 -4))
+   
+   (equalp #\a #\a)
+   (equalp #\a #\A)
+
+   (equalp "Foo" "Foo")
+   (equalp "Foo" (copy-seq "Foo"))
+   (equalp "FOO" "foo")
+
+   (equalp (cons 'a 'b) (cons 'a 'b))
+   (equalp '(a . b) '(a . b))
+   (equalp '(1 4/2 3d0) (copy-list '(1 4/2 3d0)))
+
+   (let ((h1 (make-hash-table :test #'equal))
+         (h2 (make-hash-table :test #'equal))
+         (h3 (make-hash-table :test #'equal))
+         (h4 (make-hash-table :test #'equal))
+         (h5 (make-hash-table :test #'equalp)))
+     (mapcar #'(lambda (k v)
+                 (dolist (h (list h1 h2 h3 h4 h5))
+                   (setf (gethash k h) v)))
+             '("pung" "foo" "bar")
+             '(1 2 3))
+     (setf (gethash "baz" h3) 4)
+     (setf (gethash "bar" h4) :three)
+     (check
+      (equalp h1 h2)
+      (not (equalp h1 h3))
+      (not (equalp h1 h4))
+      (not (equalp h1 h5))))
+
+   (not (equal #("pung" "foo" "bar") #("pung" "foo" "bar")))
+   (equalp #("pung" "foo" "bar") #("pung" "foo" "bar"))
+   (equalp #("pung" "FOO" "bar") #("Pung" "foo" "BAR"))
+   (equals #("pung" "foo" "bar") #("pung" "foo" "bar")) ; CORE:EQUALS
+   (not (equals #("pung" "FOO" "bar") #("Pung" "foo" "BAR")))
+
+   (let ((v1 (make-array 6 :element-type 'integer :initial-contents '(1 1 1 3 5 7)))
+         (v2 (make-array 8 :element-type 'integer :initial-contents '(1 1 1 3 5 7 2 6) :fill-pointer 6))
+         (v3 (vector 1 1 1 3 5 7)))
+     (check
+      (equalp v1 v2)
+      (equalp v1 v3)))
+
+   (not (equalp (make-instance 'foo) (make-instance 'foo)))) )
+
+(deftest test-equality ()
+  (check
+   (and (eq 'a 'a) (eql 'a 'a) (equal 'a 'a) (equalp 'a 'a))
+   (and (eql 3 3) (equal 3 3) (equalp 3 3))
+   (and (eql #\a #\a) (equal #\a #\a) (equalp #\a #\a))
+   (and (equal "Foo" "Foo") (equalp "Foo" "Foo"))))
+
+(deftest test-tree-equal ())
+(deftest test-= ())
+
+
+
 
 (deftest test-compare-characters ()
   (check
@@ -889,6 +1099,10 @@
    (eq (tenth #1#) (nth 9 #1#))
 
    (eq (car #1#) (first #1#))
+   (eq (cadr #1#) (second #1#))
+   (eq (caddr #1#) (third #1#))
+   (eq (cadddr #1#) (fourth #1#))
+   (eq (car (cddddr #1#)) (fifth #1#))
 
    (eq (car #1#) (nth 0 #1#))
    (eq (cadr #1#) (nth 1 #1#))
@@ -1048,11 +1262,53 @@
 
 (deftest test-copy-list ()
   (check
-   (let ((l (list 1 2 3 4 5)))
-     (and (equal l (copy-list l))
-          (not (eq l (copy-list l))) ; Lists are different
-          (every #'eq l (copy-list l)))) )) ; Elements are the same
+   (let ((l '(1 2 3 4 5)))
+     (check
+      (equal l (copy-list l))
+      (not (eq l (copy-list l))) ; Lists are different
+      (every #'eq l (copy-list l)))) ; Elements are the same
+   (let ((l '(1 2d0 (a b) "pung" #\Q #(0 1 0))))
+     (check
+      (equal l (copy-list l))
+      (not (eq l (copy-list l))) ; Lists are different
+      (every #'eq l (copy-list l)))) )) ; Elements are the same
 
+(deftest test-copy-tree ()
+  (check
+   (let ((l '(1 2 3 4 5)))
+     (equal (copy-list l) (copy-tree l)))
+   (let* ((l1 (list (list 1 2) 3 (list (list 4) 5)))
+          (l2 (copy-list l1)) ; Shared structure
+          (l3 (copy-tree l1))) ; No shared structure
+     (check
+      (equal l1 l2)
+      (equal l1 l3)
+      (eq (third l1) (third l2))
+      (not (eq (third l1) (third l3)))
+      (progn (setf (first (first l1)) :one)
+             (equal l1 l2))
+      (not (equal l1 l3))
+      (equal '(:one 2) (first l1))
+      (equal '(:one 2) (first l2))
+      (equal '(1 2) (first l3))))
+   (let* ((l1 (list (vector 1 2 3) (vector 4 5 6)))
+          (l2 (copy-tree l1))) ; Only CONSes copied. Atoms still shared.
+     (check
+      (equal l1 l2)
+      (progn (setf (aref (first l1) 2) 9)
+             (equal l1 l2))
+      (equals #(1 2 9) (first l1))
+      (equals #(1 2 9) (first l2)))) ))
+
+;; (defun copy-tree (tree)
+;;   (if (atom tree)
+;;       tree
+;;       (cons (copy-tree (car tree))
+;;             (copy-tree (cdr tree)))) )
+
+;;;
+;;;    Contrast LIST-LENGTH below
+;;;    
 (deftest test-length ()
   (check
    (equal 0 (length '()))
@@ -2626,4 +2882,80 @@
          (= 6765 (fibonacci 20))
          (= 453973694165307953197296969697410619233826 (fibonacci 201)))) ))
 
+
+;;;
+;;;    Contrast LENGTH above. LIST-LENGTH deals with potentially circular lists.
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_list_l.htm
+;;;
+(deftest test-list-length ()
+  (flet ((circular-list (&rest elements) ; CLHS example
+           (let ((cycle (copy-list elements))) 
+             (nconc cycle cycle))))
+    (check
+     (zerop (list-length '()))
+     (= 4 (list-length '(a b c d)))
+     (null (list-length (circular-list 'a)))
+     (null (list-length (circular-list 'a 'b)))
+     (null (list-length (circular-list 'a 'b 'c)))
+     (null (list-length (circular-list 'a 'b 'c 'd)))
+     (handler-case (list-length '(a b c . d))
+       (type-error () t)
+       (:no-error (_) (error "List must either be a proper list or a circular list.")))) ))
+    
+;;;
+;;;    CLHS shows this possible implementation. Two pointers traverse the list.
+;;;    For a proper list, the FAST pointer will eventually reach the terminal CONS.
+;;;    For a circular list, FAST will "wrap around" and catch up to SLOW. In fact,
+;;;    they will both coincide when pointing to the first element after SLOW has
+;;;    wrapped around once and FAST has wrapped around twice.
+;;;    
+;; (defun list-length (x)  
+;;   (do ((n 0 (+ n 2))
+;;        (fast x (cddr fast))
+;;        (slow x (cdr slow)))
+;;       (nil)
+;;     (when (endp fast) (return n))
+;;     (when (endp (cdr fast)) (return (+ n 1)))
+;;     (when (and (eq fast slow) (> n 0)) (return nil))))
+
+;; (defun list-length* (x)  
+;;   (do ((n 0 (+ n 2))
+;;        (fast x (cddr fast))
+;;        (slow x (cdr slow)))
+;;       (nil)
+;;     (print n)
+;;     (when (endp fast) (return n))
+;;     (when (endp (cdr fast)) (return (+ n 1)))
+;;     (when (and (eq fast slow) (> n 0)) (return nil))))
+
+;; (defun circular-list (&rest elements)
+;;    (let ((cycle (copy-list elements))) 
+;;      (nconc cycle cycle)))
+
+;; (list-length* (circular-list 'a))
+
+;; 0 
+;; 2 
+;; NIL
+;; * (list-length* (circular-list 'a 'b))
+
+;; 0 
+;; 2 
+;; 4 
+;; NIL
+;; * (list-length* (circular-list 'a 'b 'c))
+
+;; 0 
+;; 2 
+;; 4 
+;; 6 
+;; NIL
+;; * (list-length* (circular-list 'a 'b 'c 'd))
+
+;; 0 
+;; 2 
+;; 4 
+;; 6 
+;; 8 
+;; NIL
 

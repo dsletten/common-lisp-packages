@@ -399,17 +399,17 @@
               (make-empty q)
               (enqueue q (pop list)))) )))
 
-;; pathname, structure, hash table, bit vector
+;; pathname, structure, hash table, bit vector, array
 (defgeneric equals (o1 o2)
   (:documentation "Is O1 equal to O2 in a type-specific sense?"))
 (defmethod equals (o1 o2)
   (eql o1 o2))
 (defmethod equals ((n1 number) (n2 number))
   (= n1 n2))
-(defmethod equals ((s1 string) (s2 string))
-  (string= s1 s2))
 (defmethod equals ((ch1 character) (ch2 character))
   (char= ch1 ch2))
+(defmethod equals ((s1 string) (s2 string))
+  (string= s1 s2))
 (defmethod equals ((l1 list) (l2 list))
   (cond ((null l1) (null l2))
         ((null l2) nil)
@@ -417,16 +417,16 @@
         (t nil)))
 (defmethod equals ((v1 vector) (v2 vector))
   (if (= (length v1) (length v2))
-      (do ((i 0 (1+ i)))
-          ((= i (length v1)) t)
-        (unless (equals (aref v1 i) (aref v2 i))
-          (return nil)))) )
+      (loop for elt1 across v1
+            for elt2 across v2
+            always (equals elt1 elt2))
+      nil))
 (defmethod equals ((s1 symbol) (s2 symbol))
   (equals (symbol-name s1) (symbol-name s2)))
 ;; (defmethod equals ((k1 keyword) (k2 keyword))
 ;;   (call-next-method))
 
-;; pathname, structure, hash table, bit vector
+;; pathname, structure, hash table, bit vector, array
 (defgeneric eqls (o1 o2)
   (:documentation "Is O1 EQL to O2 or are all elements EQL?"))
 (defmethod eqls (o1 o2)
@@ -440,10 +440,10 @@
         (t nil)))
 (defmethod eqls ((v1 vector) (v2 vector))
   (if (= (length v1) (length v2))
-      (do ((i 0 (1+ i)))
-          ((= i (length v1)) t)
-        (unless (eqls (aref v1 i) (aref v2 i))
-          (return nil)))) )
+      (loop for elt1 across v1
+            for elt2 across v2
+            always (eqls elt1 elt2))
+      nil))
 
 (defgeneric prefixp (s1 s2 &key test)
   (:documentation "Is sequence S1 a prefix of S2?"))
@@ -828,7 +828,7 @@
 ;;;    This collects the _values_ of applying the function to elts, not
 ;;;    the elts themselves. Different from REMOVE-IF-NOT!
 ;;;
-;;;    More efficient version of: (mapcar #'f (remove-if-not #'f seq))
+;;;    More efficient version of: (mapcar f (remove-if-not f seq))
 ;;;    FILTER uses the result of applying F to determine which elements to keep.
 ;;;    
 ;; (defun filter (f seq)
@@ -884,9 +884,12 @@
 ;;         collect (first take-drop)))
 
 ;;;
-;;;    Must terminate when (EMPTYP TAKE) to handle N = 0.
+;;;    Must terminate when (EMPTYP TAKE) to handle N = 0.  ???? Inconsistent with Graham's definition
 ;;;    
 (defun group (seq n)
+  (assert (typep n `(integer (0)))
+          (n)
+          "N must be a positive integer.")
   (loop for (take drop) =      (multiple-value-list (take-drop n seq))
                           then (multiple-value-list (take-drop n drop))
         until (emptyp take)
