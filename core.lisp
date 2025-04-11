@@ -32,8 +32,10 @@
 (defpackage :core
   (:shadowing-import-from :collections :intersection :set :subsetp :union)
   (:use :common-lisp :collections)
-  (:export :after :append1 :analyze-tree :approximately= :array-indices :as-if
-           :before :best :best-index :best-worst :best-worst-n :bestn :build-prefix :build-tree
+  (:export :after :analyze-tree :append1
+           :compound-compare :approximately= :array-indices :as-if
+           :before :best :best-index :best-worst :best-worst-n :bestn
+           :binary-search :build-prefix :build-tree
            :>case :class-template :comment :compose :conc1 :copy-array :cycle
            :defchain :destructure :dohash :doset :dostring :dotuples :dovector
            :drop :drop-until :drop-while :duplicatep
@@ -52,14 +54,15 @@
            :rotate0 :rotate-list0 :rotate1 :rotate-list1
            :same-shape-tree-p
            :shift0 :shift-list0 :shift1 :shift-list1
-           :show-symbols :shuffle :singlep :some-pred :sort-symbol-list :splice
+           :show-symbols :shuffle :singlep :some-pred
+           :sort-by :sort-symbol-list :splice
 ;           :split-if
            :stable-partition :starts-with :stream-partition :suffixp :symb
            :take :take-drop :take-while :take-until :totally :transfer
            :transition :transition-1 :transition-n :transition-stream :traverse :tree-find-if :tree-map
            :until
            :when-let :when-let* :while :with-gensyms :worst :worstn)
-  (:shadow :emptyp :next))
+  (:shadow :emptyp :next :search))
 ;  (:shadow :while :until :prefixp :dovector :macroexpand-all)) ; ????
 
 (in-package :core)
@@ -1977,11 +1980,12 @@ starting with X or the index of the position of X in the sequence."))
 	      (setf (gethash args cache)
 		    (apply fn args)))) )))
 
-
-;;;    Multiple value compose???
-
 ;;;
 ;;;    This executes REDUCE every time the composed function is called.
+;;;
+;;;    Graham's version (essentially. He forgot to use his LAST1!)
+;;;    - He's right that APPLY is only needed for innermost (rightmost) call.
+;;;    - :FROM-END is kind of gross
 ;;;    
 ;; (defun compose (&rest fns)
 ;;   (if fns
@@ -1993,29 +1997,44 @@ starting with X or the index of the position of X in the sequence."))
 ;;                     :initial-value (apply fn1 args))))
 ;;       #'identity))
 
-
 ;;;
-;;;    Same here for > 2 functions...
-;;;    Same logic for multiple functions.
-;;;    
-;; (defun compose (&rest fs)
-;;   (if (null fs)
-;;       #'identity
-;;       (destructuring-bind (f . more) fs
-;;         (if (null more)
-;;             f
-;;             (destructuring-bind (g . more) more
-;;               (if (null more)
-;;                   #'(lambda (&rest args) (funcall f (apply g args)))
-;;                   (destructuring-bind (f* . fs*) (reverse fs)
-;;                     #'(lambda (&rest args)
-;;                         (reduce #'(lambda (x f) (funcall f x)) fs* :initial-value (apply f* args)))) )))) ))
-
+;;;    Graham computes f∘(g∘h), whereas Clojure and I generate (f∘g)∘h. But function
+;;;    composition is associative, so f∘g∘h = f∘(g∘h) = (f∘g)∘h
 ;;;
-;;;    Clojure-style
-;;;    Composed function is constructed entirely prior to invocation.
+;;;    The more important consideration is that only the innermost function will receive
+;;;    multiple arguments. Each nested function returns a single argument to the next
+;;;    enclosing function. This is straightforward in Clojure but could be otherwise in
+;;;    Common Lisp if multiple values were accounted for. In any case, only the innermost
+;;;    function need consider APPLY. For all others, FUNCALL would suffice:
+;;;    (funcall f (funcall g (apply h args)))
+;;;    However, once composed, g∘h must itself be applicable to multiple values:
+;;;    (funcall f (apply g∘h args))
+;;;    Similarly in the other direction:
+;;;    (f∘g)∘h -> (funcall f∘g (apply h args))
+;;;    Thus, at each level the compose operation must accept arbitrary &REST args and APPLY
+;;;    the inner function to them:
+;;;    #'(lambda (&rest args)
+;;;        (funcall f (apply g args))))
+;;;
+;;;    At no point is it possible to swap FUNCALL for APPLY.
 ;;;    
+;;;    Graham gets around this by performing the REDUCE at runtime! Only the innermost (last) function
+;;;    sees the ARGS.
+;;;    
+
 (defun compose (&rest fs)
+  (if (null fs)
+      #'identity
+      (reduce #'(lambda (f g)
+                  #'(lambda (&rest args)
+                      (funcall f (apply g args))))
+              fs)))
+
+;;;
+;;;    What is the use case?
+;;;    (apply #'expt (multiple-value-list (truncate 4.5)))
+;;;    
+(defun multiple-value-compose (&rest fs)
   (if (null fs)
       #'identity
       (destructuring-bind (f . more) fs
@@ -2023,8 +2042,8 @@ starting with X or the index of the position of X in the sequence."))
             f
             (destructuring-bind (g . more) more
               (if (null more)
-                  #'(lambda (&rest args) (funcall f (apply g args)))
-                  (reduce #'compose fs)))) )))
+                  #'(lambda (&rest args) (apply f (multiple-value-call (apply g args))))
+                  (reduce #'compose more :initial-value (compose f g)))) ))))
 
 ;;;
 ;;;    Inspired by Clojure juxt
@@ -2033,81 +2052,36 @@ starting with X or the index of the position of X in the sequence."))
 (defun juxtapose (&rest fs)
   #'(lambda (&rest args)
       (values-list (mapcar #'(lambda (f) (multiple-value-list (apply f args))) fs))))
-;      (values-list (mapcar #'(lambda (f) (apply f args)) fs))))
 
 ;;;
-;;;    Graham ACL pg. 110
-;;;
-;;;    "Curry"
-;;;    Have to pay runtime penalty rather than using function literal (essentially inline)?
-;;;
-;;;    Clozure:
-;;;    
-;; ? (time (dotimes (i 10000) (funcall #'(lambda (x) (+ x 8)) 7)))
-;; (DOTIMES (I 10000) (FUNCALL #'(LAMBDA (X) (+ X 8)) 7))
-;; took  7 microseconds (0.000007 seconds) to run.
-;; During that period, and with 16 available CPU cores,
-;;      10 microseconds (0.000010 seconds) were spent in user mode
-;;       0 microseconds (0.000000 seconds) were spent in system mode
-;; NIL
-;; ? (time (dotimes (i 10000) (funcall (partial #'+ 8) 7)))
-;; (DOTIMES (I 10000) (FUNCALL (PARTIAL #'+ 8) 7))
-;; took 6,144 microseconds (0.006144 seconds) to run.
-;;      1,107 microseconds (0.001107 seconds, 18.02%) of which was spent in GC.
-;; During that period, and with 16 available CPU cores,
-;;      6,161 microseconds (0.006161 seconds) were spent in user mode
-;;          0 microseconds (0.000000 seconds) were spent in system mode
-;;  1,280,000 bytes of memory allocated.
-;; NIL
-;; ? (time (dotimes (i 10000) (funcall #'(lambda (x) (+ x 8)) 7)))
-;; (DOTIMES (I 10000) (FUNCALL #'(LAMBDA (X) (+ X 8)) 7))
-;; took 12 microseconds (0.000012 seconds) to run.
-;; During that period, and with 16 available CPU cores,
-;;      16 microseconds (0.000016 seconds) were spent in user mode
-;;       0 microseconds (0.000000 seconds) were spent in system mode
-;; NIL
-;; ? (time (dotimes (i 10000) (funcall (partial #'+ 8) 7)))
-;; (DOTIMES (I 10000) (FUNCALL (PARTIAL #'+ 8) 7))
-;; took 4,169 microseconds (0.004169 seconds) to run.
-;; During that period, and with 16 available CPU cores,
-;;      4,171 microseconds (0.004171 seconds) were spent in user mode
-;;          0 microseconds (0.000000 seconds) were spent in system mode
-;;  1,280,000 bytes of memory allocated.
-;; NIL
-;; (defun partial (f &rest args)
-;;   (if (null args)
-;;       f
-;;       #'(lambda (&rest args2)
-;;           (apply f (append args args2)))) )
-
-;;;
+;;;    "Curry" Graham ACL pg. 110
 ;;;    Clojure style
 ;;;    
-(defun partial (f &rest args)
-  (if (null args)
+(defun partial (f &rest fixed)
+  "Create a partial function that calls F with 0+ fixed arguments. The remaining arguments are to be supplied when the function is called."
+  (if (null fixed)
       f
-      (destructuring-bind (arg0 &rest args) args
-        (if (null args)
-            #'(lambda (&rest args2)
-                (apply f arg0 args2))
-            (destructuring-bind (arg1 &rest args) args
-              (if (null args)
-                  #'(lambda (&rest args2)
-                      (apply f arg0 arg1 args2))
-                  (destructuring-bind (arg2 &rest args) args
-                    (if (null args)
-                        #'(lambda (&rest args2)
-                            (apply f arg0 arg1 arg2 args2))
-                        #'(lambda (&rest args2)
-                            (apply f arg0 arg2 arg2 (append args args2)))) )))) )))
+      (destructuring-bind (fixed0 &rest fixed) fixed
+        (if (null fixed)
+            #'(lambda (&rest args) (apply f fixed0 args))
+            (destructuring-bind (fixed1 &rest fixed) fixed
+              (if (null fixed)
+                  #'(lambda (&rest args) (apply f fixed0 fixed1 args))
+                  (destructuring-bind (fixed2 &rest fixed) fixed
+                    (if (null fixed)
+                        #'(lambda (&rest args) (apply f fixed0 fixed1 fixed2 args))
+                        #'(lambda (&rest args)
+                            (apply f fixed0 fixed1 fixed2 (append fixed args)))) )))) )))
+
 ;;;
 ;;;    "Right Curry"
 ;;;    
-(defun partial* (f &rest args)
-  (if (null args)
+(defun partial* (f &rest fixed)
+  "Create a partial function that calls F with 0+ fixed arguments following the remaining arguments supplied when the function is called."
+  (if (null fixed)
       f
-      #'(lambda (&rest args2)
-          (apply f (append args2 args)))) )
+      #'(lambda (&rest args)
+          (apply f (append args fixed)))) )
 
 ;; (defmacro defcurry (name (param &rest params) &body body)
 ;;   (if (null params)
@@ -3057,3 +3031,36 @@ starting with X or the index of the position of X in the sequence."))
 ;;;    
 (defun horners (x coefficients)
   (reduce #'(lambda (a b) (+ (* a x) b)) coefficients :initial-value 0))
+
+(defun binary-search (a target &key (key #'identity) (test #'<))
+  "Locate index of TARGET within A. Return -(i + 1) if not present, where i is the index at which the TARGET would be found if present."
+  (labels ((search (low high)
+             (if (< high low)
+                 (- (1+ low))
+                 (let* ((mid (truncate (+ low high) 2))
+                        (current (funcall key (aref a mid))))
+                   (cond ((funcall test current target) (search (1+ mid) high))
+                         ((funcall test target current) (search low (1- mid)))
+                         (t mid)))) ))
+    (search 0 (1- (length a)))) )
+
+(defun compound-compare (a b criteria)
+  "Consider comparison CRITERIA of decreasing priority until one distinguishes A and B as not being equal in some sense.
+Each criterion specifies a comparison TEST or a pair of a TEST and a KEY. The key function is used to extract
+information from each object prior to applying the comparison function to both A and B. The compound comparison predicate
+specified by these criteria is appropriate for use by SORT-BY to sort or BINARY-SEARCH to search."
+  (flet ((analyze (criterion)
+           (if (listp criterion)
+               criterion
+               (list criterion #'identity))))
+    (if (endp criteria)
+        nil
+        (destructuring-bind (criterion . more) criteria
+          (destructuring-bind (test key) (analyze criterion)
+            (cond ((funcall test (funcall key a) (funcall key b)) t)
+                  ((funcall test (funcall key b) (funcall key a)) nil)
+                  (t (compound-compare a b more)))) ))))
+
+(defun sort-by (seq criteria)
+  (sort seq (partial* #'compound-compare criteria)))
+

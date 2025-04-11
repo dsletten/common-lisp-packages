@@ -1117,23 +1117,28 @@
 
 (deftest test-compose ()
   (check
-   (equal (funcall (compose #'first #'rest #'rest #'rest #'rest) #1='(a b c d e f)) (fifth #1#))
-   (equal (mapcar (compose #'1+ #'1+) #2=(loop for i from 1 to 10 collect i)) (mapcar #'(lambda (x) (+ x 2)) #2#))
+   (equal (fifth #1='(a b c d e f)) (funcall (compose #'first #'rest #'rest #'rest #'rest) #1#))
+   (equal (mapcar #'(lambda (x) (+ x 2)) #2=(loop for i from 1 to 10 collect i)) (mapcar (compose #'1+ #'1+) #2#))
    ;; IDENTITY!
-   (equal #3=(loop for i from 1 to 10 collect i) (mapcar (compose #'1+ #'1-) #3#))
-   (equal (mapcar (compose #'list #'(lambda (x) (* x 2))) #4=(loop for i from 1 to 5 collect i)) (mapcar #'(lambda (x) (list (* x 2))) #4#))
+   (equal #2# (mapcar (compose #'1+ #'1-) #2#))
+   (equal (mapcar #'(lambda (x) (list (* x 2))) #2#) (mapcar (compose #'list (partial #'* 2)) #2#))
    ;; COUNT-IF
-   (equal (funcall (compose #'length #'remove-if-not) #'evenp #5=(loop for i from 1 to 10 collect i)) (length (remove-if-not #'evenp #5#)))
-   (equal (funcall (compose #'1+ #'find-if) #'oddp '(2 3 4)) 4)
-   (equal (mapcar (compose #'length #'cons) '(a b c d) '((1 2) (3) () (4 5 6))) '(3 2 1 4))
+   (equal (length (remove-if-not #'evenp #2#)) (funcall (compose #'length (partial #'remove-if-not #'evenp)) #2#))
+   (equal 4 (funcall (compose #'1+ (partial #'find-if #'oddp)) '(2 3 4)))
+   (equal '(3 2 1 4) (mapcar (compose #'length #'cons) '(a b c d) '((1 2) (3) () (4 5 6))))
    ;; COMPLEMENT
-   (equal (mapcar (compose #'not #'evenp) #6=(loop for i from 1 to 10 collect i)) (mapcar (complement #'evenp) #6#))))
+   (equal (mapcar (complement #'evenp) #2#) (mapcar (compose #'not #'evenp) #2#))
+   (= (sqrt 15) (funcall (compose #'sqrt #'abs #'+) -1 -2 -3 -4 -5))
+   (= (sqrt 15d0) (funcall (compose #'sqrt (partial* #'coerce 'double-float) #'abs #'+) -1 -2 -3 -4 -5))))
 
 (deftest test-juxtapose ()
   (check
-   (equal (multiple-value-list (funcall (juxtapose #'truncate #'floor #'ceiling #'round) 23 10)) '((2 3) (2 3) (3 -7) (2 3)))
-   (equal (multiple-value-list (funcall (juxtapose #'truncate #'floor #'ceiling #'round) 2.3)) '((2 0.29999995) (2 0.29999995) (3 -0.70000005) (2 0.29999995)))
-   (equal (multiple-value-list (funcall (juxtapose #'string-upcase #'string-downcase #'string-capitalize) "Is this not pung?")) '(("IS THIS NOT PUNG?") ("is this not pung?") ("Is This Not Pung?")))) )
+   (equal '((2 3) (2 3) (3 -7) (2 3))
+          (multiple-value-list (funcall (juxtapose #'truncate #'floor #'ceiling #'round) 23 10)))
+   (equal '((2 0.29999995) (2 0.29999995) (3 -0.70000005) (2 0.29999995))
+          (multiple-value-list (funcall (juxtapose #'truncate #'floor #'ceiling #'round) 2.3)))
+   (equal '(("IS THIS NOT PUNG?") ("is this not pung?") ("Is This Not Pung?"))
+          (multiple-value-list (funcall (juxtapose #'string-upcase #'string-downcase #'string-capitalize) "Is this not pung?")))) )
 
 (deftest test-partial ()
   (check
@@ -1141,18 +1146,124 @@
    (funcall (partial #'> (funcall (partial #'reduce #'+) '(1 2 3))) 3)
    (= (1+ 8) (funcall (partial #'+ 1) 8))
    (string= "Twelve thousand three hundred forty-five" (funcall (partial #'format nil "~@(~R~)") 12345))
-   (equal '(B C 2 Y Z) (funcall (compose (partial #'apply #'nconc) #'mapcar) #'rest (copy-tree '((a b c) (1 2) (x y z))))) ; MAPCAN
+   (equal '(B C 2 Y Z) (funcall (compose (partial #'apply #'nconc) (partial #'mapcar #'rest)) (copy-tree '((a b c) (1 2) (x y z)))) ) ; MAPCAN
    (let ((xxs '((1 2 3 4 5) (5 4 5 4 3 2) (7 8 9 0 1 2 3)))) ; Learn You A Haskell 18 页
      (equal '((2 4) (4 4 2) (8 0 2)) (mapcar (partial #'remove-if-not #'evenp) xxs)))
-   (every (compose (partial #'= (length "pung")) #'length) '("over" "your" "turn" "send"))))
 ;   (every #'(lambda (s) (= (length "pung") (length s))) '("over" "your" "turn" "send"))))
+   (every (compose (partial #'= (length "pung")) #'length) '("over" "your" "turn" "send"))
+   (= (reduce #'+ (loop for i from 1 to 6 collect i)) (funcall (partial #'+ 1 2 3 4 5) 6))
+   (labels ((f3 (m b x) (+ (* m x) b))
+            (f2 (b x) (f3 3 b x))
+            (f1 (x) (f2 2 x))
+            (f0 () (f1 7)))
+     (check
+      (= (f3 3 2 7) (funcall (partial #'f3) 3 2 7))
+      (= (f2 2 7) (funcall (partial #'f3 3) 2 7))
+      (= (f1 7) (funcall (partial #'f3 3 2) 7))
+      (= (f0) (funcall (partial #'f3 3 2 7)))) )))
 
 (deftest test-partial* ()
   (check
    (funcall (partial* #'typep 'atom) 'a) ; ATOM
    (not (funcall (partial* #'typep 'atom) '(1 2)))
-   (= (funcall (partial* #'- 1) 8) (1- 8))
+   (funcall (complement (partial* #'typep 'atom)) '(1 2))
+   (= (1- 8) (funcall (partial* #'- 1) 8))
    (equal '(t nil t nil) (mapcar (compose (partial* #'< 10000) #'abs) '(23 12345 -80 -80000)))) )
+
+;;;
+;;;    There is a performance penalty for using PARTIAL(*)
+;;;    The discrepancy with using a literal function gets blurred the more work the function is doing.
+;;;    Adding 8 to 7 takes no time, so the overhead is visible. But generating the English version
+;;;    of a large number takes a lot more time in any case, so it isn't as obvious whether a literal
+;;;    or a partial is much slower.
+;;;    
+;;;    Clozure Common Lisp Version 1.12 (v1.12) LinuxX8664
+;; ? (time (dotimes (i 10000) (funcall #'(lambda (x) (+ x 8)) 7)))
+;; (DOTIMES (I 10000) (FUNCALL #'(LAMBDA (X) (+ X 8)) 7))
+;; took 16 microseconds (0.000016 seconds) to run.
+;; During that period, and with 32 available CPU cores,
+;;      17 microseconds (0.000017 seconds) were spent in user mode
+;;       4 microseconds (0.000004 seconds) were spent in system mode
+;; NIL
+;; ? (time (dotimes (i 10000) (funcall (partial #'+ 8) 7)))
+;; (DOTIMES (I 10000) (FUNCALL (PARTIAL #'+ 8) 7))
+;; took 6,852 microseconds (0.006852 seconds) to run.
+;; During that period, and with 32 available CPU cores,
+;;      6,856 microseconds (0.006856 seconds) were spent in user mode
+;;          0 microseconds (0.000000 seconds) were spent in system mode
+;;  1,120,000 bytes of memory allocated.
+;; NIL
+;; ? (let ((f (partial #'+ 8))) (time (dotimes (i 10000) (funcall f 7))))
+;; (DOTIMES (I 10000) (FUNCALL F 7))
+;; took 1,425 microseconds (0.001425 seconds) to run.
+;;        687 microseconds (0.000687 seconds, 48.21%) of which was spent in GC.
+;; During that period, and with 32 available CPU cores,
+;;      1,447 microseconds (0.001447 seconds) were spent in user mode
+;;          0 microseconds (0.000000 seconds) were spent in system mode
+;;  160,000 bytes of memory allocated.
+;; NIL
+;; ? (time (dotimes (i 10000) (funcall #'(lambda (n) (format nil "~@(~R~)" n)) 12345)))
+
+;; (DOTIMES (I 10000) (FUNCALL #'(LAMBDA (N) (FORMAT NIL "~@(~R~)" N)) 12345))
+;; took 25,684 microseconds (0.025684 seconds) to run.
+;;         159 microseconds (0.000159 seconds, 0.62%) of which was spent in GC.
+;; During that period, and with 32 available CPU cores,
+;;      25,662 microseconds (0.025662 seconds) were spent in user mode
+;;           1 microseconds (0.000001 seconds) were spent in system mode
+;;  4,161,696 bytes of memory allocated.
+;; NIL
+;; ? (time (dotimes (i 10000) (funcall (partial #'format nil "~@(~R~)") 12345)))
+;; (DOTIMES (I 10000) (FUNCALL (PARTIAL #'FORMAT NIL "~@(~R~)") 12345))
+;; took 25,592 microseconds (0.025592 seconds) to run.
+;;         182 microseconds (0.000182 seconds, 0.71%) of which was spent in GC.
+;; During that period, and with 32 available CPU cores,
+;;      25,520 microseconds (0.025520 seconds) were spent in user mode
+;;           0 microseconds (0.000000 seconds) were spent in system mode
+;;  5,440,752 bytes of memory allocated.
+;; NIL
+;; ? (let ((f (partial #'format nil "~@(~R~)"))) (time (dotimes (i 10000) (funcall f 12345))))
+;; (DOTIMES (I 10000) (FUNCALL F 12345))
+;; took 24,464 microseconds (0.024464 seconds) to run.
+;;         376 microseconds (0.000376 seconds, 1.54%) of which was spent in GC.
+;; During that period, and with 32 available CPU cores,
+;;      24,375 microseconds (0.024375 seconds) were spent in user mode
+;;           0 microseconds (0.000000 seconds) were spent in system mode
+;;  4,320,752 bytes of memory allocated.
+;; NIL
+;; ? (let ((xxs '((1 2 3 4 5) (5 4 5 4 3 2) (7 8 9 0 1 2 3))))
+;;   (time (dotimes (i 10000)
+;;           (mapcar #'(lambda (xs) (remove-if-not #'evenp xs)) xxs))))
+;; (DOTIMES (I 10000) (MAPCAR #'(LAMBDA (XS) (REMOVE-IF-NOT #'EVENP XS)) XXS))
+;; took 6,727 microseconds (0.006727 seconds) to run.
+;;        554 microseconds (0.000554 seconds, 8.24%) of which was spent in GC.
+;; During that period, and with 32 available CPU cores,
+;;      6,744 microseconds (0.006744 seconds) were spent in user mode
+;;          0 microseconds (0.000000 seconds) were spent in system mode
+;;  1,760,000 bytes of memory allocated.
+;; NIL
+;; ? (let ((xxs '((1 2 3 4 5) (5 4 5 4 3 2) (7 8 9 0 1 2 3))))
+;;   (time (dotimes (i 10000)
+;;           (mapcar (partial #'remove-if-not #'evenp) xxs))))
+;; (DOTIMES (I 10000) (MAPCAR (PARTIAL #'REMOVE-IF-NOT #'EVENP) XXS))
+;; took 13,729 microseconds (0.013729 seconds) to run.
+;;         435 microseconds (0.000435 seconds, 3.17%) of which was spent in GC.
+;; During that period, and with 32 available CPU cores,
+;;      13,748 microseconds (0.013748 seconds) were spent in user mode
+;;           0 microseconds (0.000000 seconds) were spent in system mode
+;;  3,200,000 bytes of memory allocated.
+;; NIL
+;; ? (let ((xxs '((1 2 3 4 5) (5 4 5 4 3 2) (7 8 9 0 1 2 3)))
+;;       (f (partial #'remove-if-not #'evenp)))
+;;   (time (dotimes (i 10000)
+;;           (mapcar f xxs))))
+;; (DOTIMES (I 10000) (MAPCAR F XXS))
+;; took 7,569 microseconds (0.007569 seconds) to run.
+;;        469 microseconds (0.000469 seconds, 6.20%) of which was spent in GC.
+;; During that period, and with 32 available CPU cores,
+;;      7,585 microseconds (0.007585 seconds) were spent in user mode
+;;          1 microseconds (0.000001 seconds) were spent in system mode
+;;  2,240,000 bytes of memory allocated.
+;; NIL
 
 (defun smallp (s)
   (< (length s) 10))
@@ -1630,3 +1741,130 @@
    (as-if '(nil))
    (as-if '(nil nil nil nil))
    (not (as-if '(nil t nil)))) )
+
+(deftest test-binary-search ()
+  (check
+   (let ((a #(-5 -1 0 3 9 11 15 17 30 35 51 54)))
+     (check
+      (= 0 (binary-search a -5))
+      (= 3 (binary-search a 3))
+      (= 4 (binary-search a 9))
+      (= 8 (binary-search a 30))
+      (= 11 (binary-search a 54))
+      (= -1 (binary-search a -8))
+      (= -7 (binary-search a 12))
+      (= -13 (binary-search a 60))))
+   (let ((a (reverse #(-5 -1 0 3 9 11 15 17 30 35 51 54))))
+     (check
+      (= 0 (binary-search a 54 :test #'>))
+      (= 3 (binary-search a 30 :test #'>))
+      (= 4 (binary-search a 17 :test #'>))
+      (= 8 (binary-search a 3 :test #'>))
+      (= 11 (binary-search a -5 :test #'>))
+      (= -13 (binary-search a -8 :test #'>))
+      (= -7 (binary-search a 12 :test #'>))
+      (= -1 (binary-search a 60 :test #'>))))
+   (let ((a #("Clojure" "java" "JavaScript" "LISP" "Prolog" "ruby")))
+     (check
+      (= 0 (binary-search a "clojure" :test #'string-lessp))
+      (= 1 (binary-search a "Java" :test #'string-lessp))
+      (= 2 (binary-search a "JAVASCRIPT" :test #'string-lessp))
+      (= 3 (binary-search a "Lisp" :test #'string-lessp))
+      (= 4 (binary-search a "prolog" :test #'string-lessp))
+      (= 5 (binary-search a "Ruby" :test #'string-lessp))
+      (= -5 (binary-search a "oz" :test #'string-lessp))
+      (= -1 (binary-search a "C#" :test #'string-lessp))))
+   (check ; Duplicate elements
+    (= 2 (binary-search #(1 2 3 3d0 4) 3))
+    (= 2 (binary-search #(1 2 3 3d0) 3))
+    (= 1 (binary-search #(2 3 3d0 4) 3))
+    (= 1 (binary-search #(3 3d0 4) 3))
+    (= 4 (binary-search #(0 1 2 3 3d0 4) 3)))
+   (let ((a #((a . 1) (b . 3) (b . 2) (c . 1) (c . 5)))) ; Duplicate elements
+     (flet ((symbol< (a b)
+              (string< (symbol-name a) (symbol-name b))))
+       (check
+        (= 2 (binary-search a 'b :test #'symbol< :key #'car))
+        (= 3 (binary-search a 'c :test #'symbol< :key #'car))
+        (= 0 (binary-search a 'a :test #'symbol< :key #'car)))) )
+   (let ((a #((a . 1) (b . 2) (b . 3) (c . 1) (c . 5))))
+     (flet ((test (a b)
+              (compound-compare a b (list (list #'string< (compose #'symbol-name #'car)) (list #'< #'cdr)))) )
+       (check
+        (= 1 (binary-search a '(b . 2) :test #'test))
+        (= 2 (binary-search a '(b . 3) :test #'test))
+        (= 3 (binary-search a '(c . 1) :test #'test))
+        (= 4 (binary-search a '(c . 5) :test #'test)))) )))
+
+(defclass person-with-age (person)
+  ((age :reader age :initarg :age)))
+
+(deftest test-compound-compare ()
+  (check
+   (labels ((get-year (date) (third date))
+            (get-day (date) (second date))
+            (get-month (date) (first date))
+            (date< (date1 date2)
+              (compound-compare date1 date2 (list (list #'< #'get-year) (list #'< #'get-month) (list #'< #'get-day))))
+            (date> (date1 date2)
+              (compound-compare date1 date2 (list (list #'> #'get-year) (list #'> #'get-month) (list #'> #'get-day)))) )
+     (check
+      (date< '(3 23 1997) '(2 17 1999))
+      (not (date< '(3 23 1997) '(3 23 1997)))
+      (date> '(8 7 1999) '(8 1 1999))
+      (not (date> '(8 7 1999) '(8 7 1999)))) )
+   (flet ((sorted-string< (s1 s2)
+            (compound-compare s1 s2 (list (list #'string< #'(lambda (s) (sort (copy-seq s) #'string<)))) )))
+     (check
+      (sorted-string< "bar" "baz") ; "abr" vs. "abz"
+      (sorted-string< "son" "not") ; "ons" vs. "ont"
+      (sorted-string< "sudden" "podium"))) ; "ddensu" vs. "dimopu"
+   (let ((bob (make-instance 'person-with-age :first "Bob" :last "Smith" :age 30))
+         (mike (make-instance 'person-with-age :first "Mike" :last "Smith" :age 35))
+         (larry (make-instance 'person-with-age :first "Larry" :last "Jones" :age 41))
+         (darryl1 (make-instance 'person-with-age :first "Darryl" :last "Jones" :age 42))
+         (darryl2 (make-instance 'person-with-age :first "Darryl" :last "Jones" :age 43)))
+     (flet ((person< (p1 p2)
+              (compound-compare p1 p2 (list (list #'string< #'last-name) (list #'string< #'first-name) (list #'< #'age)))) )
+       (check
+        (person< bob mike)
+        (person< larry mike)
+        (person< darryl1 larry)
+        (person< darryl1 darryl2)))) ))
+         
+(deftest test-sort-by ()
+  (check
+   (let ((v (shuffle (coerce '((c . 1) (c . 5) (a . 1) (b . 3) (b . 2)) 'vector))))
+     (equals #((A . 1) (B . 2) (B . 3) (C . 1) (C . 5))
+             (sort-by v (list (list #'string< (compose #'symbol-name #'car)) (list #'< #'cdr)))) )
+   (let ((l (list "baz" "pung" "foo" "bar" "academic"))) ;; Sort by length, then lexicographical order.
+     (check
+      (equals '("bar" "baz" "foo" "pung" "academic") (sort-by l (list (list #'< #'length) #'string<)))) )
+   (let ((l (list "baz" "pung" "foo" "bar" "academic"))) ;; Sort by length, then reverse lexicographical order.
+     (check
+      (equals '("foo" "baz" "bar" "pung" "academic") (sort-by l (list (list #'< #'length) #'string>)))) )
+   (flet ((get-year (date) (third date))
+          (get-day (date) (second date))
+          (get-month (date) (first date)))
+     (let ((dates (copy-tree '((3 23 1997)
+                               (2 17 1999)
+                               (8 1 1999)
+                               (2 22 1996)
+                               (4 18 2000)
+                               (8 7 1999)
+                               (5 13 1996)))) )
+       (check
+        (equals '((2 22 1996) (5 13 1996) (3 23 1997) (2 17 1999) (8 1 1999) (8 7 1999) (4 18 2000))
+                (sort-by dates (list (list #'< #'get-year) (list #'< #'get-month) (list #'< #'get-day)))) )))
+   (let ((v (shuffle (vector 1 3 5 7 -2 -4 -6 -8))))
+     (equals #(-8 7 -6 5 -4 3 -2 1) (sort-by v (list (list #'> #'abs)))) )
+   (let ((bob (make-instance 'person-with-age :first "Bob" :last "Smith" :age 30))
+         (mike (make-instance 'person-with-age :first "Mike" :last "Smith" :age 35))
+         (larry (make-instance 'person-with-age :first "Larry" :last "Jones" :age 41))
+         (darryl1 (make-instance 'person-with-age :first "Darryl" :last "Jones" :age 42))
+         (darryl2 (make-instance 'person-with-age :first "Darryl" :last "Jones" :age 43)))
+     (check
+      (equals (vector darryl1 darryl2 larry bob mike)
+              (sort-by (vector bob mike larry darryl1 darryl2) (list (list #'string< #'last-name) (list #'string< #'first-name) (list #'< #'age)))) ))))
+
+

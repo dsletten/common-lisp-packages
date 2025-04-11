@@ -92,13 +92,13 @@
   (loop for p in '(10 -10)
         do (loop for d in '(3 -3)
                  do (check
-                     (multiple-value-bind (_ r) (floor p d)
+                     (multiple-value-bind (_ r) (floor p d) ; FLOOR -> MOD
                        (declare (ignore _))
                        (= r (mod p d)))
                      (multiple-value-bind (_ r) (floor (/ p d))
                        (declare (ignore _))
                        (= (* d r) (mod p d)))
-                     (multiple-value-bind (_ r) (truncate p d)
+                     (multiple-value-bind (_ r) (truncate p d) ; TRUNCATE -> REM
                        (declare (ignore _))
                        (= r (rem p d)))
                      (multiple-value-bind (_ r) (truncate (/ p d))
@@ -279,6 +279,8 @@
 ;;;    (not (> a b)) ≡ (<= a b)
 ;;;      but
 ;;;    (not (> a b c d)) ≢(<= a b c d)
+;;;
+;;;    见 TEST-= below
 ;;;    
 (deftest test-compare-numbers ()
   (check
@@ -863,7 +865,6 @@
    (not (equal #(1 2 3) #(1 2 3)))
    (not (equal (make-instance 'foo) (make-instance 'foo)))) )
 
-
 ;;;
 ;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_equalp.htm
 ;;;    Returns true if x and y are equal, or if they have components that are of the same type as each other
@@ -943,11 +944,48 @@
    (and (eql #\a #\a) (equal #\a #\a) (equalp #\a #\a))
    (and (equal "Foo" "Foo") (equalp "Foo" "Foo"))))
 
-(deftest test-tree-equal ())
-(deftest test-= ())
+(deftest test-tree-equal ()
+  (check
+   (tree-equal #1='(1 (2) (3 (4 5) (6))) (copy-tree #1#))
+   (not (tree-equal #1# #2='(1d0 (2d0) (3d0 (4d0 5d0) (6d0)))) )
+   (handler-case (tree-equal #1# #2# :test #'=)
+     (type-error () t)
+     (:no-error (_) (error "TEST must apply to all leaves of tree!")))
+   (tree-equal #1# #2# :test #'(lambda (a b) (or (and (null a) (null b)) (= a b))))
+   (not (tree-equal #1# #3='(1d0 (2d0) ((3d0) (4d0 5d0) (6d0))) :test #'(lambda (a b) (or (and (null a) (null b)) (= a b)))) )
+   ;;
+   ;;  PAIP pg. 76 SAME-SHAPE-TREE-P
+   ;;  "Do trees A and B have the same structure even if values are different?"
+   ;;
+   (tree-equal '((a) (b) (c d) ((e))) '((:a) (:b) (:c :d) ((:e))) :test (constantly t))
+   (not (tree-equal '((a) (b) (c d) ((e))) '((:a) (:b) (:c (:d)) ((:e))) :test (constantly t)))) )
 
-
-
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_eq_sle.htm
+;;;    The value of = is true if all numbers are the same in value; otherwise it is false.
+;;;    Two complexes are considered equal by = if their real and imaginary parts are equal according to =.
+;;;
+;;;    The value of /= is true if no two numbers are the same in value; otherwise it is false.
+;;;                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+;;;
+;;;    见 TEST-COMPARE-NUMBERS above.
+;;;    
+(deftest test-= ()
+  (check
+   (= 2)
+   (= 2 2)
+   (= 2 2 2)
+   (= 2d0 2d0)
+   (= 2 2d0)
+   (= 4/2 #X2 #B10 #O2)
+   (= 0d0 -0d0)
+   (= #C(4 5) #C(4 5d0) #C(4d0 5d0) #C(4d0 5d0))
+   (/= 1)
+   (/= 1 2)
+   (not (= 1 2 1 1))
+   (not (/= 1 2 1 1)) ; Graham ACL 147 页 (/= w x y z) ≡ (and (/= w x) (/= w y) (/= w z) (/= x y) (/= x z) (/= y z)) !!!!
+   (not (= (+ 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0) (* 6 0.1d0) 0.6d0))
+   (not (/= (+ 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0) (* 6 0.1d0) 0.6d0))))
 
 (deftest test-compare-characters ()
   (check
@@ -2959,3 +2997,73 @@
 ;; 8 
 ;; NIL
 
+;;;
+;;;    CLHS:
+;;;    SET changes the contents of the value cell of SYMBOL to the given VALUE.
+;;;    (set symbol value) ≡ (setf (symbol-value symbol) value)
+;;;
+;;;     The function SET is deprecated.
+;;;     SET cannot change the value of a lexical variable.
+;;;     
+(deftest test-setters ()
+  (check
+   (let ((x 8))
+     (check
+      (progn (setq x 9)
+             (= 9 x))
+      (progn (setf x 10)
+             (= 10 x)))) 
+   (let ((x 8))
+     (declare (special x))
+     (check
+      (progn (set 'x 9)
+             (= 9 x))
+      (progn (setf x 10)
+             (= 10 x)))) 
+   (let ((x 8)
+         (y 'x))
+     (declare (special x))
+     (check
+      (progn (set y 9)
+             (= 9 x))))
+   (let ((x 8)
+         (y (list 'x)))
+     (declare (special x))
+     (check
+      (progn (set (first y) 9)
+             (and (= 9 x)
+                  (equal '(x) y)))
+      (progn (setf (first y) 10)
+             (and (= 9 x)
+                  (equal '(10) y)))) )))
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/m_psetq.htm
+;;;    See ROTATEF above.
+;;;    
+(deftest test-parallel-setters ()
+  (check
+   (let ((a 3) ; Failed swap
+         (b 4))
+     (setf a b b a)
+     (= 4 a b))
+   (let ((a 3) ; Swap
+         (b 4))
+     (psetq a b b a)
+     (and (= 4 a) (= 3 b)))
+   (let ((a 3) ; Swap
+         (b 4))
+     (psetf a b b a)
+     (and (= 4 a) (= 3 b)))
+   (let ((a 1) ; CLHS example
+         (b 2)
+         (c 3))
+     (psetq a (1+ b) b (1+ a) c (+ a b))
+     (and (= 3 a c) (= 2 b)))
+   (let ((x (list 10 20 30))) ; CLHS - Use of PSETQ on a symbol macro.
+     (symbol-macrolet ((y (car x)) (z (cadr x)))
+       (psetq y (1+ z) z (1+ y))
+       (equal '((21 11 30) 21 11) (list x y z))))
+   (let ((l (list 'a 'b 'c))) ; PSETQ only works on symbols. PSETF can take generalized vars.
+     (psetf (first l) (second l) (second l) (first l))
+     (equal '(b a c) l))))
