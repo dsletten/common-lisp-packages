@@ -872,11 +872,13 @@
 ;;         (group-aux source '())
 ;;         '())))
 
-(defun emptyp (seq)
-  (typecase seq
-    (list (null seq))
-    (vector (zerop (length seq)))) )
-
+(defgeneric emptyp (seq)
+  (:documentation "Is SEQ empty?"))
+(defmethod emptyp ((seq list))
+  (null seq))
+(defmethod emptyp ((seq vector))
+  (zerop (length seq)))
+  
 ;;;
 ;;;    See Clojure partition-all
 ;;;    
@@ -1050,16 +1052,6 @@
         tree
         (elements (flatten-aux tree (make-linked-queue)))) ))
 
-(defun prune (item tree &key (test #'eql) (key #'identity))
-  "Remove all instances of the atom ITEM from TREE."
-  (labels ((prune-aux (tree result)
-	     (cond ((null tree) (nreverse result))
-                   (t (destructuring-bind (car . cdr) tree
-                        (cond ((and (atom car) (funcall test item (funcall key car))) (prune-aux cdr result))
-                              ((atom car) (prune-aux cdr (cons car result)))
-                              (t (prune-aux cdr (cons (prune-aux car '()) result)))) )))) )
-    (prune-aux tree '())))
-
 ;; See prune.lisp
 ;; (defun prune-if (pred tree)
 ;;   "Remove all leaves of TREE for which PRED is true. Like REMOVE-IF for trees."
@@ -1089,6 +1081,10 @@
 (defun prune-if-not (pred tree)
   "Remove all leaves of TREE for which PRED is not true."
   (prune-if (complement pred) tree))
+
+(defun prune (item tree &key (test #'eql) (key #'identity))
+  "Remove all instances of the atom ITEM from TREE."
+  (prune-if #'(lambda (leaf) (funcall test item (funcall key leaf))) tree))
 
 ;;;
 ;;;    Graham describes this (find2) as a combination of FIND-IF and SOME. It returns
