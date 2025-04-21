@@ -108,6 +108,7 @@
 (deftest test-symbol-name ()
   (check
    (string= "PUNG" (symbol-name 'pung))
+   (string= "PUNG" 'pung) ; String designator
    (string= "pUNG" (symbol-name '\pung))
    (string= "pUNG" (symbol-name '|p|ung))
    (string= "pung" (symbol-name '|pung|))
@@ -124,6 +125,10 @@
    (string= "" (symbol-name '||))
    (string= "" (symbol-name (make-symbol "")))) )
 
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_nump.htm
+;;;    (numberp object) ≡ (typep object 'number)
+;;;    
 (deftest test-numberp ()
   (check
    (numberp 9)
@@ -969,6 +974,7 @@
 ;;;                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ;;;
 ;;;    见 TEST-COMPARE-NUMBERS above.
+;;;    见 TEST-COMPARE-NUMBERS /= similar to CHAR/=, CHAR-NOT-EQUAL
 ;;;    
 (deftest test-= ()
   (check
@@ -1036,6 +1042,11 @@
    (not (char> #\z #\z #\y #\y #\x #\x #\w #\w #\v #\v))
    (char>= #\z #\z #\y #\y #\x #\x #\w #\w #\v #\v)
 
+   ;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/13_af.htm
+   (or (char> #\z #\A) (char< #\z #\A)) ; Implementation dependent
+   (or (char> #\Z #\a) (char< #\Z #\a))
+   (equal '(#\A #\a #\b #\B #\c #\C) (stable-sort (list #\b #\A #\B #\a #\c #\C) #'char-lessp))
+
    (not (char-equal #\a #\B #\c))
    (char-not-equal #\a #\B #\c)
    (eq (and (char-not-equal #\a #\B) (char-not-equal #\a #\c) (char-not-equal #\B #\c))
@@ -1067,6 +1078,12 @@
    (string= "pung" "Is this not pung?" :start2 12 :end2 16)
    (not (string= "pung" "PUNG"))
    (string/= "pung" "PUNG")
+
+   (string= "PUNG" 'pung) ; String designators
+   (string= 'foo :foo)
+   (string= "x" #\x)
+   (string= (make-symbol "PUNG") (make-symbol "PUNG"))
+   (string= 'cl-user::foo 'test-lisp::foo)
 
    (string-equal "pung" "PUNG")
    (string-equal "Is this not pung?" "PUNG" :start1 12 :end1 16)
@@ -1541,7 +1558,9 @@
    (equal (rest #3#) (member '(b) #3# :test #'equal))
    (not (member '#:c #1#))
    (equal '(c d) (member "C" #1# :key #'symbol-name :test #'equal))
-   (equal '(c d) (member '#:c #1# :test #'(lambda (s1 s2) (equal (symbol-name s1) (symbol-name s2)))) )))
+   (equal '(c d) (member '#:c #1# :test #'(lambda (s1 s2) (equal (symbol-name s1) (symbol-name s2)))) )
+   (member #\a '(#\a #\e #\i #\o #\u))
+   (find #\a "aeiou")))
 
 (deftest test-remove ()
   (check
@@ -3067,3 +3086,259 @@
    (let ((l (list 'a 'b 'c))) ; PSETQ only works on symbols. PSETF can take generalized vars.
      (psetf (first l) (second l) (second l) (first l))
      (equal '(b a c) l))))
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/m_defi_2.htm
+;;;    Except for the issue of avoiding multiple evaluation (see below), the expansion of a define-modify-macro is equivalent to the following: 
+;;;     (defmacro name (reference . lambda-list)                                                                                                
+;;;       documentation                                                                                                                         
+;;;       `(setf ,reference                                                                                                                     
+;;;              (function ,reference ,arg1 ,arg2 ...)))                                                                                        
+;;;
+
+;;;
+;;;    (timesf x 9) ≈ (setf x (funcall #'* x 9))
+;;;    
+(define-modify-macro timesf (multiplier) *)
+
+;;;
+;;;    (addf x 5 10) ≈ (setf x (funcall #'+ x 5 10))
+;;;    
+(define-modify-macro addf (&rest numbers) +)
+
+;; (macroexpand-1 '(define-modify-macro addf (&rest numbers) +))
+;; (DEFMACRO ADDF (#:PLACE &REST NUMBERS &ENVIRONMENT #:ENV)
+;;   (SB-IMPL::EXPAND-RMW-MACRO '+ 'NIL #:PLACE (LIST* NUMBERS) T #:ENV 'NIL))
+;; T
+
+;;;
+;;;    (reversef l) ≈ (setf l (funcall #'reverse l))
+;;;    
+(define-modify-macro reversef () reverse)
+
+(deftest test-define-modify-macro ()
+  (check
+   (let ((x 7))
+     (timesf x 2)
+     (= 14 x))
+   (let ((x 4))
+     (addf x 1 2 3)
+     (= x 10))
+   (let* ((x (list 1 2 3))
+          (y x)
+          (z x))
+     (reversef x)
+     (and (equal '(3 2 1) x)
+          (equal '(1 2 3) y)
+          (not (eq x y))
+          (eq y z)
+          (progn (setf y (nreverse y))
+                 (equal x y)))) ))
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/12_acc.htm
+;;;    12.1.3.3 Rule of Float Substitutability
+;;;
+;;;    When the arguments to an irrational mathematical function are all rational and the true mathematical result
+;;;    is also (mathematically) rational, then unless otherwise noted an implementation is free to return either
+;;;    an accurate rational result or a single float approximation.
+;;;    If the arguments are all rational but the result cannot be expressed as a rational number,
+;;;    then a single float approximation is always returned.
+;;;
+;;;    Function  Sample Results                                   
+;;;    abs       (abs #c(3 4)) =>  5 or 5.0                       
+;;;    acos      (acos 1) =>  0 or 0.0                            
+;;;    acosh     (acosh 1) =>  0 or 0.0                           
+;;;    asin      (asin 0) =>  0 or 0.0                            
+;;;    asinh     (asinh 0) =>  0 or 0.0                           
+;;;    atan      (atan 0) =>  0 or 0.0                            
+;;;    atanh     (atanh 0) =>  0 or 0.0                           
+;;;    cis       (cis 0) =>  1 or #c(1.0 0.0)                     
+;;;    cos       (cos 0) =>  1 or 1.0                             
+;;;    cosh      (cosh 0) =>  1 or 1.0                            
+;;;    exp       (exp 0) =>  1 or 1.0                             
+;;;    expt      (expt 8 1/3) =>  2 or 2.0                        
+;;;    log       (log 1) =>  0 or 0.0                             
+;;;              (log 8 2) =>  3 or 3.0                           
+;;;    phase     (phase 7) =>  0 or 0.0                           
+;;;    signum    (signum #c(3 4)) =>  #c(3/5 4/5) or #c(0.6 0.8)  
+;;;    sin       (sin 0) =>  0 or 0.0                             
+;;;    sinh      (sinh 0) =>  0 or 0.0                            
+;;;    sqrt      (sqrt 4) =>  2 or 2.0                            
+;;;              (sqrt 9/16) =>  3/4 or 0.75                      
+;;;    tan       (tan 0) =>  0 or 0.0                             
+;;;    tanh      (tanh 0) =>  0 or 0.0
+;;;
+(deftest test-float-substitutability ()
+  (check
+   (or (typep (exp 0) 'rational)
+       (typep (exp 0) 'single-float))
+   (typep (exp (coerce 0 'double-float)) 'double-float)
+   (or (typep (expt 32 1/5) 'rational)
+       (typep (expt 32 1/5) 'single-float))
+   (typep (expt (coerce 32 'double-float) 1/5) 'double-float)
+   (or (typep (log 1) 'rational)
+       (typep (log 1) 'single-float))
+   (typep (log (coerce 1 'double-float)) 'double-float)
+   (or (typep (log 32 2) 'rational)
+       (typep (log 32 2) 'single-float))
+   (typep (log (coerce 32 'double-float) 2) 'double-float)
+   (or (typep (sin 0) 'rational)
+       (typep (sin 0) 'single-float))
+   (typep (sin (coerce 0 'double-float)) 'double-float)
+   (or (typep (sqrt 8) 'rational)
+       (typep (sqrt 8) 'single-float))
+   (typep (sqrt (coerce 8 'double-float)) 'double-float)
+   (or (typep (tan 0) 'rational)
+       (typep (tan 0) 'single-float))
+   (typep (tan (coerce 0 'double-float)) 'double-float)))
+
+(deftest test-make-string ()
+  (check
+   (string= "XXXXX" (make-string 5 :initial-element #\X))
+   (equal (make-string 8) (make-string 8))
+   (= 10 (length (make-string 10)))
+   (or (string= "        " (make-string 8)) ; Implementation-dependent
+       (string/= "        " (make-string 8)))
+   (let ((s (make-string 5 :initial-element #\space))) ; Mutable
+     (setf (subseq s 0) "Is this not pung?")
+     (string= "Is th" s))
+   (let ((s (make-string 17 :initial-element #\space)))
+     (setf (subseq s 0) "Is this not pung?")
+     (string= "Is this not pung?" s))))
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_chp.htm
+;;;    (characterp object) ≡ (typep object 'character)
+;;;    
+(deftest test-characterp ()
+  (check
+   (characterp #\a)
+   (not (characterp 'a))
+   (not (characterp :a))
+   (not (characterp "a"))
+   (characterp (code-char 65))
+   (characterp (character 'a))
+   (characterp (character :a))
+   (characterp (character "a"))))
+   
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_stgp.htm
+;;;    (stringp object) ≡ (typep object 'string)
+;;;
+(deftest test-stringp ()
+  (check
+   (stringp "pung")
+   (not (stringp 'pung))
+   (not (stringp :pung))
+   (not (stringp #\p))
+   (stringp (string 'pung))
+   (stringp (string :pung))
+   (stringp (string #\p))))
+
+(deftest test-alpha-char-p ()
+  (check
+   (every #'alpha-char-p #[#\a #\z])
+   (every #'alpha-char-p #[#\A #\Z])
+   (notany #'alpha-char-p #[#\0 #\9])
+   (notany #'alpha-char-p #[#\space #\/])))
+
+;;;
+;;;    DIGIT-CHAR-P           char->number
+;;;    "Is this CHAR a DIGIT?"
+;;;    
+(deftest test-digit-char-p ()
+  (check
+   (not (digit-char-p #\?))
+   (digit-char-p #\8)
+   (not (digit-char-p #\a))
+   (digit-char-p #\a 16)
+   (digit-char-p #\A 16)
+   (not (digit-char-p #\3 2))))
+
+;;;
+;;;    DIGIT-CHAR            number->char
+;;;    (DIGIT->CHAR)
+;;;
+(deftest test-digit-char ()
+  (check
+   (digit-char 9)
+   (char= #\9 (digit-char 9))
+   (not (digit-char 10))
+   (digit-char 10 16)
+   (char= #\A (digit-char 10 16)))) ; Always uppercase.
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_alphan.htm
+;;;    (alphanumericp x) ≡ (or (alpha-char-p x) (not (null (digit-char-p x))))
+;;;
+(deftest test-alphanumericp ()
+  (check
+   (every #'alphanumericp #[#\a #\z])
+   (every #'alphanumericp #[#\A #\Z])
+   (every #'alphanumericp #[#\0 #\9])
+   (notany #'alphanumericp #[#\space #\/])))
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/13_adca.htm
+;;;
+(deftest test-upper-case-p ()
+  (check
+   (every #'upper-case-p #[#\A #\Z])
+   (notany #'upper-case-p #[#\a #\z])))
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/13_adcb.htm
+;;;
+(deftest test-lower-case-p ()
+  (check
+   (every #'lower-case-p #[#\a #\z])
+   (notany #'lower-case-p #[#\A #\Z])))
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/13_adc.htm
+;;;
+(deftest test-both-case-p ()
+  (check
+   (every #'both-case-p #[#\a #\z])
+   (every #'both-case-p #[#\A #\Z])))
+
+(deftest test-standard-char-p ()
+  (check
+   (every #'standard-char-p #[#\! #\~])
+   (every (partial* #'typep 'standard-char) #[#\! #\~])
+   (standard-char-p #\space)
+   (standard-char-p #\newline)
+   (not (standard-char-p #\tab))
+   (notany #'standard-char-p "中国的首都是北京")))
+
+(deftest test-graphic-char-p ()
+  (check
+   (every #'graphic-char-p #[#\! #\~])
+   (graphic-char-p #\space)
+   (not (graphic-char-p #\newline))
+   (not (graphic-char-p #\tab))
+   (every #'graphic-char-p "中国的首都是北京")))
+
+(deftest test-change-character-case ()
+  (check
+   (every #'char= #[#\a #\z] (mapcar #'char-downcase #[#\A #\Z]))
+   (every #'char= #[#\A #\Z] (mapcar #'char-upcase #[#\a #\z]))))
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_ch.htm
+;;;    (character object) ≡ (coerce object 'character)
+;;;    
+(deftest test-character ()
+  (check
+   (char= #\A (character #\A))
+   (char= #\A (character "A")) ; Character designators https://www.lispworks.com/documentation/HyperSpec/Body/26_glo_c.htm#character_designator
+   (char= #\A (character 'a))
+   (char= #\A (character :a))))
+
+(deftest test-char-code-conversion ()
+  (check
+   (every #'char= #[#\a #\z] (mapcar #'code-char #[(char-code #\a) (char-code #\z)]))
+   (every #'char= #[#\A #\Z] (mapcar #'code-char #[(char-code #\A) (char-code #\Z)]))
+   (every #'= #[(char-code #\a) (char-code #\z)] (mapcar #'char-code #[#\a #\z]))
+   (every #'= #[(char-code #\A) (char-code #\Z)] (mapcar #'char-code #[#\A #\Z]))))

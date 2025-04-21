@@ -68,3 +68,18 @@
    (not (valid-num-p 8d0 #'integerp))
    (not (valid-num-p 1/8 #'integralp))
    (not (valid-num-p (sqrt -1) #'realp))))
+
+(deftest test-read-word ()
+  (check
+   (string= "foo" (with-input-from-string (s "foo") (read-word s)))
+   (string= "" (with-input-from-string (s "   ") (read-word s)))
+   (string= "" (with-input-from-string (s "") (read-word s)))) )
+
+(deftest test-read-words ()
+  (check
+   (equal '("Is" "this" "not" "pung?")
+          (with-input-from-string (s "Is this not pung?")
+            (read-words s)))
+   (equal '("This" "love" "has" "taken" "its" "toll" "on" "me." "She" "said" "goodbye" "too" "many" "times" "before.")
+          (with-input-from-string (s "This love has taken its toll on me. She said goodbye too many times before.")
+            (read-words s)))) )

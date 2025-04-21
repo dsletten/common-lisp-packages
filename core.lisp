@@ -39,13 +39,13 @@
            :>case :class-template :comment :compose :conc1 :copy-array :cycle
            :defchain :destructure :dohash :doset :dostring :dotuples :dovector
            :drop :drop-until :drop-while :duplicatep
-           :emptyp :ends-with :equalelts :equals :eqls :every-pred :explode
+           :empty :emptyp :ends-with :equalelts :equals :eqls :every-pred :explode
            :filter :filter-split :find-some-if :find-subtree :firsts-rests :for :flatten
            :group :group-until :horners
 	   :if-let :if3 :iffn :in :in-if :inq :integralp :iterate
            :juxtapose
            :last1 :least :leastn :list-to-string :longerp
-           :macroexpand-all :make-empty-seq :make-identity-matrix
+           :macroexpand-all :make-identity-matrix
            :map-> :map-array :map-array-index :map0-n :map1-n :mapa-b :mapcars :mappend :mapset
            :memoize :mklist :mkstr :most :mostn :most-least :most-least-n :nif
            :partial :partial* :partition :ppmx
@@ -308,6 +308,7 @@
 (defgeneric take-drop (n seq)
   (:documentation "Split a sequence at the Nth element. Return the subsequences before and after."))
 (defmethod take-drop :around (n seq)
+  (declare (ignore seq))
   (assert (typep n `(integer 0))
           (n)
           "N must be a non-negative integer.")
@@ -343,12 +344,27 @@
 ;;                     finally (return (values q #- :clisp (rest tail) #+ :clisp tail))) ))
 ;;     (vector (values (take n seq) (drop n seq)))) ) ; Works for strings too
 
-;; (defun take-drop (n seq)
+;; (defmethod take-drop (n (seq list))
 ;;   (loop repeat n
 ;;         for elt in seq
 ;;         for tail on (rest seq)
 ;;         collect elt into take
 ;;         finally (return (values take tail))))
+
+;; (defmethod take-drop* (n (seq list))
+;;   (loop repeat n
+;;         for tail on seq
+;;         collect (first tail) into take
+;;         never (null tail)
+;;         finally (return (values take (rest tail)))) )
+
+;; (defmethod take-drop (n (seq list))
+;;   (loop for i below n
+;;         for tail on (rest seq)
+;;         finally (return (if (endp tail)
+;;                             (values seq '())
+;;                             (values (subseq seq 0 i) tail)))) )
+
 
 ;;;
 ;;;    Call TAKE-WHILE, get DROP-WHILE for free.
@@ -365,6 +381,7 @@
   (take-drop (or (position-if-not pred seq) (length seq)) seq))
 
 (defun take-until (pred seq)
+  "Take elements of sequence SEQ as long as PRED evaluates to false. Return remainder of sequence as secondary value."
   (take-while (complement pred) seq))
 
 (defgeneric drop-while (pred seq)
@@ -378,19 +395,24 @@
   (drop (or (position-if-not pred seq) (length seq)) seq))
 
 (defun drop-until (pred seq)
+  "Drop elements of sequence SEQ as long as PRED evaluates to false."
   (drop-while (complement pred) seq))
 
-;; (defun empty-seq (in)
-;;   (map (type-of in) #'identity in))
-
-;; (defun empty-seq (in)
-;;   (make-sequence (type-of in) 0))
-
-(defun make-empty-seq (in)
-  (typecase in
-    (list (list))
-    (string (make-string 0))
-    (vector (vector))))
+(defgeneric empty (seq)
+  (:documentation "Return an empty sequence of the same type as SEQ."))
+(defmethod empty ((seq list))
+  (declare (ignore seq))
+  (list))
+(defmethod empty ((seq string))
+  (declare (ignore seq))
+  (make-string 0))
+(defmethod empty ((seq simple-vector))
+  (declare (ignore seq))
+  (vector))
+(defmethod empty ((seq vector))
+  (make-array (array-total-size seq)
+              :fill-pointer (if (array-has-fill-pointer-p seq) 0 nil)
+              :adjustable (adjustable-array-p seq)))
 
 (defun prefix-generator (l)
   "Given a list L return a function that successively yields all prefixes of L."
@@ -854,8 +876,10 @@
         for val = (funcall f elt)
         when val collect val))
 (defmethod filter (f (seq vector))
+  (declare (ignore f seq))
   (coerce (call-next-method) 'vector))
 (defmethod filter (f (seq string))
+  (declare (ignore f seq))
   (coerce (call-next-method) 'string))
 
 ;;;
@@ -1052,27 +1076,14 @@
         tree
         (elements (flatten-aux tree (make-linked-queue)))) ))
 
-;; See prune.lisp
-;; (defun prune-if (pred tree)
-;;   "Remove all leaves of TREE for which PRED is true. Like REMOVE-IF for trees."
-;;   (labels ((prune-aux (tree acc)
-;;              (cond ((null tree) (nreverse acc))
-;;                    ((atom (car tree)) (prune-aux (cdr tree)
-;;                                                  (if (funcall pred (car tree))
-;;                                                      acc
-;;                                                      (cons (car tree) acc))))
-;;                    (t (prune-aux (cdr tree)
-;;                                  (cons (prune-aux (car tree) '()) acc)))) ))
-;;     (prune-aux tree '())))
-
 (defun prune-if (pred tree)
   "Remove all leaves of TREE for which PRED is true."
   (labels ((prune-aux (tree result)
 	     (cond ((null tree) (nreverse result))
                    (t (destructuring-bind (car . cdr) tree
-                        (cond ((and (atom car) (funcall pred car)) (prune-aux cdr result))
-                              ((atom car) (prune-aux cdr (cons car result)))
-                              (t (prune-aux cdr (cons (prune-aux car '()) result)))) )))) )
+                        (cond ((consp car) (prune-aux cdr (cons (prune-aux car '()) result)))
+                              ((funcall pred car) (prune-aux cdr result))
+                              (t (prune-aux cdr (cons car result)))) )))) )
     (prune-aux tree '())))
 
 ;;;
@@ -1091,32 +1102,18 @@
 ;;;    the first element (FIND-IF) and the value of applying a function to that element (SOME)
 ;;;    when that value is true.
 ;;;    
-;; (defun find-some-if (fn list)
-;;   (if (endp list)
-;;       nil
-;;       (let ((val (funcall fn (first list))))
-;;         (if val
-;;             (values (first list) val)
-;;             (find-some-if fn (rest list)))) ))
-
-;; (defun find-some-if (f list)
-;;   (do* ((l list (rest l))
-;;         (elt (first l) (first l))
-;;         (val (funcall f elt) (funcall f elt)))
-;;        ((endp l) nil)
-;;     (when val
-;;       (return (values elt val)))) )
-
-(defun find-some-if (f seq)
-  (typecase seq
-    (list (loop for elt in seq
-                for val = (funcall f elt)
-                when val
-                return (values elt val)))
-    (vector (loop for elt across seq
-                  for val = (funcall f elt)
-                  when val
-                  return (values elt val)))) )
+(defgeneric find-some-if (f seq)
+  (:documentation "For a given test F return the first element of SEQ for which F is true along with the value of applying F to that element."))
+(defmethod find-some-if (f (seq list))
+  (loop for elt in seq
+        for val = (funcall f elt)
+        when val
+        return (values elt val)))
+(defmethod find-some-if (f (seq vector))
+  (loop for elt across seq
+        for val = (funcall f elt)
+        when val
+        return (values elt val)))
 
 ;;;
 ;;;    Does X occur before Y in list?
@@ -1137,29 +1134,29 @@
   (:documentation  "Does X occur before Y in SEQ? This is true whenever X occurs without Y having yet been encountered, 
 i.e., even if Y is not actually in the sequence. For a positive result, returns the tail of the list
 starting with X or the index of the position of X in the sequence."))
-(defmethod before (x y (seq null) &key test key)
-  (declare (ignore x y seq test key))
-  nil)
+(defmethod before :around (x y (seq sequence) &key (test #'eql) key)
+  (declare (ignore key))
+  (cond ((emptyp seq) nil)
+        ((funcall test x y) nil)
+        (t (call-next-method))))
 (defmethod before (x y (seq list) &key (test #'eql) (key #'identity))
-  (if (funcall test x y)
-      nil
-      (loop for cons on seq
-            for elt = (first cons)
-            when (funcall test y (funcall key elt)) return nil
-            when (funcall test x (funcall key elt)) return cons)))
+  (loop for cons on seq
+        for elt = (first cons)
+        when (funcall test y (funcall key elt)) return nil
+        when (funcall test x (funcall key elt)) return cons))
 (defmethod before (x y (seq vector) &key (test #'eql) (key #'identity))
-  (if (funcall test x y)
-      nil
-      (loop for elt across seq
-            for i from 0
-            when (funcall test y (funcall key elt)) return nil
-            when (funcall test x (funcall key elt)) return i)))
+  (loop for elt across seq
+        for i from 0
+        when (funcall test y (funcall key elt)) return nil
+        when (funcall test x (funcall key elt)) return i))
 
 (defgeneric after (x y seq &key test key)
   (:documentation "Does X occur after Y in SEQ? X must explicitly and exclusively be present after Y."))
-(defmethod after (x y (seq null) &key test key)
-  (declare (ignore x y seq test key))
-  nil)
+(defmethod after :around (x y (seq sequence) &key test key)
+  (declare (ignore x y test key))
+  (if (emptyp seq)
+      nil
+      (call-next-method)))
 (defmethod after (x y (seq list) &key (test #'eql) (key #'identity))
  (member x (before y x seq :test test :key key) :test test :key key))
 (defmethod after (x y (seq vector) &key (test #'eql) (key #'identity))
@@ -1169,9 +1166,11 @@ starting with X or the index of the position of X in the sequence."))
 
 (defgeneric duplicatep (obj seq &key test key)
   (:documentation "Are there duplicate instances of OBJ in SEQ as determined by TEST? If so return the tail of the list starting with the duplicate or the index in the vector of the duplicate."))
-(defmethod duplicatep (obj (seq null) &key test key)
-  (declare (ignore obj seq test key))
-  nil)
+(defmethod duplicatep :around (obj (seq sequence) &key test key)
+  (declare (ignore obj test key))
+  (if (emptyp seq)
+      nil
+      (call-next-method)))
 (defmethod duplicatep (obj (seq list) &key (test #'eql) (key #'identity))
   (member obj (rest (member obj seq :test test :key key)) :test test :key key))
 (defmethod duplicatep (obj (seq vector) &key (test #'eql) (key #'identity))
@@ -1710,6 +1709,7 @@ starting with X or the index of the position of X in the sequence."))
       (make-range #\0 (code-char (1- (char-code start))) step)
       '()))
 (defmethod make-range ((start character) end step)
+  (declare (ignore start end step))
   (error "Mismatched input types."))
 (defmethod make-range ((start number) (end number) (step number))
   (mapa-b #'identity start end step))
@@ -1729,6 +1729,7 @@ starting with X or the index of the position of X in the sequence."))
       (make-range 0 (1- start) step)
       '()))
 (defmethod make-range ((start number) end step)
+  (declare (ignore start end step))
   (error "Mismatched input types."))
   
 ;; (defun map-> (fn start test-fn succ-fn)
@@ -2663,23 +2664,19 @@ starting with X or the index of the position of X in the sequence."))
 ;;;    This segregates _elements_ of SEQ not the _values_ of applying F.
 ;;;    (See FILTER above).
 ;;;    
-(defun filter-split (f seq)
-  (typecase seq
-    (list (loop for elt in seq
-                when (funcall f elt) collect elt into trues
-                else collect elt into falses
-                finally (return (list trues falses))))
-    (vector (loop for elt across seq
-                  when (funcall f elt) collect elt into trues
-                  else collect elt into falses
-                  finally (return (list (coerce trues 'vector)
-                                        (coerce falses 'vector)))) )))
-
-;; (defun filter-split (f seq)
-;;   (let ((trues '())
-;;         (falses '()))
-;;     (map nil #'(lambda (elt) (if (funcall f elt) (push elt trues) (push elt falses))) seq)
-;;     (list (nreverse trues) (nreverse falses))))
+(defgeneric filter-split (f seq)
+  (:documentation "Segregate elements of SEQ that pass the test F from those that don't."))
+(defmethod filter-split (f (seq list))
+  (loop for elt in seq
+        when (funcall f elt) collect elt into trues
+        else collect elt into falses
+        finally (return (list trues falses))))
+(defmethod filter-split (f (seq vector))
+  (loop for elt across seq
+        when (funcall f elt) collect elt into trues
+        else collect elt into falses
+        finally (return (list (coerce trues 'vector)
+                              (coerce falses 'vector)))) )
 
 ;;;
 ;;;    I wrote these without realizing I already had FIRSTS-RESTS...

@@ -190,7 +190,9 @@
 (deftest test-take-until ()
   (check
    (equal '((1 2 3 4) (5 6 7 8 9 10))
-          (multiple-value-list (take-until #'(lambda (x) (> x 4)) (loop for i from 1 to 10 collect i))))
+          (multiple-value-list (take-until #'(lambda (x) (> x 4)) (loop for i from 1 to 10 collect i)))) ; Graham's SPLIT-IF
+   (equal '((1 2 3 4) (5 6 7 8 9 10))
+          (multiple-value-list (take-until (partial* #'> 4) (loop for i from 1 to 10 collect i))))
    (equal '((1 2 3 4 5 6 7 8 9 10) ())
           (multiple-value-list (take-until #'(lambda (x) (> x 14)) (loop for i from 1 to 10 collect i))))
    (equal '(() (1 2 3 4 5 6 7 8 9 10))
@@ -428,6 +430,10 @@
    (equal (cycle #'1+ 8 '(1 2 3 4 5 6 7)) '(2 3 4 5 6 7 8 2))
    (equal (cycle #'1+ 20 '(1 2 3 4 5 6 7)) '(2 3 4 5 6 7 8 2 3 4 5 6 7 8 2 3 4 5 6 7))))
 
+(deftest test-filter-split ()
+  (check
+   (equal '((1 3 5 7 9) (2 4 6 8 10)) (filter-split #'oddp (loop for i from 1 to 10 collect i)))
+   (equal '((5 6 7 8 9 10) (1 2 3 4)) (filter-split (partial* #'> 4) (loop for i from 1 to 10 collect i)))) )
 
 (defun make-random-tree (generator)
   (if (< (random 1d0) 0.5)
@@ -487,7 +493,6 @@
    (equal (multiple-value-list (find-some-if #'(lambda (ch) (if (member ch '(#\a #\e #\i #\o #\u)) (char-upcase ch) nil)) "Is this not pung?")) '(#\i #\I))
    (equal (multiple-value-list (find-some-if (iffn #'(lambda (ch) (member ch '(#\a #\e #\i #\o #\u))) #'char-upcase) "Is this not pung?")) '(#\i #\I))
    (equal (multiple-value-list (find-some-if #'(lambda (s) (if (= (length s) 4) (string-upcase s) nil)) #("Yoshimi" "Battles" "The" "Pink" "Robots"))) '("Pink" "PINK"))))
-   
 
 (deftest test-last1 ()
   (check
@@ -554,6 +559,35 @@
           (filter #'(lambda (ch) (and (alpha-char-p ch) (lower-case-p ch) (char-upcase ch))) (coerce "Is this not pung?" 'list)))
    (equal '(#\S #\T #\H #\I #\S #\N #\O #\T #\P #\U #\N #\G)
           (filter (every-pred #'alpha-char-p #'lower-case-p #'char-upcase) (coerce "Is this not pung?" 'list)))))
+
+(deftest test-empty ()
+  (check
+   (string= "" (empty "Is this not pung?"))
+   (equal '() (empty '(1 2 3 4)))
+   (equals #() (empty (vector :pung :foo :bar :baz)))
+   (let* ((v0 (make-array 5 :fill-pointer 0 :adjustable t))
+          (v1 (empty v0)))
+     (check
+      (= (array-total-size v0) (array-total-size v1))
+      (array-has-fill-pointer-p v1)
+      (adjustable-array-p v1))
+     (vector-push-extend 8 v1)
+     (check
+      (= 1 (length v1))
+      (= 1 (fill-pointer v1))
+      (equals #(8) v1)))) )
+
+(deftest test-emptyp ()
+  (check
+   (emptyp "")
+   (emptyp '())
+   (emptyp #())
+   (not (emptyp "pung"))
+   (not (emptyp '(1 2 3)))
+   (not (emptyp #(:a :b :c :d :e)))
+   (emptyp (empty "pung"))
+   (emptyp (empty '(1 2 3)))
+   (emptyp (empty #(:a :b :c :d :e)))) )
 
 (deftest test-group ()
   (check
@@ -640,16 +674,24 @@
 
 (deftest test-before ()
   (check
-   (equal '(A B C D) (before 'a 'b '(a b c d)))
+   (equal '(a b c d) (before 'a 'b '(a b c d)))
+   (not (before 'a 'a '(a b c d)))
    (not (before 'a 'b '()))
    (not (before 'a 'b '(b a c d)))
-   (equal '(A C D) (before 'a 'b '(a c d)))
+   (equal '(a c d) (before 'a 'b '(a c d)))
+   (not (before 2 3 '(0 1 2.0d0 3)))
    (not (before 2 3 '(0 1 2.0d0 3 2)))
    (equal '(2.0d0 3 2) (before 2 3 '(0 1 2.0d0 3 2) :test #'=))
+   (equal '(2.0d0 3 2) (before 2d0 2 '(0 1 2.0d0 3 2)))
+   (not (before 2d0 2 '(0 1 2.0d0 3 2) :test #'=))
+   (not (before 'a 'b #()))
    (= 12 (before #\p #\u "Is this not pung?"))
+   (not (before #\p #\u ""))
    (not (before #\p #\u "Is this not Pung?"))
    (= 12 (before #\p #\u "Is this not Pung?" :test #'char-equal))
    (not (before #\u #\p "Is this not pung?"))
+   (= 0 (before #\I #\i "Is this not pung?"))
+   (not (before #\I #\i "Is this not Pung?" :test #'char-equal))
    (not (before '(a b) '(c d) (vector '(:a) "foo" '(a b) '(c d))))
    (= 2 (before '(a b) '(c d) (vector '(:a) "foo" '(a b) '(c d)) :test #'equal))
    (equal '((:A 9) (:E 5) (:B -6))
@@ -660,8 +702,9 @@
 
 (deftest test-after ()
   (check
-   (equal '(B C D) (after 'b 'a '(a b c d)))
-   (equal '(D) (after 'd 'a '(a b c d)))
+   (equal '(b c d) (after 'b 'a '(a b c d)))
+   (equal '(d) (after 'd 'a '(a b c d)))
+   (not (after 'a 'b '()))
    (not (after 'a 'b '(a b c d)))
    (not (after 'a 'b '(a b c a d)))
    (not (after 'a 'a '(a b c a d)))
@@ -669,11 +712,15 @@
    (= 3 (after 'd 'a '#(a b c d)))
    (not (after 'e 'a '#(a b c d)))
    (not (after 'a 'b '#(a b c d)))
+   (not (after 'a 'b #()))
+   (not (after #\p #\u ""))
    (= 13 (after #\u #\p "Is this not pung?"))
    (= 5 (after #\i #\s "Is this not pung?"))
    (not (after #\i #\s "Is this not pung?" :test #'char-equal))
    (not (after 2 0 #(4 6 8 0 2.0 3 5 7 9)))
    (= 4 (after 2 0 #(4 6 8 0 2.0 3 5 7 9) :test #'=))
+   (= 6 (after 2 2.0 #(4 6 8 0 2.0 3 2 7 9)))
+   (not (after 2 2.0 #(4 6 8 0 2.0 3 2 7 9) :test #'=))
    (equal '((:B -6))
           (after :b :a '((:d 7) (:c 12) (:a 9) (:e 5) (:b -6)) :key #'first))
    (= 4 (after :b :a #((:d 7) (:c 12) (:a 9) (:e 5) (:b -6)) :key #'first))
@@ -681,12 +728,15 @@
         
 (deftest test-duplicatep ()
   (check
+   (not (duplicatep 'a '()))
    (not (duplicatep 'a '(a b c d)))
    (equal '(A E F G) (duplicatep 'a '(a b c d a e f g)))
    (not (duplicatep #\a "abcd"))
    (= 4 (duplicatep #\a "abcdaefg"))
    (not (duplicatep #\a "abcdAEFG"))
+   (not (duplicatep #\a ""))
    (= 4 (duplicatep #\a "abcdAEFG" :test #'char-equal))
+   (not (duplicatep 2 #()))
    (not (duplicatep 2 #(2 4 6 8)))
    (= 5 (duplicatep 2 #(2 4 6 8 0 2 3 5 7 9)))
    (not (duplicatep 2 #(2 4 6 8 0 2.0 3 5 7 9)))
@@ -1117,7 +1167,10 @@
 
 (deftest test-compose ()
   (check
-   (equal (fifth #1='(a b c d e f)) (funcall (compose #'first #'rest #'rest #'rest #'rest) #1#))
+   (eq #'identity (compose))
+   (let ((s "foo"))
+     (eq s (funcall (compose) s)))
+   (eq #'length (compose #'length))
    (equal (mapcar #'(lambda (x) (+ x 2)) #2=(loop for i from 1 to 10 collect i)) (mapcar (compose #'1+ #'1+) #2#))
    ;; IDENTITY!
    (equal #2# (mapcar (compose #'1+ #'1-) #2#))
@@ -1128,6 +1181,7 @@
    (equal '(3 2 1 4) (mapcar (compose #'length #'cons) '(a b c d) '((1 2) (3) () (4 5 6))))
    ;; COMPLEMENT
    (equal (mapcar (complement #'evenp) #2#) (mapcar (compose #'not #'evenp) #2#))
+   (equal (fifth #1='(a b c d e f)) (funcall (compose #'first #'rest #'rest #'rest #'rest) #1#))
    (= (sqrt 15) (funcall (compose #'sqrt #'abs #'+) -1 -2 -3 -4 -5))
    (= (sqrt 15d0) (funcall (compose #'sqrt (partial* #'coerce 'double-float) #'abs #'+) -1 -2 -3 -4 -5))))
 

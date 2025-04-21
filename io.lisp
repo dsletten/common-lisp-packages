@@ -44,7 +44,7 @@
            :number-file
            :print-plist :prompt :prompt-read
            :read-file :read-file-as-string
-           :read-list :read-num :read-word
+           :read-list :read-num :read-word :read-words
            :reread           
            :search-file :search-lines-of-file
 	   :valid-num-p
@@ -259,16 +259,48 @@
           (validate (string-trim " " response))
           (validate response)))) )
 
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/02_adg.htm
+;;;    #\Backspace #\Rubout ??
+;;;
+;;;    (map 'vector #'code-char '(32 9 10 11 12 13)) =>
+;;;    #(#\  #\Tab #\Newline #\Vt #\Page #\Return) ; ABCL, CLISP, CMUCL, SBCL
+;;;    #(#\  #\Tab #\Newline #\PageUp #\Page #\Return) ; Clozure
+;;;    
+(defgeneric white-space-p (ch)
+  (:documentation "Is character CH a whitespace character?"))
+(defmethod white-space-p ((ch character))
+  (declare (ignore ch))
+  nil)
+(defmethod white-space-p ((ch (eql #\space))) t)
+(defmethod white-space-p ((ch (eql #\newline))) t)
+(defmethod white-space-p ((ch (eql #\linefeed))) t) ; Same as #\newline?
+(defmethod white-space-p ((ch (eql #\return))) t)
+(defmethod white-space-p ((ch (eql #\page))) t)
+(defmethod white-space-p ((ch (eql #\tab))) t)
+
+;; (defun read-word (stream)
+;;   (loop for ch = (read-char stream nil nil)
+;;         while (member ch '(#\space #\newline #\tab))
+;;         finally (unless (null ch) (unread-char ch stream)))
+;;   (with-output-to-string (s)
+;;     (loop for ch = (read-char stream nil nil)
+;;           until (or (member ch '(#\space #\newline #\tab)) (null ch))
+;;           do (write-char ch s))))
 (defun read-word (stream)
   (loop for ch = (read-char stream nil nil)
-        while (member ch '(#\space #\newline #\tab))
+        until (or (null ch) (not (white-space-p ch)))
         finally (unless (null ch) (unread-char ch stream)))
   (with-output-to-string (s)
     (loop for ch = (read-char stream nil nil)
-          until (or (member ch '(#\space #\newline #\tab)) (null ch))
+          until (or (null ch) (white-space-p ch))
           do (write-char ch s))))
 
-;(defun get-num (prompt &optional test)
+(defun read-words (stream)
+  (loop for word = (read-word stream)
+        until (string= word "")
+        collect word))
+
 (defun get-num (prompt &key test (precision 'double-float))
   (let ((num (read-num (prompt-read prompt) :test test :precision precision)))
     (if (null num)
@@ -294,45 +326,6 @@
           t)
       nil))
 
-;;;    The number may be constrained by optional min and max
-;;;    args (which are inclusive).
-; (defun get-num (prompt &optional min max)
-;   (format t "~A" prompt)
-;   (or (valid-num (read-from-string (read-line) nil nil) min max)
-;       (get-num prompt min max)) )
-
-; ;;;
-; ;;;    GET-NUM should send in 3 args, but by making MIN and MAX optional
-; ;;;    this can be used by other functions too.
-; ;;;    
-; (defun valid-num (num &optional min max)
-;   (and (numberp num)
-;        (if min (>= num min) t)
-;        (if max (<= num max) t)
-;        num) )
-
-;;;
-;;;    Christopher Stacy
-;;;    
-;; (defun read-a-number (&key stream default)
-;;   (let* ((line (read-line stream))
-;;          (n (let* ((*read-eval* nil))
-;;               (ignore-errors (read-from-string line nil)))))
-;;     (if (numberp n)
-;;         n
-;;       default)))
-
-;;;
-;;;    Matthew Danish
-;;;    
-;; (defun parse-float (string &optional (default 0.0))
-;;   (let* ((*read-eval* nil)
-;; 	 (val (ignore-errors (read-from-string string))))
-;;     (typecase val
-;;       (number val)
-;;       (t default))))
-
-;(defun readlist (&rest args)
 (defun read-list (&rest args)
   (let ((*read-eval* nil))
     (values (read-from-string
@@ -391,80 +384,6 @@
 
 
 #|
-;;;
-;;;    Read a number from STDIN using a given prompt and meeting the given
-;;;    TEST criterion. Continue prompting until a valid number is entered.
-;;;
-;;;    Note: READ-LINE is used so that all input is consumed rather than
-;;;          leaving anything in buffer.
-;;;          
-; (defun get-num (prompt &optional min max)
-;   (do ((num nil))
-;       ((if (numberp num)
-; 	   (and (if (numberp min)
-; 		    (>= num min)
-; 		    t)
-; 		(if (numberp max)
-; 		    (<= num max)
-; 		    t))
-; 	   nil)
-;        num)
-;     (format t "~A" prompt)
-;     (setf num (read-from-string (read-line) nil))) )
-
-(defun get-num (prompt &optional test)
-  (format t "~A" prompt)
-  (force-output)
-  (let ((num (read-from-string (read-line) nil nil)))
-    (if (valid-num num test)
-	num
-	(get-num prompt test))))
-
-(defun valid-num (num test)
-  (if (numberp num)
-      (if test
-          (funcall test num)
-          t)
-      nil))
-
-;;;    The number may be constrained by optional min and max
-;;;    args (which are inclusive).
-; (defun get-num (prompt &optional min max)
-;   (format t "~A" prompt)
-;   (or (valid-num (read-from-string (read-line) nil nil) min max)
-;       (get-num prompt min max)) )
-
-; ;;;
-; ;;;    GET-NUM should send in 3 args, but by making MIN and MAX optional
-; ;;;    this can be used by other functions too.
-; ;;;    
-; (defun valid-num (num &optional min max)
-;   (and (numberp num)
-;        (if min (>= num min) t)
-;        (if max (<= num max) t)
-;        num) )
-
-;;;
-;;;    Christopher Stacy
-;;;    
-;; (defun read-a-number (&key stream default)
-;;   (let* ((line (read-line stream))
-;;          (n (let* ((*read-eval* nil))
-;;               (ignore-errors (read-from-string line nil)))))
-;;     (if (numberp n)
-;;         n
-;;       default)))
-
-;;;
-;;;    Matthew Danish
-;;;    
-;; (defun parse-float (string &optional (default 0.0))
-;;   (let* ((*read-eval* nil)
-;; 	 (val (ignore-errors (read-from-string string))))
-;;     (typecase val
-;;       (number val)
-;;       (t default))))
-
 ;; (defmacro read-from-file ((file-name var) &body body)
 ;;   (let ((stream (gensym))
 ;; 	(eof (gensym)))
