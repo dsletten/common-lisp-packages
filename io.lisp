@@ -37,6 +37,7 @@
   (:use :common-lisp :core)
   (:export :add-column :atime
 	   :break-loop
+           :confirm
            :copy-file :ctime
            :file-each-line
 	   :get-num
@@ -258,6 +259,27 @@
       (if trim
           (validate (string-trim " " response))
           (validate response)))) )
+
+(defun valid-affirmative-p (flag)
+  (member flag '("y" "yes") :test #'string-equal))
+
+(defun valid-negative-p (flag)
+  (member flag '("n" "no") :test #'string-equal))
+
+(defun valid-confirmation-p (flag)
+  (or (valid-affirmative-p flag)
+      (valid-negative-p flag)))
+
+(defun convert-confirmation (flag)
+  (cond ((valid-affirmative-p flag) t)
+        ((valid-negative-p flag) nil)
+        (t (error "Invalid flag: ~A" flag))))
+
+;;;
+;;;    More control than Y-OR-N-P/YES-OR-NO-P
+;;;    
+(defun confirm (prompt &key (test #'valid-confirmation-p))
+  (convert-confirmation (prompt-read prompt :allow-empty nil :test test)))
 
 ;;;
 ;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/02_adg.htm

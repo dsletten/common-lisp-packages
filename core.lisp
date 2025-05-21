@@ -135,19 +135,6 @@
                  (subseq seq (min (length seq) (+ offset length)))) ))
 
 ;;;
-;;;    Create a list of successive integers from START to END.
-;;;    (Like Perl's (START..END))
-;;;    See below...
-; (defun make-range (&optional (start 0) (end 0))
-;   (if (> start end)
-;       (rotatef start end))
-;   (mapcar #'(lambda (x)
-; 	      (setf x start)
-; 	      (incf start)
-; 	      x)
-; 	  (make-list (1+ (- end start)))) )
-
-;;;
 ;;;    Convert NIL to ()
 ;;;    
 (defun list-to-string (l)
@@ -348,6 +335,14 @@
 ;;   (loop repeat n
 ;;         for elt in seq
 ;;         for tail on (rest seq)
+;;         collect elt into take
+;;         finally (return (values take tail))))
+
+;; (defmethod take-drop (n (seq list))
+;;   (loop for i from 0
+;;         for elt in seq
+;;         for tail on seq
+;;         while (< i n)
 ;;         collect elt into take
 ;;         finally (return (values take tail))))
 
@@ -1340,154 +1335,8 @@ starting with X or the index of the position of X in the sequence."))
     (declare (ignore winners))
     losers))
 
-  
 
-;; (defun best-concept (f seq)
-;;   (let ((sorted (stable-sort (copy-seq seq) f)))
-;;     (elt sorted 0)))
-
-;;;
-;;;    Graham's original
-;;;    
-;; (defun best (fn list)
-;;   (if (null list)
-;;       nil
-;;       (let ((wins (car list)))
-;;         (dolist (obj (cdr list))
-;;           (when (funcall fn obj wins)
-;; 	    (setq wins obj)))
-;;         wins)))
-
-;; (defun best (f seq)
-;;   ""
-;;   (typecase seq
-;;     (list (if (null seq)
-;;               nil
-;;               (loop with winner = (first seq)
-;;                     for elt in (rest seq)
-;;                     when (funcall f elt winner) do (setf winner elt)
-;;                     finally (return winner))))
-;;     (vector (if (zerop (length seq))
-;;                 nil
-;;                 (loop with winner = (elt seq 0)
-;;                       for i from 1 below (length seq)
-;;                       for elt = (elt seq i)
-;;                       when (funcall f elt winner) do (setf winner elt)
-;;                       finally (return winner)))) ))
-
-(defun best* (f seq)
-  "Return the first element as if the elements of SEQ were sorted by means of F."
-  (labels ((a-vs-b (b a)
-             (if (funcall f a b) a b)))
-    (if (emptyp seq)
-        nil
-        (reduce #'a-vs-b seq))))
-
-;; (defun bestn (f seq)
-;;   "Return all elements with the highest score as if the elements of SEQ were sorted by means of F."
-;;   (labels ((elt-beats-winner (elt winner)
-;;              (funcall f elt winner))
-;;            (elt-is-winner (elt winner)
-;;              (not (funcall f winner elt))))
-;;     (if (emptyp seq)
-;;         nil
-;;         (typecase seq
-;;           (list (loop with winners = (make-linked-queue)
-;;                       with winner = (first seq)
-;;                       for elt in seq
-;;                       do (cond ((elt-beats-winner elt winner)
-;;                                 (make-empty winners)
-;;                                 (enqueue winners elt)
-;;                                 (setf winner elt))
-;;                                ((elt-is-winner elt winner)
-;;                                 (enqueue winners elt)))
-;;                       finally (return (elements winners))))
-;;           (vector (loop with winners = (make-linked-queue)
-;;                         with winner = (elt seq 0)
-;;                         for elt across seq
-;;                         do (cond ((elt-beats-winner elt winner)
-;;                                   (make-empty winners)
-;;                                   (enqueue winners elt)
-;;                                   (setf winner elt))
-;;                                  ((elt-is-winner elt winner)
-;;                                   (enqueue winners elt)))
-;;                         finally (return (elements winners)))) ))))
-
-(defun bestn* (f seq)
-  "Return all elements with the highest score as if the elements of SEQ were sorted by means of F."
-  (labels ((elt-beats-winner (elt winner)
-             (funcall f elt winner))
-           (elt-is-winner (elt winner)
-             (not (funcall f winner elt))))
-    (if (emptyp seq)
-        nil
-        (let ((winners (make-linked-queue)))
-          (reduce #'(lambda (winner elt)
-                      (cond ((elt-beats-winner elt winner)
-                             (make-empty winners)
-                             (enqueue winners elt)
-                             elt)
-                            ((elt-is-winner elt winner)
-                             (enqueue winners elt)
-                             winner)
-                            (t winner)))
-                  seq
-                  :initial-value (elt seq 0))
-          (elements winners)))) )
-
-;;;
-;;;    CONSes!
-;;;    
-;; (defun best-worst (f seq)
-;;   "Return the first and last elements as if the elements of SEQ were sorted by means of F."
-;;   (let ((first (elt seq 0))) ; Assumes not empty?!
-;;     (values-list (reduce #'(lambda (winner elt)
-;;                              (destructuring-bind (max min) winner
-;;                                (cond ((funcall f elt max) (list elt min))
-;;                                      ((funcall f min elt) (list max elt))
-;;                                      (t winner))))
-;;                          seq
-;;                          :initial-value (list first first)))) )
-
-;; (defun best-worst (f seq)
-;;   "Return the first and last elements as if the elements of SEQ were sorted by means of F."
-;;   (if (emptyp seq)
-;;       nil
-;;       (typecase seq
-;;         (list (loop with winner = (first seq)
-;;                     with loser = winner
-;;                     for elt in (rest seq)
-;;                     when (funcall f elt winner) do (setf winner elt)
-;;                     else when (funcall f loser elt) do (setf loser elt)
-;;                     finally (return (values winner loser))))
-;;         (vector (loop with winner = (elt seq 0)
-;;                       with loser = winner
-;;                       for i from 1 below (length seq)
-;;                       for elt = (elt seq i)
-;;                       when (funcall f elt winner) do (setf winner elt)
-;;                       else when (funcall f loser elt) do (setf loser elt)
-;;                       finally (return (values winner loser)))) )))
-
-(defun best-worst* (f seq)
-  "Return the first and last elements as if the elements of SEQ were sorted by means of F."
-  (if (emptyp seq)
-      nil
-      (typecase seq
-        (list (loop with winner = (first seq)
-                    with loser = winner
-                    for elt in (rest seq)
-                    when (funcall f elt winner) do (setf winner elt)
-                    else when (funcall f loser elt) do (setf loser elt)
-                    finally (return (values winner loser))))
-        (vector (loop with winner = (elt seq 0)
-                      with loser = winner
-                      for i from 1 below (length seq)
-                      for elt = (elt seq i)
-                      when (funcall f elt winner) do (setf winner elt)
-                      else when (funcall f loser elt) do (setf loser elt)
-                      finally (return (values winner loser)))) )))
-
-
+;;; ????
 (defun best-index (f seq)
   (bestn #'(lambda (a b) (funcall f (second a) (second b)))
          (loop for elt in seq 
@@ -1663,21 +1512,6 @@ starting with X or the index of the position of X in the sequence."))
                          (t (enqueue head (first tail))
                             (setf tail (rest tail)))) )))) ))
 
-;; (defun mapa-b (fn a b &optional (step 1))
-;;   (do ((i a (+ i step))
-;;        (result '()))
-;;       ((> i b) (nreverse result))
-;;     (push (funcall fn i) result)))
-
-;; (defun mapa-b (f a b &optional (step 1))
-;;   (loop for i from a to b by step
-;;         collect (funcall f i)))
-
-;; (defun mapa-b (f a b &optional (step 1))
-;;   (if (plusp step)
-;;       (loop for i from a to b by step collect (funcall f i))
-;;       (loop for i from a downto b by (abs step) collect (funcall f i))))
-
 (defun mapa-b (f a b &optional (step 1))
   (assert (plusp step) () "Step increment must be positive.")
   (if (<= a b)
@@ -1705,9 +1539,9 @@ starting with X or the index of the position of X in the sequence."))
   (mapa-b #'code-char (char-code start) (char-code end) step))
 (defmethod make-range ((start character) (end null) (step integer))
   (declare (ignore end))
-  (if (char> start #\0)
-      (make-range #\0 (code-char (1- (char-code start))) step)
-      '()))
+  (if (char= start (code-char 0))
+      '()
+      (make-range (code-char 0) (code-char (1- (char-code start))) step)))
 (defmethod make-range ((start character) end step)
   (declare (ignore start end step))
   (error "Mismatched input types."))
@@ -1725,19 +1559,13 @@ starting with X or the index of the position of X in the sequence."))
             collect elt)))
 (defmethod make-range ((start number) (end null) (step number))
   (declare (ignore end))
-  (if (plusp start)
-      (make-range 0 (1- start) step)
-      '()))
+  (cond ((zerop start) '())
+        ((plusp start) (make-range 0 (1- start) step))
+        (t (make-range 0 (1+ start) step))))
 (defmethod make-range ((start number) end step)
   (declare (ignore start end step))
   (error "Mismatched input types."))
   
-;; (defun map-> (fn start test-fn succ-fn)
-;;   (do ((i start (funcall succ-fn i))
-;;        (result '()))
-;;       ((funcall test-fn i) (nreverse result))
-;;     (push (funcall fn i) result)))
-
 (defun map-> (f start test step)
   "Collect repeated application of the function F to START as it is transformed by the STEP function until TEST returns true."
   (loop for obj = start then (funcall step obj)
@@ -1762,12 +1590,17 @@ starting with X or the index of the position of X in the sequence."))
 ;;;
 ;;;    Map over multiple lists in sequence, accumulating all results.
 ;;;    
-(defun mapcars (fn &rest lsts)
-  (let ((result '()))
-    (dolist (l lsts)
-      (dolist (obj l)
-	(push (funcall fn obj) result)))
-    (nreverse result)))
+;; (defun mapcars (fn &rest lsts)
+;;   (let ((result '()))
+;;     (dolist (l lsts)
+;;       (dolist (obj l)
+;; 	(push (funcall fn obj) result)))
+;;     (nreverse result)))
+
+(defun mapcars (f &rest lists)
+  (loop for list in lists
+        nconc (loop for elt in list
+                    collect (funcall f elt))))
 
 ;; (defun mapcars (f &rest lists)
 ;;   "Map the function F over each element of each list argument provided."

@@ -954,7 +954,8 @@
    (equal '(T NIL T NIL T NIL) (mapa-b #'evenp 0 5))
    (equal '(1 2 0 1 2 0 1 2 0 1) (mapa-b (partial* #'mod 3) 1 10))
    (equal '(0 1 2 0 1 2 0 1 2 0) (mapa-b (partial* #'mod 3) 0 9))
-   (equal (mapcar #'sqrt #[1d0 10d0]) (mapa-b #'sqrt 1d0 10d0))))
+   (equal (mapcar #'sqrt #[1d0 10d0]) (mapa-b #'sqrt 1d0 10d0))
+   (equal (mapcar (partial #'* 3) #[1 33]) (mapa-b (partial #'* 3) 1 33))))
 
 (deftest test-map0-n ()
   (check
@@ -968,8 +969,15 @@
 
 (deftest test-range ()
   (check
+   ;;
+   ;;    (range 0) and (range 0 0) behave the same as Clojure.
+   ;;    
    (null (range 0))
-   (equal #[1] (range 1))
+   (equal #[0] (range 0))
+   (equal '(0) (range 0 0))
+   (equal '(0) (range 1))
+   (equal #[1] #[0 0])
+   (equal #[0 1] (range 0 1))
    (equal #[5] (range 5))
    (equal #[1 5] (range 1 5))
    (equal #[1 5] (range 1 5 1))
@@ -1013,40 +1021,32 @@
 (deftest test-map-> ()
   (check
    ;; (mapa-b #'1+ -2 0 0.5)
-   (equal (map-> #'1+ -2 #'(lambda (x) (> x 0)) #'(lambda (x) (+ x 0.5))) '(-1 -0.5 0.0 0.5 1.0))
+   (equal '(-1 -0.5 0.0 0.5 1.0) (map-> #'1+ -2 #'(lambda (x) (> x 0)) #'(lambda (x) (+ x 0.5))))
    ;; (mapcar #'length '("Is" "this" "not" "pung?"))
-   (equal (map-> #'(lambda (l) (length (first l))) '("Is" "this" "not" "pung?") #'null #'rest) '(2 4 3 5))
-   (equal (map-> (compose #'length #'first) '("Is" "this" "not" "pung?") #'null #'rest) '(2 4 3 5))
+   (equal '(2 4 3 5) (map-> #'(lambda (l) (length (first l))) #1='("Is" "this" "not" "pung?") #'null #'rest))
+   (equal '(2 4 3 5) (map-> (compose #'length #'first) #1# #'null #'rest))
    ;; (maplist #'reverse '(1 2 3 4))
-   (equal (map-> #'reverse '(1 2 3 4) #'null #'rest) '((4 3 2 1) (4 3 2) (4 3) (4)))
-   (equal (map-> #'(lambda (i) (list (code-char i) i)) (char-code #\p) #'(lambda (i) (> i (char-code #\z))) #'(lambda (x) (+ x 2))) '((#\p 112) (#\r 114) (#\t 116) (#\v 118) (#\x 120) (#\z 122)))
-   (equal (map-> #'(lambda (l) (string-upcase (first l))) #1='("Is" "this" "not" "pung?") #'null #'cdr) (mapcar #'string-upcase #1#))
-   (equal (map-> (compose #'string-upcase #'first) #2='("Is" "this" "not" "pung?") #'null #'cdr) (mapcar #'string-upcase #2#))
-   (equal '(0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0) (map-> #'(lambda (x) (log x 2)) 1 #'(lambda (x) (> x 1024)) #'(lambda (x) (* 2 x))))
-   (equal '(1 2 4 8 16 32 64 128 256 512 1024 2048 4096 8192) (map-> #'identity 1 (partial #'< 10000) (partial #'* 2)))) )
-
-
-;; (map-> #'identity 1 (partial #'< 1000) (partial #'* 2))
-;; (1 2 4 8 16 32 64 128 256 512)
-;; * 
-;; *
-
-;; (let ((current 0)
-;;       (next 1)
-;;       (count 0))
-;;   (labels ((fib (_) (declare (ignore _)) current)
-;;            (succ (i) (declare (ignore i)) (psetf current next next (+ current next)) (incf count))
-;;            (test (_) (declare (ignore _)) (> count 10)))
-;;     (map-> #'fib 0 #'test #'succ)))
-
-
-
-
+   (equal '((4 3 2 1) (4 3 2) (4 3) (4)) (map-> #'reverse '(1 2 3 4) #'null #'rest))
+   (equal '((#\p 112) (#\r 114) (#\t 116) (#\v 118) (#\x 120) (#\z 122))
+          (map-> #'(lambda (i) (list (code-char i) i))
+                 (char-code #\p)
+                 #'(lambda (i) (> i (char-code #\z)))
+                 #'(lambda (x) (+ x 2))))
+   (equal (mapcar #'string-upcase #1#)
+          (map-> #'(lambda (l) (string-upcase (first l))) #1# #'null #'cdr))
+   (equal (mapcar #'string-upcase #1#)
+          (map-> (compose #'string-upcase #'first) #1# #'null #'cdr))
+   (equal '(0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0)
+          (map-> #'(lambda (x) (log x 2)) 1 #'(lambda (x) (> x 1024)) #'(lambda (x) (* 2 x))))
+   (equal '(1 2 4 8 16 32 64 128 256 512 1024 2048 4096 8192)
+          (map-> #'identity 1 (partial #'< 10000) (partial #'* 2)))) )
 
 (deftest test-mapcars ()
   (check
-   (equal (mapcars #'abs '(2 5 6) '(99 -23 -8)) '(2 5 6 99 23 8))
-   (equal (mapcars #'sqrt (range 2 7) (range 9 4)) '(1.4142135 1.7320508 2.0 2.236068 2.4494898 2.6457512 3.0 2.828427 2.6457512 2.4494898 2.236068 2.0))))
+   (equal '(2 5 6 99 23 8)
+          (mapcars #'abs '(2 5 6) '(99 -23 -8)))
+   (equal '(1.4142135 1.7320508 2.0 2.236068 2.4494898 2.6457512 3.0 2.828427 2.6457512 2.4494898 2.236068 2.0)
+          (mapcars #'sqrt (range 2 7) (range 9 4)))))
 
 ;;;
 ;;;    See PAIP ch.1 (pg. 19)
@@ -1076,8 +1076,16 @@
 
 (deftest test-rmapcar ()
   (check
-   (equal (rmapcar #'1+ '(1 2 (3 4 (5) 6) 7 (8 9))) '(2 3 (4 5 (6) 7) 8 (9 10)))
-   (equal (rmapcar #'(lambda (s1 s2) (concatenate 'string s1 s2)) '("Is" ("this" ("not" ("pung?")))) '("Ça" ("plane" ("pour" ("moi" "Plastic" "Bertrand")))) ) '("IsÇa" ("thisplane" ("notpour" ("pung?moi")))) )))
+   (equal '(2 3 (4 5 (6) 7) 8 (9 10))
+          (rmapcar #'1+ '(1 2 (3 4 (5) 6) 7 (8 9))))
+   (equal '("IsÇa" ("thisplane" ("notpour" ("pung?moi"))))
+          (rmapcar #'(lambda (s1 s2) (concatenate 'string s1 s2))
+                   '("Is" ("this" ("not" ("pung?"))))
+                   '("Ça" ("plane" ("pour" ("moi" "Plastic" "Bertrand")))) ))
+   (equal '("IsÇa" ("thisplane" ("notpour" ("pung?moi"))))
+          (rmapcar (partial #'concatenate 'string)
+                   '("Is" ("this" ("not" ("pung?"))))
+                   '("Ça" ("plane" ("pour" ("moi" "Plastic" "Bertrand")))) ))))
 
 (deftest test-tree-map ()
   (check
