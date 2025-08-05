@@ -48,3 +48,21 @@
    (string= "is this Not puNg?" (translate "Is this not pung?" "nI" "Ni"))
    (string= "W3 0ught@ t@k3 it 3@sy" (translate "We oughta take it easy" "aeo" "@30"))))
 
+(deftest test-mkstr ()
+  (check
+   (string= "1234" (mkstr 1 2 3 4))
+   (string= "PI is 3.141592653589793d0" (mkstr 'pi " is " pi))))
+
+(deftest test-symb ()
+  (check
+   (eq 'pung (symb 'pung))
+   (eq 'pung (symb "PUNG"))
+   (eq 'pung (symb #\P #\U #\N #\G))
+   (eq '|PUNg| (symb #\P #\U #\N #\g))
+   (eq '|ARMadiLL0| (symb 'ar "Madi" #\L #\L 0))
+   (eq '|(IS THIS NOT PUNG?)| (symb (list 'is 'this "NOT" :pung?)))) )
+
+(deftest test-explode ()
+  (check
+   (equal '(b o m b) (explode 'bomb))))
+

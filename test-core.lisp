@@ -119,7 +119,7 @@
    (equal '(b c) (take 2 (drop 1 '(a b c d))))
    (equal '(b) (drop 1 (take 2 '(a b c d))))
    (equals #(:c) (take 1 (drop 2 #(:a :b :c))))
-   (string= "pung" (take 4 (drop 12 "Is this not pung?")))))
+   (string= "pung" (take 4 (drop 12 "Is this not pung?")))) )
 
 (deftest test-take-drop ()
   (check
@@ -432,8 +432,10 @@
 
 (deftest test-filter-split ()
   (check
-   (equal '((1 3 5 7 9) (2 4 6 8 10)) (filter-split #'oddp (loop for i from 1 to 10 collect i)))
-   (equal '((5 6 7 8 9 10) (1 2 3 4)) (filter-split (partial* #'> 4) (loop for i from 1 to 10 collect i)))) )
+   (equal '((1 3 5 7 9) (2 4 6 8 10))
+          (multiple-value-list (filter-split #'oddp (loop for i from 1 to 10 collect i))))
+   (equal '((5 6 7 8 9 10) (1 2 3 4))
+          (multiple-value-list (filter-split (partial* #'> 4) (loop for i from 1 to 10 collect i)))) ))
 
 (defun make-random-tree (generator)
   (if (< (random 1d0) 0.5)
@@ -463,7 +465,7 @@
   (cond ((null tree) 0)
         ((atom tree) 1)
         (t (+ (tree-size (car tree))
-              (tree-size (cdr tree))))))
+              (tree-size (cdr tree)))) ))
 ;; (let ((i 0)) (make-random-tree #'(lambda () (prog1 i (incf i)))))
 ;; (let ((i 0)) (make-random-tree #'(lambda () (prog1 (code-char (+ i (char-code #\A))) (incf i)))))  
 ;; (defvar *tree* (let ((i 0)) (make-random-tree #'(lambda () (prog1 i (incf i))))))
@@ -485,14 +487,20 @@
 
 (deftest test-find-some-if ()
   (check
-   (equal (multiple-value-list (find-some-if #'(lambda (elt) (if (numberp elt) (sqrt elt) nil)) '(a "pung" 5 t))) '(5 2.236068))
-   (equal (multiple-value-list (find-some-if (iffn #'numberp #'sqrt) '(a "pung" 5 t))) '(5 2.236068))
+   (equal '(5 2.236068)
+          (multiple-value-list (find-some-if #'(lambda (elt) (if (numberp elt) (sqrt elt) nil)) '(a "pung" 5 t))))
+   (equal '(5 2.236068)
+          (multiple-value-list (find-some-if (iffn #'numberp #'sqrt #'null) '(a "pung" 5 t))))
    (null (find-some-if #'(lambda (elt) (if (numberp elt) (sqrt elt) nil)) '(a "pung" :j t)))
-   (equal (multiple-value-list (find-some-if #'(lambda (elt) (if (numberp elt) (sqrt elt) nil)) #('a "pung" 5 t))) '(5 2.236068))
+   (equal '(5 2.236068)
+          (multiple-value-list (find-some-if #'(lambda (elt) (if (numberp elt) (sqrt elt) nil)) #('a "pung" 5 t))))
    (null (find-some-if #'(lambda (elt) (if (numberp elt) (sqrt elt) nil)) #('a "pung" :j t)))
-   (equal (multiple-value-list (find-some-if #'(lambda (ch) (if (member ch '(#\a #\e #\i #\o #\u)) (char-upcase ch) nil)) "Is this not pung?")) '(#\i #\I))
-   (equal (multiple-value-list (find-some-if (iffn #'(lambda (ch) (member ch '(#\a #\e #\i #\o #\u))) #'char-upcase) "Is this not pung?")) '(#\i #\I))
-   (equal (multiple-value-list (find-some-if #'(lambda (s) (if (= (length s) 4) (string-upcase s) nil)) #("Yoshimi" "Battles" "The" "Pink" "Robots"))) '("Pink" "PINK"))))
+   (equal '(#\i #\I)
+          (multiple-value-list (find-some-if #'(lambda (ch) (if (member ch '(#\a #\e #\i #\o #\u)) (char-upcase ch) nil)) "Is this not pung?")))
+   (equal '(#\i #\I)
+          (multiple-value-list (find-some-if (iffn #'(lambda (ch) (member ch '(#\a #\e #\i #\o #\u))) #'char-upcase #'null) "Is this not pung?")))
+   (equal '("Pink" "PINK")
+          (multiple-value-list (find-some-if #'(lambda (s) (if (= (length s) 4) (string-upcase s) nil)) #("Yoshimi" "Battles" "The" "Pink" "Robots"))))))
 
 (deftest test-last1 ()
   (check
@@ -551,14 +559,18 @@
 (deftest test-filter ()
   (check
    (equal '(2 3 4 5) (filter #'(lambda (x) (if (numberp x) (1+ x) nil)) '(a 1 2 b 3 c d 4)))
-   (equal '(2 3 4 5) (filter (iffn #'numberp #'1+) '(a 1 2 b 3 c d 4)))
+   (equal '(2 3 4 5) (filter (iffn #'numberp #'1+ (constantly nil)) '(a 1 2 b 3 c d 4)))
    (equals [2 3 4 5] (filter #'(lambda (x) (if (numberp x) (1+ x) nil)) ['a 1 2 'b 3 'c 'd 4]))
-   (string= "STHISNOTPUNG" (filter #'(lambda (ch) (and (alpha-char-p ch) (lower-case-p ch) (char-upcase ch))) "Is this not pung?"))
-   (string= "STHISNOTPUNG" (filter (every-pred #'alpha-char-p #'lower-case-p #'char-upcase) "Is this not pung?"))
-   (equal '(#\S #\T #\H #\I #\S #\N #\O #\T #\P #\U #\N #\G)
-          (filter #'(lambda (ch) (and (alpha-char-p ch) (lower-case-p ch) (char-upcase ch))) (coerce "Is this not pung?" 'list)))
-   (equal '(#\S #\T #\H #\I #\S #\N #\O #\T #\P #\U #\N #\G)
-          (filter (every-pred #'alpha-char-p #'lower-case-p #'char-upcase) (coerce "Is this not pung?" 'list)))))
+   ;;;
+   ;;;    Different semantics for CONJOIN (previously EVERY-PRED) now
+   ;;;    
+   ;; (string= "STHISNOTPUNG" (filter #'(lambda (ch) (and (alpha-char-p ch) (lower-case-p ch) (char-upcase ch))) "Is this not pung?"))
+   ;; (string= "STHISNOTPUNG" (filter (conjoin #'alpha-char-p #'lower-case-p #'char-upcase) "Is this not pung?"))
+   ;; (equal '(#\S #\T #\H #\I #\S #\N #\O #\T #\P #\U #\N #\G)
+   ;;        (filter #'(lambda (ch) (and (alpha-char-p ch) (lower-case-p ch) (char-upcase ch))) (coerce "Is this not pung?" 'list)))
+   ;; (equal '(#\S #\T #\H #\I #\S #\N #\O #\T #\P #\U #\N #\G)
+   ;;        (filter (conjoin #'alpha-char-p #'lower-case-p #'char-upcase) (coerce "Is this not pung?" 'list)))) )
+))
 
 (deftest test-empty ()
   (check
@@ -640,7 +652,7 @@
    (equal (group-until #'(lambda (chs) (or (> (count-vowels chs) 2) (> (count-consonants chs) 4))) "The quick brown fox jumps over the LAZY dog.")
           '((#\T #\h #\e #\  #\q #\u) (#\i #\c #\k #\  #\b #\r #\o) (#\w #\n #\  #\f #\o #\x #\ ) (#\j #\u #\m #\p #\s #\  #\o) (#\v #\e #\r #\  #\t #\h #\e #\ ) (#\L #\A #\Z #\Y #\  #\d #\o) (#\g #\.)))
    (equal (group-until #'(lambda (coins) (> (count :head coins) 3)) '(:HEAD :HEAD :HEAD :TAIL :HEAD :TAIL :HEAD :TAIL :TAIL :HEAD :TAIL :TAIL :TAIL :HEAD :TAIL :HEAD :TAIL :HEAD :TAIL :TAIL))
-          '((:HEAD :HEAD :HEAD :TAIL) (:HEAD :TAIL :HEAD :TAIL :TAIL :HEAD :TAIL :TAIL :TAIL) (:HEAD :TAIL :HEAD :TAIL :HEAD :TAIL :TAIL)))))
+          '((:HEAD :HEAD :HEAD :TAIL) (:HEAD :TAIL :HEAD :TAIL :TAIL :HEAD :TAIL :TAIL :TAIL) (:HEAD :TAIL :HEAD :TAIL :HEAD :TAIL :TAIL)))) )
 
 (deftest test-prune ()
   (check
@@ -697,7 +709,7 @@
    (equal '((:A 9) (:E 5) (:B -6))
           (before :a :b '((:d 7) (:c 12) (:a 9) (:e 5) (:b -6)) :key #'first))
    (= 2 (before :a :b #((:d 7) (:c 12) (:a 9) (:e 5) (:b -6)) :key #'first))
-   (equal '(12 15 18 20) (before 3 5 '(4 8 12 15 18 20) :test #'(lambda (x elt) (zerop (mod elt x))))) ; Is an element divisible by 3 before any divisible by 5?
+   (equal '(12 15 18 20) (before 3 5 '(4 8 12 15 18 20) :test #'(lambda (x elt) (zerop (mod elt x)))) ) ; Is an element divisible by 3 before any divisible by 5?
    (not (before 5 3 '(4 8 12 15 18 20) :test #'(lambda (x elt) (zerop (mod elt x)))) )))
 
 (deftest test-after ()
@@ -855,8 +867,8 @@
   (check
    (equal '(nil nil nil nil) (multiple-value-list (most-least-n #'length '())))
    (equal '(((A B) (A C) (B A) (E G)) 2 ((A B) (A C) (B A) (E G)) 2) (multiple-value-list (most-least-n #'length '((a b) (a c) (b a) (e g)))) )
-   (equal '(((A B) (A C) (E G)) 2 ((A)) 1) (multiple-value-list (most-least-n #'length '((a b) (a c) (a) (e g)))))
-   (equal '(((X X X)) 3 ((A)) 1) (multiple-value-list (most-least-n #'length '((a b) (a c) (a) (e g) (x x x)))))
+   (equal '(((A B) (A C) (E G)) 2 ((A)) 1) (multiple-value-list (most-least-n #'length '((a b) (a c) (a) (e g)))) )
+   (equal '(((X X X)) 3 ((A)) 1) (multiple-value-list (most-least-n #'length '((a b) (a c) (a) (e g) (x x x)))) )
    (equal '((-28) 28 (0) 0) (multiple-value-list (most-least-n #'abs #(-9 8 -7 3 25 0 -28))))
    (equal '((28 -28) 28 (0) 0) (multiple-value-list (most-least-n #'abs #(-9 8 -7 3 25 28 0 -28))))
    (equal '((4 7 -7 -8) 3 (0 -1) 0) (multiple-value-list (most-least-n #'integer-length #(0 1 3 4 7 -1 -4 -7 -8))))
@@ -1046,7 +1058,7 @@
    (equal '(2 5 6 99 23 8)
           (mapcars #'abs '(2 5 6) '(99 -23 -8)))
    (equal '(1.4142135 1.7320508 2.0 2.236068 2.4494898 2.6457512 3.0 2.828427 2.6457512 2.4494898 2.236068 2.0)
-          (mapcars #'sqrt (range 2 7) (range 9 4)))))
+          (mapcars #'sqrt (range 2 7) (range 9 4)))) )
 
 ;;;
 ;;;    See PAIP ch.1 (pg. 19)
@@ -1076,6 +1088,7 @@
 
 (deftest test-rmapcar ()
   (check
+   (= 6 (rmapcar #'+ 1 2 3))
    (equal '(2 3 (4 5 (6) 7) 8 (9 10))
           (rmapcar #'1+ '(1 2 (3 4 (5) 6) 7 (8 9))))
    (equal '("IsÇa" ("thisplane" ("notpour" ("pung?moi"))))
@@ -1085,58 +1098,270 @@
    (equal '("IsÇa" ("thisplane" ("notpour" ("pung?moi"))))
           (rmapcar (partial #'concatenate 'string)
                    '("Is" ("this" ("not" ("pung?"))))
-                   '("Ça" ("plane" ("pour" ("moi" "Plastic" "Bertrand")))) ))))
+                   '("Ça" ("plane" ("pour" ("moi" "Plastic" "Bertrand")))) ))
 
-(deftest test-tree-map ()
-  (check
-   (equal (tree-map #'length "is") 2)
-   (equal (tree-map #'length '("Ça" ("plane" ("pour" ("moi" "Plastic" "Bertrand")))) ) '(2 (5 (4 (3 7 8)))) )
-   (equal (tree-map #'length '("Ça" ("plane" ("pour" ("moi" . "Plastic") . "Bertrand")))) '(2 (5 (4 (3 . 7) . 8))))
-   (equal (tree-map #'< 1 2) T)
-   (equal (tree-map #'1+ '((1 2) (3 4))) '((2 3) (4 5)))
-   (equal (tree-map #'cons '(a b c) '((d e) (f g) (h i)))
-          '((A D E) (B F G) (C H I)))
-   (equal (tree-map #'cons '((a) (b) (c)) '((d e) (f g) (h i)))
-          '(((A . D)) ((B . F)) ((C . H))))
-   (equal (tree-map #'cons '(a (b c)) '((d e) ((f g) (h i))))
-          '((A D E) ((B F G) (C H I))))
-   (equal (tree-map #'cons '(a b) '((d e) (f g) (h i)))
-          '((A D E) (B F G)))
-   (equal (tree-map #'cons '(a b c) '((d e) (f g)))
-          '((A D E) (B F G)))
-   (equal (tree-map #'cons '(a b c) '((1) (2 3) (4 5 6)))
-          '((A 1) (B 2 3) (C 4 5 6)))
-   (equal (tree-map #'cons '((a . b) (c . d) (e . f)) '((1 . 2) (3 . 4) (5 . 6))) '(((A . 1) B . 2) ((C . 3) D . 4) ((E . 5) F . 6)))
-   (equal (tree-map #'list '((a . b) (c . d) (e . f)) '((1 . 2) (3 . 4) (5 . 6))) '(((A 1) B 2) ((C 3) D 4) ((E 5) F 6)))
-   (equal (tree-map #'cons '(a b c d e f) '(1 2 3 4 5 6)) '((A . 1) (B . 2) (C . 3) (D . 4) (E . 5) (F . 6)))
-   (equal (tree-map #'list '(a b c d e f) '(1 2 3 4 5 6)) '((A 1) (B 2) (C 3) (D 4) (E 5) (F 6)))
-   (equal (tree-map #'1+ '((1 . 2) (3 . 4) (5 . 6))) '((2 . 3) (4 . 5) (6 . 7)))
-   (equal (tree-map #'+ '((1 . 2) (3 . 4) (5 . 6)) '((9 . 9) (9 . 9) (9 . 9)))
-          '((10 . 11) (12 . 13) (14 . 15)))
-   (equal (tree-map #'+ '((1 . 2) (3 . 4) (5 . 6)) '((9 . 9) (9 . 9)))
-          '((10 . 11) (12 . 13)))
-   (equal (tree-map #'+ '((1 2) (3 4) (5 6)) '((9 9) (9 9) (9 9)))
-          '((10 11) (12 13) (14 15)))
-   (equal (tree-map #'+ '((1 . 2) (3 . 4) (5 . 6) . 7) '((9 . 9) (9 . 9) (9 . 9) . 9))
-          '((10 . 11) (12 . 13) (14 . 15) . 16))
-   (equal (tree-map #'+ '((1 2) (3 4) (5)) '((9 9) (9) (9 9)))
-          '((10 11) (12) (14)))
-   (equal (tree-map #'+ '((1 2) (3 4) (5) (6 7)) '((9 9) (9) (9 9) (9 9)) '((0.5) (0.5 0.5) (0.5 0.5) (0.5 0.5)))
-          '((10.5) (12.5) (14.5) (15.5 16.5)))
-   (equal (tree-map #'+ '((1 2) (3 4) (5) (6 7)) '((9 9) (9) (9 9) (9 9)) '((0.5) (0.5 0.5) (0.5 0.5) (0.5 0.5) (0.5 0.5)))
-          '((10.5) (12.5) (14.5) (15.5 16.5)))
-   (equal (tree-map #'1+ '(1 2 (3 4 (5) 6) 7 (8 9))) '(2 3 (4 5 (6) 7) 8 (9 10)))
-   (equal (tree-map #'(lambda (s1 s2) (concatenate 'string s1 s2)) '("Is" ("this" ("not" ("pung?")))) '("Ça" ("plane" ("pour" ("moi" "Plastic" "Bertrand")))) ) '("IsÇa" ("thisplane" ("notpour" ("pung?moi")))))
+   (equal 2 (rmapcar #'length "is"))
+   (equal '(2 (5 (4 (3 7 8)))) (rmapcar #'length '("Ça" ("plane" ("pour" ("moi" "Plastic" "Bertrand")))) ))
+
+;   (equal '(2 (5 (4 (3 . 7) . 8))) (rmapcar #'length '("Ça" ("plane" ("pour" ("moi" . "Plastic") . "Bertrand")))) )
+   (rmapcar #'< 1 2)
+   (equal '((2 3) (4 5)) (rmapcar #'1+ '((1 2) (3 4))))
+   (equal '((a d e) (b f g) (c h i))
+          (rmapcar #'cons
+                    '(a b c)
+                    '((d e) (f g) (h i))))
+   (equal '(((a . d)) ((b . f)) ((c . h)))
+          (rmapcar #'cons
+                    '((a) (b) (c))
+                    '((d e) (f g) (h i))))
+   (equal '((a d e) ((b f g) (c h i)))
+          (rmapcar #'cons
+                    '(a (b c))
+                    '((d e) ((f g) (h i)))) )
+          
+   (equal '((a d e) (b f g))
+          (rmapcar #'cons
+                    '(a b)
+                    '((d e) (f g) (h i))))
+   (equal '((a d e) (b f g))
+          (rmapcar #'cons
+                    '(a b c)
+                    '((d e) (f g))))
+   (equal '((a 1) (b 2 3) (c 4 5 6))
+          (rmapcar #'cons
+                    '(a b c)
+                    '((1) (2 3) (4 5 6))))
+   ;; (equal (rmapcar #'list
+   ;;                  '((a . b) (c . d) (e . f))
+   ;;                  '((1 . 2) (3 . 4) (5 . 6)))
+   ;;        '(((a 1) b 2) ((c 3) d 4) ((e 5) f 6)))
+   ;; (equal (rmapcar #'cons
+   ;;                  '((a . b) (c . d) (e . f))
+   ;;                  '((1 . 2) (3 . 4) (5 . 6)))
+   ;;        '(((a . 1) b . 2) ((c . 3) d . 4) ((e . 5) f . 6)))
+   (equal '((a . 1) (b . 2) (c . 3) (d . 4) (e . 5) (f . 6))
+          (rmapcar #'cons
+                    '(a b c d e f)
+                    '(1 2 3 4 5 6)))
+   (equal '((a 1) (b 2) (c 3) (d 4) (e 5) (f 6))
+          (rmapcar #'list
+                    '(a b c d e f)
+                    '(1 2 3 4 5 6)))
+   ;; (equal '((2 . 3) (4 . 5) (6 . 7))
+   ;;        (rmapcar #'1+ '((1 . 2) (3 . 4) (5 . 6))))
+   ;; (equal '((10 . 11) (12 . 13) (14 . 15))
+   ;;        (rmapcar #'+
+   ;;                  '((1 . 2) (3 . 4) (5 . 6))
+   ;;                  '((9 . 9) (9 . 9) (9 . 9))))
+   ;; (equal '((10 . 11) (12 . 13))
+   ;;        (rmapcar #'+
+   ;;                  '((1 . 2) (3 . 4) (5 . 6))
+   ;;                  '((9 . 9) (9 . 9))))
+   (equal '((10 11) (12 13) (14 15))
+          (rmapcar #'+
+                    '((1 2) (3 4) (5 6))
+                    '((9 9) (9 9) (9 9))))
+   ;; (equal '((10 . 11) (12 . 13) (14 . 15) . 16)
+   ;;        (rmapcar #'+
+   ;;                  '((1 . 2) (3 . 4) (5 . 6) . 7)
+   ;;                  '((9 . 9) (9 . 9) (9 . 9) . 9)))
+   (equal '((10 11) (12) (14))
+          (rmapcar #'+
+                    '((1 2) (3 4) (5))
+                    '((9 9) (9) (9 9))))
+   (equal '((10.5) (12.5) (14.5) (15.5 16.5))
+          (rmapcar #'+
+                    '((1 2) (3 4) (5) (6 7))
+                    '((9 9) (9) (9 9) (9 9))
+                    '((0.5) (0.5 0.5) (0.5 0.5) (0.5 0.5))))
+   (equal '((10.5) (12.5) (14.5) (15.5 16.5))
+          (rmapcar #'+
+                    '((1 2) (3 4) (5) (6 7))
+                    '((9 9) (9) (9 9) (9 9))
+                    '((0.5) (0.5 0.5) (0.5 0.5) (0.5 0.5) (0.5 0.5))))
+   (equal '(2 3 (4 5 (6) 7) 8 (9 10))
+          (rmapcar #'1+ '(1 2 (3 4 (5) 6) 7 (8 9))))
+   (equal '("IsÇa" ("thisplane" ("notpour" ("pung?moi"))))
+          (rmapcar #'(lambda (s1 s2) (concatenate 'string s1 s2))
+                    '("Is" ("this" ("not" ("pung?"))))
+                    '("Ça" ("plane" ("pour" ("moi")))) ))
+   (equal '("IsÇa" ("thisplane" ("notpour" ("pung?moi"))))
+          (rmapcar #'(lambda (s1 s2) (concatenate 'string s1 s2))
+                    '("Is" ("this" ("not" ("pung?"))))
+                    '("Ça" ("plane" ("pour" ("moi" "Plastic" "Bertrand")))) ))
+   (equal '("IsÇaa" ("thisplaneb" ("notpourc" ("pung?moid"))))
+          (rmapcar #'(lambda (&rest strings)
+                        (apply #'concatenate 'string strings))
+                    '("Is" ("this" ("not" ("pung?"))))
+                    '("Ça" ("plane" ("pour" ("moi"))))
+                    '("a" ("b" ("c" ("d")))) ))
+   ;; ??????????
+   ;; (equal '("IsÇaa" ("thisplaneb" ("notpourc" ())))
+   ;;        (rmapcar #'(lambda (&rest strings)
+   ;;                      (apply #'concatenate 'string strings))
+   ;;                  '("Is" ("this" ("not" ())))
+   ;;                  '("Ça" ("plane" ("pour" ("moi"))))
+   ;;                  '("a" ("b" ("c" ("d")))) ))
    ;;
    ;;    See Slade ch. 4 exercises.
    ;;    TREE-AVERAGE/TREE-ADDITION
    ;;    
-   (= (let ((count 0) (sum 0)) (tree-map #'(lambda (x) (incf count) (incf sum x)) '(1 2 (3 (4 (5) 6) (7)) 8 (9))) (/ sum count)) 5)
-   (= (let ((count 0) (sum 0)) (tree-map #'(lambda (x) (incf count) (incf sum x)) '((1 . 2) (3 (4 (5 . 6))) (7) 8 . 9)) (/ sum count)) 5)
-   (= (let ((count 0) (sum 0)) (tree-map #'(lambda (x) (incf count) (incf sum x)) '(((( ((1)) )))) ) (/ sum count)) 1)
-   (equal (tree-map #'(lambda (x) (+ x 2)) '(5 4 3 2 1)) '(7 6 5 4 3))
-   (equal (tree-map #'(lambda (x) (+ x 3)) '(1 2 (3 (4 (5) 6) (7)) 8 (9))) '(4 5 (6 (7 (8) 9) (10)) 11 (12)))
-   (equal (tree-map #'(lambda (x) (+ x 5)) '(((( (1) )))) ) '(((( (6) )))) )))
+   (= 5
+      (let ((count 0) (sum 0))
+        (rmapcar #'(lambda (x) (incf count) (incf sum x))
+                  '(1 2 (3 (4 (5) 6) (7)) 8 (9)))
+        (/ sum count)))
+   ;; (= 5
+   ;;    (let ((count 0) (sum 0))
+   ;;      (rmapcar #'(lambda (x) (incf count) (incf sum x))
+   ;;                '((1 . 2) (3 (4 (5 . 6))) (7) 8 . 9))
+   ;;      (/ sum count)))
+   (= 1
+      (let ((count 0) (sum 0))
+        (rmapcar #'(lambda (x) (incf count) (incf sum x))
+                  '(((( ((1)))) )))
+        (/ sum count)))
+   (equal '(7 6 5 4 3)
+          (rmapcar #'(lambda (x) (+ x 2)) '(5 4 3 2 1)))
+   (equal '(4 5 (6 (7 (8) 9) (10)) 11 (12))
+          (rmapcar #'(lambda (x) (+ x 3)) '(1 2 (3 (4 (5) 6) (7)) 8 (9))))
+   (equal '(((( (6) ))))
+          (rmapcar #'(lambda (x) (+ x 5)) '(((( (1)))) )))
+   (equal '((1 :a) (((2 :b)) (3 :c)) ((4 :d)))
+          (rmapcar #'list '(1 ((2) 3) (4)) '(:a ((:b) :c) (:d))))
+   (equal '((1 :a) (((2 :b))) ((4 :d)))
+          (rmapcar #'list '(1 ((2)) (4)) '(:a ((:b) :c) (:d)))) ))
+
+
+
+(deftest test-tree-map ()
+  (check
+   (= 6 (tree-map #'+ 1 2 3))
+   (equal 2 (tree-map #'length "is"))
+   (equal '(2 (5 (4 (3 7 8)))) (tree-map #'length '("Ça" ("plane" ("pour" ("moi" "Plastic" "Bertrand")))) ))
+   (equal '(2 (5 (4 (3 . 7) . 8))) (tree-map #'length '("Ça" ("plane" ("pour" ("moi" . "Plastic") . "Bertrand")))) )
+   (tree-map #'< 1 2)
+   (equal '((2 3) (4 5)) (tree-map #'1+ '((1 2) (3 4))))
+   (equal '((a d e) (b f g) (c h i))
+          (tree-map #'cons
+                    '(a b c)
+                    '((d e) (f g) (h i))))
+   (equal '(((a . d)) ((b . f)) ((c . h)))
+          (tree-map #'cons
+                    '((a) (b) (c))
+                    '((d e) (f g) (h i))))
+   (equal '((a d e) ((b f g) (c h i)))
+          (tree-map #'cons
+                    '(a (b c))
+                    '((d e) ((f g) (h i)))) )
+          
+   (equal '((a d e) (b f g))
+          (tree-map #'cons
+                    '(a b)
+                    '((d e) (f g) (h i))))
+   (equal '((a d e) (b f g))
+          (tree-map #'cons
+                    '(a b c)
+                    '((d e) (f g))))
+   (equal '((a 1) (b 2 3) (c 4 5 6))
+          (tree-map #'cons
+                    '(a b c)
+                    '((1) (2 3) (4 5 6))))
+   (equal (tree-map #'list
+                    '((a . b) (c . d) (e . f))
+                    '((1 . 2) (3 . 4) (5 . 6)))
+          '(((a 1) b 2) ((c 3) d 4) ((e 5) f 6)))
+   (equal (tree-map #'cons
+                    '((a . b) (c . d) (e . f))
+                    '((1 . 2) (3 . 4) (5 . 6)))
+          '(((a . 1) b . 2) ((c . 3) d . 4) ((e . 5) f . 6)))
+   (equal '((a . 1) (b . 2) (c . 3) (d . 4) (e . 5) (f . 6))
+          (tree-map #'cons
+                    '(a b c d e f)
+                    '(1 2 3 4 5 6)))
+   (equal '((a 1) (b 2) (c 3) (d 4) (e 5) (f 6))
+          (tree-map #'list
+                    '(a b c d e f)
+                    '(1 2 3 4 5 6)))
+   (equal '((2 . 3) (4 . 5) (6 . 7))
+          (tree-map #'1+ '((1 . 2) (3 . 4) (5 . 6))))
+   (equal '((10 . 11) (12 . 13) (14 . 15))
+          (tree-map #'+
+                    '((1 . 2) (3 . 4) (5 . 6))
+                    '((9 . 9) (9 . 9) (9 . 9))))
+   (equal '((10 . 11) (12 . 13))
+          (tree-map #'+
+                    '((1 . 2) (3 . 4) (5 . 6))
+                    '((9 . 9) (9 . 9))))
+   (equal '((10 11) (12 13) (14 15))
+          (tree-map #'+
+                    '((1 2) (3 4) (5 6))
+                    '((9 9) (9 9) (9 9))))
+   (equal '((10 . 11) (12 . 13) (14 . 15) . 16)
+          (tree-map #'+
+                    '((1 . 2) (3 . 4) (5 . 6) . 7)
+                    '((9 . 9) (9 . 9) (9 . 9) . 9)))
+   (equal '((10 11) (12) (14))
+          (tree-map #'+
+                    '((1 2) (3 4) (5))
+                    '((9 9) (9) (9 9))))
+   (equal '((10.5) (12.5) (14.5) (15.5 16.5))
+          (tree-map #'+
+                    '((1 2) (3 4) (5) (6 7))
+                    '((9 9) (9) (9 9) (9 9))
+                    '((0.5) (0.5 0.5) (0.5 0.5) (0.5 0.5))))
+   (equal '((10.5) (12.5) (14.5) (15.5 16.5))
+          (tree-map #'+
+                    '((1 2) (3 4) (5) (6 7))
+                    '((9 9) (9) (9 9) (9 9))
+                    '((0.5) (0.5 0.5) (0.5 0.5) (0.5 0.5) (0.5 0.5))))
+   (equal '(2 3 (4 5 (6) 7) 8 (9 10))
+          (tree-map #'1+ '(1 2 (3 4 (5) 6) 7 (8 9))))
+   (equal '("IsÇa" ("thisplane" ("notpour" ("pung?moi"))))
+          (tree-map #'(lambda (s1 s2) (concatenate 'string s1 s2))
+                    '("Is" ("this" ("not" ("pung?"))))
+                    '("Ça" ("plane" ("pour" ("moi")))) ))
+   (equal '("IsÇa" ("thisplane" ("notpour" ("pung?moi"))))
+          (tree-map #'(lambda (s1 s2) (concatenate 'string s1 s2))
+                    '("Is" ("this" ("not" ("pung?"))))
+                    '("Ça" ("plane" ("pour" ("moi" "Plastic" "Bertrand")))) ))
+   (equal '("IsÇaa" ("thisplaneb" ("notpourc" ("pung?moid"))))
+          (tree-map #'(lambda (&rest strings)
+                        (apply #'concatenate 'string strings))
+                    '("Is" ("this" ("not" ("pung?"))))
+                    '("Ça" ("plane" ("pour" ("moi"))))
+                    '("a" ("b" ("c" ("d")))) ))
+   (equal '("IsÇaa" ("thisplaneb" ("notpourc" ())))
+          (tree-map #'(lambda (&rest strings)
+                        (apply #'concatenate 'string strings))
+                    '("Is" ("this" ("not" ())))
+                    '("Ça" ("plane" ("pour" ("moi"))))
+                    '("a" ("b" ("c" ("d")))) ))
+   ;;
+   ;;    See Slade ch. 4 exercises.
+   ;;    TREE-AVERAGE/TREE-ADDITION
+   ;;    
+   (= 5
+      (let ((count 0) (sum 0))
+        (tree-map #'(lambda (x) (incf count) (incf sum x))
+                  '(1 2 (3 (4 (5) 6) (7)) 8 (9)))
+        (/ sum count)))
+   (= 5
+      (let ((count 0) (sum 0))
+        (tree-map #'(lambda (x) (incf count) (incf sum x))
+                  '((1 . 2) (3 (4 (5 . 6))) (7) 8 . 9))
+        (/ sum count)))
+   (= 1
+      (let ((count 0) (sum 0))
+        (tree-map #'(lambda (x) (incf count) (incf sum x))
+                  '(((( ((1)))) )))
+        (/ sum count)))
+   (equal '(7 6 5 4 3)
+          (tree-map #'(lambda (x) (+ x 2)) '(5 4 3 2 1)))
+   (equal '(4 5 (6 (7 (8) 9) (10)) 11 (12))
+          (tree-map #'(lambda (x) (+ x 3)) '(1 2 (3 (4 (5) 6) (7)) 8 (9))))
+   (equal '(((( (6) ))))
+          (tree-map #'(lambda (x) (+ x 5)) '(((( (1)))) )))) )
 
 ;;;
 ;;;    见 ~/lisp/books/Tanimoto/ch02/2010/ch02.lisp
@@ -1162,16 +1387,17 @@
 
 (deftest test-tree-plus ()
   (check
-   (equal (tree-plus 8 9) 17)
-   (equal (tree-plus '(1 (2 ((3) 4) (5 (6)))) 9) '(10 (11 ((12) 13) (14 (15)))) )))
+   (equal 17 (tree-plus 8 9))
+   (equal '(10 (11 ((12) 13) (14 (15)))) (tree-plus '(1 (2 ((3) 4) (5 (6)))) 9))))
 
 (defun tree-upcase (obj)
   (build-tree #'string-upcase obj))
 
 (deftest test-tree-upcase ()
   (check
-   (equal (tree-upcase "pung") "PUNG")
-   (equal (tree-upcase '("is" ("this") ("not" ((("pung?")))))) '("IS" ("THIS") ("NOT" ((("PUNG?"))))) )))
+   (equal "PUNG" (tree-upcase "pung"))
+   (equal '("IS" ("THIS") ("NOT" ((("PUNG?")))) )
+          (tree-upcase '("is" ("this") ("not" ((("pung?")))) )))) )
 
 (deftest test-compose ()
   (check
@@ -1222,7 +1448,12 @@
       (= (f3 3 2 7) (funcall (partial #'f3) 3 2 7))
       (= (f2 2 7) (funcall (partial #'f3 3) 2 7))
       (= (f1 7) (funcall (partial #'f3 3 2) 7))
-      (= (f0) (funcall (partial #'f3 3 2 7)))) )))
+      (= (f0) (funcall (partial #'f3 3 2 7)))) )
+   (flet ((multiply-three (x y z) (* x y z)))
+     (= 126
+        (funcall (partial #'multiply-three 9) 7 2)
+        (funcall (partial (partial #'multiply-three 9) 7) 2)
+        (funcall (partial (partial (partial #'multiply-three 9) 7) 2)))) ))
 
 (deftest test-partial* ()
   (check
@@ -1338,7 +1569,7 @@
 ;; (curry (x y) (* x (expt 2 y))) <-- Can't curry every function???
 (deftest test-curry ()
   (check
-   (let ((f (curry (x y z) (+ x (* y z)))))
+   (let ((f (curry (x y z) (+ x (* y z)))) )
      (and (functionp f)
           (let ((g (funcall f 3)))
             (and (functionp g)
@@ -1388,36 +1619,85 @@
 ;;;    
 (deftest test-iffn ()
   (check
-   (equal (mapcar (iffn #'oddp #'1+ #'1-) (loop for i from 1 to 6 collect i)) (mapcar #'(lambda (n) (if (oddp n) (1+ n) (1- n))) (loop for i from 1 to 6 collect i)))
-   (equal (mapcar (iffn #'oddp #'1+ #'identity) (loop for i from 1 to 6 collect i)) (mapcar #'(lambda (n) (if (oddp n) (1+ n) n)) (loop for i from 1 to 6 collect i)))
-   (equal (mapcar (iffn #'integerp #'oddp) '(1 2 3 c)) '(t nil t nil)) ; Defect? No way to distinguish between missing 'else' function and function that returns NIL?
-   (equal (mapcar (iffn #'evenp #'1-) (loop for i from 1 to 6 collect i)) (mapcar #'(lambda (n) (if (evenp n) (1- n))) (loop for i from 1 to 6 collect i)))) )
+   (equal (mapcar #'(lambda (n) (if (oddp n) (1+ n) (1- n))) (loop for i from 1 to 6 collect i))
+          (mapcar (iffn #'oddp #'1+ #'1-) (loop for i from 1 to 6 collect i)))
+   (equal (mapcar #'(lambda (n) (if (oddp n) (1+ n) n)) (loop for i from 1 to 6 collect i))
+          (mapcar (iffn #'oddp #'1+) (loop for i from 1 to 6 collect i)))
+   (equal '(t nil t c)
+          (mapcar (iffn #'integerp #'oddp) '(1 2 3 c)))
+   (equal '(t nil t nil)
+          (mapcar (iffn #'integerp #'oddp (constantly nil)) '(1 2 3 c)))
+   (equal '("a" "foo" "bar" "PUNG")
+          (mapcar (iffn #'symbolp (compose #'string-downcase #'symbol-name)) '(a "foo" bar "PUNG")))
+   (equal '(-5 -3 -1 0 2 4)
+          (remove-if (iffn #'evenp #'minusp #'plusp) (loop for i from -5 to 5 collect i)))
+   (equal '(1 (3 0.14159265358979312d0) (2 0.0) 6 (2 0.8284271247461903d0) 9)
+          (mapcar (iffn #'integerp #'identity (multiple-value-compose #'list #'truncate)) (list 1 pi (sqrt 4) 6 (sqrt 8d0) 18/2)))) )
 
 ;;;
-;;;    Look for examples in other tests. Good for FILTER!!
+;;;    Look for examples in other tests. Good for FILTER!! (Not anymore?)
 ;;;    
-(deftest test-every-pred ()
+(deftest test-conjoin ()
   (check
-   (equal (mapcar (every-pred #'integerp #'oddp) '(a "a" 2 3)) '(nil nil nil t))
-   (funcall (every-pred #'integerp #'oddp #'plusp) 3)
-   (not (funcall (every-pred #'integerp #'oddp #'plusp) 3.0))
-   (not (funcall (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) 3))
-   (funcall (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) 7)
-   (every (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(7))
-   (every (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(7 21 35))
-   (every (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '())
-   (some (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(8 21 200))
-   (let* ((f #'integerp) (g #'oddp) (h #'plusp) (i #'(lambda (x) (zerop (mod x 7)))) (preds (list f g h i)))
-     (every (apply #'every-pred preds) '(7 21 35)))) )
+   (equal '(nil nil nil t) (mapcar (conjoin #'integerp #'oddp) '(a "a" 2 3)))
+   (funcall (conjoin #'integerp #'oddp #'plusp) 3)
+   (not (funcall (conjoin #'integerp #'oddp #'plusp) 3.0))
 
-(deftest test-some-pred ()   
+   (not (funcall (conjoin #'integerp #'oddp #'plusp (compose #'zerop (partial* #'mod 7))) 3))
+   (funcall (conjoin #'integerp #'oddp #'plusp (compose #'zerop (partial* #'mod 7))) 7)
+
+   (every (conjoin #'integerp #'oddp #'plusp (compose #'zerop (partial* #'mod 7))) '())
+   (every (conjoin #'integerp #'oddp #'plusp (compose #'zerop (partial* #'mod 7))) '(7))
+   (every (conjoin #'integerp #'oddp #'plusp (compose #'zerop (partial* #'mod 7))) '(7 21 35))
+
+   (some (conjoin #'integerp #'oddp #'plusp (compose #'zerop (partial* #'mod 7))) '(8 21 200))
+
+   (let* ((f #'integerp)
+          (g #'oddp)
+          (h #'plusp)
+          (i (compose #'zerop (partial* #'mod 7)))
+          (preds (list f g h i)))
+     (every (apply #'conjoin preds) '(7 21 35)))
+
+   (equal '(NIL NIL NIL NIL T)
+          (mapcar (conjoin #'integerp #'plusp #'evenp) '(-2 -1 0 1 2)))
+
+   (funcall (conjoin #'<) 2 3)
+   (funcall (conjoin #'> (compose #'zerop #'mod)) 4 1)
+   (funcall (conjoin #'> (compose #'zerop #'mod)) 4 2)
+   (not (funcall (conjoin #'> (compose #'zerop #'mod)) 4 3))
+   (not (funcall (conjoin #'> (compose #'zerop #'mod)) 4 4))
+
+   (funcall (conjoin))
+   (funcall (conjoin) 3)
+   (funcall (conjoin) 3 2)
+   (funcall (conjoin #'>) 3 2)
+   (not (funcall (conjoin #'> (compose #'zerop #'mod)) 3 2))
+
+   (every (conjoin #'> (compose #'zerop #'mod)) '(4 9 18) '(2 3 6))))
+
+(deftest test-disjoin ()   
   (check
-   (equal (mapcar (some-pred #'integerp #'symbolp) '(a "a" 2 3)) '(t nil t t))
-   (funcall (some-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) -3)
-   (some (some-pred #'integerp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(9.0 7.0 -21.0))
-   (some (some-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(9 7 -22 35))
-   (every (some-pred (every-pred #'integerp #'oddp) #'plusp #'(lambda (x) (zerop (mod x 7)))) '(9 7.0 22 -42))
-   (not (some (some-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '()))) )
+   (not (funcall (disjoin)))
+   (not (funcall (disjoin) 2))
+   (funcall (disjoin #'<) 2 3)
+
+   (equal '(t nil t t) (mapcar (disjoin #'integerp #'symbolp) '(a "a" 2 3)))
+
+   (funcall (disjoin #'integerp #'oddp #'plusp (compose #'zerop (partial* #'mod 7))) -3)
+
+   (some (disjoin #'integerp #'plusp (compose #'zerop (partial* #'mod 7))) '(9.0 7.0 -21.0))
+   (some (disjoin #'integerp #'oddp #'plusp (compose #'zerop (partial* #'mod 7))) '(9 7 -22 35))
+   (every (disjoin (conjoin #'integerp #'oddp) #'plusp (compose #'zerop (partial* #'mod 7))) '(9 7.0 22 -42))
+
+   (not (some (disjoin #'integerp #'oddp #'plusp (compose #'zerop (partial* #'mod 7))) '()))
+
+   (equal '(T T NIL T T)
+          (mapcar (disjoin #'stringp #'symbolp #'numberp) '(a :a #\a "A" #xA)))
+
+   (equalelts (list '(NIL T NIL T NIL NIL T NIL NIL)
+                    (mapcar (conjoin #'integerp (disjoin (conjoin #'evenp #'plusp) (conjoin #'oddp #'minusp))) '(-4.0 -3 -2 -1 0 1 2 3 4.0))
+                    (mapcar #'(lambda (x) (and (integerp x) (or (and (evenp x) (plusp x)) (and (oddp x) (minusp x)))) ) '(-4.0 -3 -2 -1 0 1 2 3 4.0)))) ))
 
 ;;;
 ;;;    This one is weird...
@@ -1505,7 +1785,7 @@
                             (UNLESS
                                 (EQUAL (BUILD-PREFIX L (NTHCDR I L))
                                        (TAKE I L))
-                              (RETURN NIL)))))
+                              (RETURN NIL)))) )
           '(COMMON-LISP ((CORE (COMMON-LISP (CORE CORE CORE CORE))))
             (COMMON-LISP (CORE (COMMON-LISP (COMMON-LISP CORE)) COMMON-LISP)
              (COMMON-LISP
@@ -1705,19 +1985,64 @@
 
 (deftest test-firsts-rests ()
   (check
-   (equal (multiple-value-list (firsts-rests '())) '(() ()))
-   (equal (multiple-value-list (firsts-rests '(())))  '(() ()))
-   (equal (multiple-value-list (firsts-rests '(() (a)))) '(() ()))
-   (equal (multiple-value-list (firsts-rests '((a) ()))) '(() ()))
-   (equal (multiple-value-list (firsts-rests '((a b) ()))) '(() ()))
-   (equal (multiple-value-list (firsts-rests '((a b c)))) '((a) ((b c))))
-   (equal (multiple-value-list (firsts-rests '((a b c) (1 2 3)))) '((a 1) ((b c) (2 3))))
-   (equal (multiple-value-list (firsts-rests '((a b c) (1 2 3) (:x :y :z)))) '((a 1 :x) ((b c) (2 3) (:y :z))))
-   (equal (multiple-value-list (firsts-rests '((a b) (1 2 3) (:x :y :z)))) '((a 1 :x) ((b) (2 3) (:y :z))))
-   (equal (multiple-value-list (firsts-rests '((a b) (c)))) '((A C) ()))
-   (equal (multiple-value-list (firsts-rests '((a b) (1 2) (:x)))) '((a 1 :x) ())) ; Not (a 1 :x); ((b) (2) ())
-   (equal (multiple-value-list (firsts-rests (nth-value 1 (firsts-rests '((a b c) (1 2) (:x :y :z)))) )) '((b 2 :y) ()))
-   (equal (multiple-value-list (firsts-rests (nth-value 1 (firsts-rests '((a b) (1 2) (:x)))) )) '(() ()))) )
+   (equal '(() ()) (multiple-value-list (firsts-rests '())))
+   (equal '(() ()) (multiple-value-list (firsts-rests '(()))) )
+   (equal '(() ()) (multiple-value-list (firsts-rests '(() (a)))) )
+   (equal '(() ()) (multiple-value-list (firsts-rests '((a) ()))) )
+   (equal '(() ()) (multiple-value-list (firsts-rests '((a b) ()))) )
+   (equal '((a) ((b c)))
+          (multiple-value-list (firsts-rests '((a b c)))) )
+   (equal '((a 1) ((b c) (2 3)))
+          (multiple-value-list (firsts-rests '((a b c) (1 2 3)))) )
+   (equal '((a 1 :x) ((b c) (2 3) (:y :z)))
+          (multiple-value-list (firsts-rests '((a b c) (1 2 3) (:x :y :z)))) )
+   (equal '((a 1 :x) ((b) (2 3) (:y :z)))
+          (multiple-value-list (firsts-rests '((a b) (1 2 3) (:x :y :z)))) )
+   (equal '((a c) ()) ; Not (a c); ((b) ())
+          (multiple-value-list (firsts-rests '((a b) (c)))) )
+   (equal '((a 1 :x) ()) ; Not (a 1 :x); ((b) (2) ())
+          (multiple-value-list (firsts-rests '((a b) (1 2) (:x)))) )
+   (equal '((b 2 :y) ())
+          (multiple-value-list (firsts-rests (nth-value 1 (firsts-rests '((a b c) (1 2) (:x :y :z)))) )))
+   (equal '(() ())
+          (multiple-value-list (firsts-rests (nth-value 1 (firsts-rests '((a b) (1 2) (:x)))) )))
+   (equal '((a c) (b d))
+          (multiple-value-list (firsts-rests '((a . b) (c . d)))) )
+   (equal '((a c e) (b d f))
+          (multiple-value-list (firsts-rests '((a . b) (c . d) (e . f)))) )
+   (equal '(((a . b) (1 . 2) (:p . :q)) (((c . d)) ((3 . 4)) ((:r . :s))))
+          (multiple-value-list (firsts-rests '(((a . b) (c . d)) ((1 . 2) (3 . 4)) ((:p . :q) (:r . :s)))) ))
+   (equal '((a) ((b c . d)))
+          (multiple-value-list (firsts-rests '((a . (b . (c . d)))) )))
+   (equal '((a 1) ((b c . d) (2 3 . 4)))
+          (multiple-value-list (firsts-rests '((a . (b . (c . d))) (1 . (2 . (3 . 4)))) )))) )
+
+(deftest test-firsts-rests* ()
+  (check
+   (equal '(() ()) (multiple-value-list (firsts-rests* '())))
+;   (equal '(() ()) (multiple-value-list (firsts-rests* '(()))) )
+;   (equal '(() ()) (multiple-value-list (firsts-rests* '(() (a)))) )
+;   (equal '(() ()) (multiple-value-list (firsts-rests* '((a) ()))) )
+;   (equal '(() ()) (multiple-value-list (firsts-rests* '((a b) ()))) )
+   (equal '((a) ((b c)))
+          (multiple-value-list (firsts-rests* '((a b c)))) )
+   (equal '((a 1) ((b c) (2 3)))
+          (multiple-value-list (firsts-rests* '((a b c) (1 2 3)))) )
+   (equal '((a 1 :x) ((b c) (2 3) (:y :z)))
+          (multiple-value-list (firsts-rests* '((a b c) (1 2 3) (:x :y :z)))) )
+   (equal '((a 1 :x) ((b c) (2 3) (:y)))
+          (multiple-value-list (firsts-rests* '((a b c) (1 2 3) (:x :y)))) )
+   ;; (equal '((a 1 :x) ((b) (2 3) (:y :z)))
+   ;;        (multiple-value-list (firsts-rests* '((a b) (1 2 3) (:x :y :z)))) )
+   ;; (equal '((a c) ())
+   ;;        (multiple-value-list (firsts-rests* '((a b) (c)))) )
+   ;; (equal '((a 1 :x) ()) ; Not (a 1 :x); ((b) (2) ())
+   ;;        (multiple-value-list (firsts-rests* '((a b) (1 2) (:x)))) )
+   ;; (equal '((b 2 :y) ())
+   ;;        (multiple-value-list (firsts-rests* (nth-value 1 (firsts-rests* '((a b c) (1 2) (:x :y :z)))) )))
+   ;; (equal '(() ())
+   ;;        (multiple-value-list (firsts-rests* (nth-value 1 (firsts-rests* '((a b) (1 2) (:x)))) )))) )
+))
 
 (deftest test-transition ()
   (check
@@ -1769,14 +2094,20 @@
    (not (equalelts '("pung" "PUNG" "pUnG" "PunG")))
    (not (equalelts '("pung" "PUNG" "pUnG" "PunG") :test #'string=))
    (equalelts '("pung" "PUNG" "pUnG" "PunG") :test #'string-equal)
+
    (equalelts #())
    (equalelts #(a a a))
+   (not (equalelts #(#(1 2 3) #(1 2 3) #(1 2 3) #(1 2 3))))
+   (equalelts #(#(1 2 3) #(1 2 3) #(1 2 3) #(1 2 3)) :test #'equals)
+
    (equalelts "")
    (equalelts "aaaaaaaaa")
    (not (equalelts "aaaAaAAaa"))
    (equalelts "aaaAaAAaa" :test #'char-equal)
+
    (not (equalelts '((a . 1) (a . 2) (a . 1) (a . 4))))
    (equalelts '((a . 1) (a . 2) (a . 1) (a . 4)) :key #'first)
+
    (let ((andy (make-instance 'person :first "Andy" :last "Warhol"))
          (joey (make-instance 'ramone :first "Joey"))
          (dee-dee (make-instance 'ramone :first "Dee Dee"))
@@ -1785,9 +2116,11 @@
      (and (not (equalelts (list joey dee-dee tommy johnny)))
           (not (equalelts (list andy joey dee-dee tommy johnny) :key #'last-name))
           (equalelts (list joey dee-dee tommy johnny) :key #'last-name)))
+
    (not (equalelts '(1 4 7 10 13)))
    (equalelts '(1 4 7 10 13) :key (partial* #'mod 3))
    (equalelts #(1 4 7 10 13) :key (partial* #'mod 3))
+
    (equalelts "147" :key #'(lambda (ch) (mod (digit-char-p ch) 3)))) )
 
 (deftest test-totally ()
@@ -1808,55 +2141,55 @@
   (check
    (let ((a #(-5 -1 0 3 9 11 15 17 30 35 51 54)))
      (check
-      (= 0 (binary-search a -5))
-      (= 3 (binary-search a 3))
-      (= 4 (binary-search a 9))
-      (= 8 (binary-search a 30))
-      (= 11 (binary-search a 54))
-      (= -1 (binary-search a -8))
-      (= -7 (binary-search a 12))
-      (= -13 (binary-search a 60))))
+      (= 0 (binary-search a -5 #'<))
+      (= 3 (binary-search a 3 #'<))
+      (= 4 (binary-search a 9 #'<))
+      (= 8 (binary-search a 30 #'<))
+      (= 11 (binary-search a 54 #'<))
+      (= -1 (binary-search a -8 #'<))
+      (= -7 (binary-search a 12 #'<))
+      (= -13 (binary-search a 60 #'<))))
    (let ((a (reverse #(-5 -1 0 3 9 11 15 17 30 35 51 54))))
      (check
-      (= 0 (binary-search a 54 :test #'>))
-      (= 3 (binary-search a 30 :test #'>))
-      (= 4 (binary-search a 17 :test #'>))
-      (= 8 (binary-search a 3 :test #'>))
-      (= 11 (binary-search a -5 :test #'>))
-      (= -13 (binary-search a -8 :test #'>))
-      (= -7 (binary-search a 12 :test #'>))
-      (= -1 (binary-search a 60 :test #'>))))
+      (= 0 (binary-search a 54 #'>))
+      (= 3 (binary-search a 30 #'>))
+      (= 4 (binary-search a 17 #'>))
+      (= 8 (binary-search a 3 #'>))
+      (= 11 (binary-search a -5 #'>))
+      (= -13 (binary-search a -8 #'>))
+      (= -7 (binary-search a 12 #'>))
+      (= -1 (binary-search a 60 #'>))))
    (let ((a #("Clojure" "java" "JavaScript" "LISP" "Prolog" "ruby")))
      (check
-      (= 0 (binary-search a "clojure" :test #'string-lessp))
-      (= 1 (binary-search a "Java" :test #'string-lessp))
-      (= 2 (binary-search a "JAVASCRIPT" :test #'string-lessp))
-      (= 3 (binary-search a "Lisp" :test #'string-lessp))
-      (= 4 (binary-search a "prolog" :test #'string-lessp))
-      (= 5 (binary-search a "Ruby" :test #'string-lessp))
-      (= -5 (binary-search a "oz" :test #'string-lessp))
-      (= -1 (binary-search a "C#" :test #'string-lessp))))
+      (= 0 (binary-search a "clojure" #'string-lessp))
+      (= 1 (binary-search a "Java" #'string-lessp))
+      (= 2 (binary-search a "JAVASCRIPT" #'string-lessp))
+      (= 3 (binary-search a "Lisp" #'string-lessp))
+      (= 4 (binary-search a "prolog" #'string-lessp))
+      (= 5 (binary-search a "Ruby" #'string-lessp))
+      (= -5 (binary-search a "oz" #'string-lessp))
+      (= -1 (binary-search a "C#" #'string-lessp))))
    (check ; Duplicate elements
-    (= 2 (binary-search #(1 2 3 3d0 4) 3))
-    (= 2 (binary-search #(1 2 3 3d0) 3))
-    (= 1 (binary-search #(2 3 3d0 4) 3))
-    (= 1 (binary-search #(3 3d0 4) 3))
-    (= 4 (binary-search #(0 1 2 3 3d0 4) 3)))
+    (= 2 (binary-search #(1 2 3 3d0 4) 3 #'<))
+    (= 2 (binary-search #(1 2 3 3d0) 3 #'<))
+    (= 1 (binary-search #(2 3 3d0 4) 3 #'<))
+    (= 1 (binary-search #(3 3d0 4) 3 #'<))
+    (= 4 (binary-search #(0 1 2 3 3d0 4) 3 #'<)))
    (let ((a #((a . 1) (b . 3) (b . 2) (c . 1) (c . 5)))) ; Duplicate elements
      (flet ((symbol< (a b)
               (string< (symbol-name a) (symbol-name b))))
        (check
-        (= 2 (binary-search a 'b :test #'symbol< :key #'car))
-        (= 3 (binary-search a 'c :test #'symbol< :key #'car))
-        (= 0 (binary-search a 'a :test #'symbol< :key #'car)))) )
+        (= 2 (binary-search a 'b #'symbol< :key #'car))
+        (= 3 (binary-search a 'c #'symbol< :key #'car))
+        (= 0 (binary-search a 'a #'symbol< :key #'car)))) )
    (let ((a #((a . 1) (b . 2) (b . 3) (c . 1) (c . 5))))
      (flet ((test (a b)
               (compound-compare a b (list (list #'string< (compose #'symbol-name #'car)) (list #'< #'cdr)))) )
        (check
-        (= 1 (binary-search a '(b . 2) :test #'test))
-        (= 2 (binary-search a '(b . 3) :test #'test))
-        (= 3 (binary-search a '(c . 1) :test #'test))
-        (= 4 (binary-search a '(c . 5) :test #'test)))) )))
+        (= 1 (binary-search a '(b . 2) #'test))
+        (= 2 (binary-search a '(b . 3) #'test))
+        (= 3 (binary-search a '(c . 1) #'test))
+        (= 4 (binary-search a '(c . 5) #'test)))) )))
 
 (defclass person-with-age (person)
   ((age :reader age :initarg :age)))

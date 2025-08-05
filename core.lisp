@@ -36,10 +36,10 @@
            :compound-compare :approximately= :array-indices :as-if
            :before :best :best-index :best-worst :best-worst-n :bestn
            :binary-search :build-prefix :build-tree
-           :>case :class-template :comment :compose :conc1 :copy-array :cycle
-           :defchain :destructure :dohash :doset :dostring :dotuples :dovector
+           :>case :class-template :comment :compose :conc1 :conjoin :copy-array :cycle
+           :defchain :destructure :disjoin :dohash :doset :dostring :dotuples :dovector
            :drop :drop-until :drop-while :duplicatep
-           :empty :emptyp :ends-with :equalelts :equals :eqls :every-pred :explode
+           :empty :emptyp :ends-with :equalelts :equals :eqls
            :filter :filter-split :find-some-if :find-subtree :firsts-rests :for :flatten
            :group :group-until :horners
 	   :if-let :if3 :iffn :in :in-if :inq :integralp :iterate
@@ -47,17 +47,17 @@
            :last1 :least :leastn :list-to-string :longerp
            :macroexpand-all :make-identity-matrix
            :map-> :map-array :map-array-index :map0-n :map1-n :mapa-b :mapcars :mappend :mapset
-           :memoize :mklist :mkstr :most :mostn :most-least :most-least-n :nif
+           :memoize :mklist :most :mostn :most-least :most-least-n :nif
            :partial :partial* :partition :ppmx
            :prefix-generator :prefixp :prune :prune-if :prune-if-not
            :range :repeat :rmapcar 
            :rotate0 :rotate-list0 :rotate1 :rotate-list1
            :same-shape-tree-p
            :shift0 :shift-list0 :shift1 :shift-list1
-           :show-symbols :shuffle :singlep :some-pred
+           :show-symbols :shuffle :singlep
            :sort-by :sort-symbol-list :splice
 ;           :split-if
-           :stable-partition :starts-with :stream-partition :suffixp :symb
+           :stable-partition :starts-with :stream-partition :suffixp
            :take :take-drop :take-while :take-until :totally :transfer
            :transition :transition-1 :transition-n :transition-stream :traverse :tree-find-if :tree-map
            :until
@@ -401,9 +401,13 @@
 (defmethod empty ((seq string))
   (declare (ignore seq))
   (make-string 0))
-(defmethod empty ((seq simple-vector))
-  (declare (ignore seq))
-  (vector))
+;;;
+;;;    SIMPLE-VECTOR is a type not a class...
+;;;    https://www.lispworks.com/documentation/HyperSpec/Body/t_smp_ve.htm
+;;;    
+;; (defmethod empty ((seq simple-vector))
+;;   (declare (ignore seq))
+;;   (vector))
 (defmethod empty ((seq vector))
   (make-array (array-total-size seq)
               :fill-pointer (if (array-has-fill-pointer-p seq) 0 nil)
@@ -1674,7 +1678,7 @@ starting with X or the index of the position of X in the sequence."))
 ;;;    When provided a single tree, it should behave as above. With multiple trees, the simplest case is
 ;;;    where both trees have identical shapes and the leaves of each provide one of N args to F.
 ;; (defun tree-map (f &rest trees)
-;;   (multiple-value-bind (cars cdrs) (strip-trees trees)
+;;   (multiple-value-bind (cars cdrs) (firsts-rests trees)
 ;;     (cond ((every #'null cars) '())
 ;;           ((every #'atom cars) (cons (apply f cars) (apply #'tree-map f cdrs)))
 ;;           (t (cons (apply #'tree-map f cars)
@@ -1683,7 +1687,6 @@ starting with X or the index of the position of X in the sequence."))
 ;; (defun tree-map-a (f &rest trees)
 ;;   (cond ((every #'null trees) '())
 ;;         ((every #'atom trees) (apply f trees)) ; Too strict to allow different depths.
-;; ;        (t (multiple-value-bind (cars cdrs) (strip-trees trees)
 ;;         (t (multiple-value-bind (cars cdrs) (firsts-rests trees)
 ;;              (cons (apply #'tree-map-a f cars)
 ;;                    (apply #'tree-map-a f cdrs)))) ))
@@ -1695,7 +1698,6 @@ starting with X or the index of the position of X in the sequence."))
 ;; (defun tree-map-b (f &rest trees)
 ;;   (cond ((every #'null trees) '())
 ;;         ((some #'atom trees) (apply f trees))
-;; ;        (t (multiple-value-bind (cars cdrs) (strip-trees trees)
 ;;         (t (multiple-value-bind (cars cdrs) (firsts-rests trees)
 ;;              (cons (apply #'tree-map-b f cars)
 ;;                    (apply #'tree-map-b f cdrs)))) ))
@@ -1726,21 +1728,17 @@ starting with X or the index of the position of X in the sequence."))
 ;;     CHARACTER
 ;;   when setting an element of (ARRAY CHARACTER)
 
-;;;
-;;;    Same as Graham???
-;;;    
-;(defun tree-map-c (f &rest trees)
 (defun tree-map (f &rest trees)
-  (cond ((null trees) '()) ; Pathological initial case: (tree-map-c f). Also recursive case where trees are not same size.
+  (cond ((null trees) '()) ; Pathological initial case: (tree-map f). Also recursive case where trees are not same size.
         ((some #'null trees) '())
         ((some #'atom trees) (apply f trees))
-;        (t (multiple-value-bind (cars cdrs) (strip-trees trees)
         (t (multiple-value-bind (cars cdrs) (firsts-rests trees)
              (cons (apply #'tree-map f cars)
                    (apply #'tree-map f cdrs)))) ))
 
 ;;;
 ;;;    见 ~/lisp/books/Tanimoto/ch02/2010/ch02.lisp REASSEMBLE
+;;;    This is TREE-MAP over a single tree.
 ;;;    
 (defun build-tree (f obj)
   (cond ((null obj) obj)
@@ -1784,23 +1782,13 @@ starting with X or the index of the position of X in the sequence."))
 
 (defun as-if (seq) (every #'not seq))
 
-(defun mkstr (&rest args)
-  (with-output-to-string (s)
-    (dolist (a args)
-      (princ a s))))
-
-(defun symb (&rest args)
-  (values (intern (apply #'mkstr args))))
-
-;; (defun explode (sym)
-;;   (map 'list #'(lambda (c)
-;; 		 (intern (make-string 1 :initial-element c)))
-;;        (symbol-name sym)))
-
-(defun explode (sym)
-  "Return a list of single-letter symbols from the characters in the symbol name of SYM."
-  (map 'list (compose #'intern #'string) (symbol-name sym)))
-
+;;;
+;;;    TODO:
+;;;    • No limit on CACHE growth -> memory leak?
+;;;    • No persistence
+;;;    • Fails with keyword args. Same call? (foo :a 1 :b 2) (foo :b 2 :a 1)
+;;;    • Does not handle (cache or return) multiple values.
+;;;    
 (defun memoize (fn)
   (let ((cache (make-hash-table :test #'equal)))
     #'(lambda (&rest args)
@@ -1852,28 +1840,47 @@ starting with X or the index of the position of X in the sequence."))
 ;;;    sees the ARGS.
 ;;;    
 
-(defun compose (&rest fs)
-  (if (null fs)
-      #'identity
-      (reduce #'(lambda (f g)
-                  #'(lambda (&rest args)
-                      (funcall f (apply g args))))
-              fs)))
+;; (defun compose (&rest fs)
+;;   (if (null fs)
+;;       #'identity
+;;       (reduce #'(lambda (f g)
+;;                   #'(lambda (&rest args)
+;;                       (funcall f (apply g args))))
+;;               fs)))
 
+(defun compose (&rest fs)
+  (cond ((null fs) #'identity)
+        ((singlep fs) (first fs))
+        (t (let ((chain (reduce #'(lambda (f g)
+                                    #'(lambda (x)
+                                        (funcall f (funcall g x))))
+                                (butlast fs)))
+                 (g (last1 fs)))
+             #'(lambda (&rest args)
+                 (funcall chain (apply g args)))) )))
 ;;;
 ;;;    What is the use case?
 ;;;    (apply #'expt (multiple-value-list (truncate 4.5)))
 ;;;    
+;; (defun multiple-value-compose (&rest fs)
+;;   (if (null fs)
+;;       #'identity
+;;       (destructuring-bind (f . more) fs
+;;         (if (null more)
+;;             f
+;;             (destructuring-bind (g . more) more
+;;               (if (null more)
+;;                   #'(lambda (&rest args) (apply f (multiple-value-list (apply g args))))
+;;                   (reduce #'multiple-value-compose more :initial-value (multiple-value-compose f g)))) ))))
+
 (defun multiple-value-compose (&rest fs)
   (if (null fs)
       #'identity
-      (destructuring-bind (f . more) fs
-        (if (null more)
-            f
-            (destructuring-bind (g . more) more
-              (if (null more)
-                  #'(lambda (&rest args) (apply f (multiple-value-call (apply g args))))
-                  (reduce #'compose more :initial-value (compose f g)))) ))))
+      (reduce #'(lambda (f g)
+                  #'(lambda (&rest args)
+;                      (apply f (multiple-value-list (apply g args)))) )
+                      (multiple-value-call f (apply g args))))
+              fs)))
 
 ;;;
 ;;;    Inspired by Clojure juxt
@@ -1901,17 +1908,99 @@ starting with X or the index of the position of X in the sequence."))
                     (if (null fixed)
                         #'(lambda (&rest args) (apply f fixed0 fixed1 fixed2 args))
                         #'(lambda (&rest args)
-                            (apply f fixed0 fixed1 fixed2 (append fixed args)))) )))) )))
+                            (multiple-value-call f fixed0 fixed1 fixed2 (values-list fixed) (values-list args)))) )))) )))
+;                            (apply f fixed0 fixed1 fixed2 (append fixed args)))) )))) )))
 
 ;;;
 ;;;    "Right Curry"
 ;;;    
+;; (defun partial* (f &rest fixed)
+;;   "Create a partial function that calls F with 0+ fixed arguments following the remaining arguments supplied when the function is called."
+;;   (if (null fixed)
+;;       f
+;;       #'(lambda (&rest args)
+;;           (apply f (append args fixed)))) )
+
 (defun partial* (f &rest fixed)
   "Create a partial function that calls F with 0+ fixed arguments following the remaining arguments supplied when the function is called."
   (if (null fixed)
       f
-      #'(lambda (&rest args)
-          (apply f (append args fixed)))) )
+      (destructuring-bind (fixed0 &rest fixed) fixed
+        (if (null fixed)
+            #'(lambda (&rest args) (multiple-value-call f (values-list args) fixed0))
+            (destructuring-bind (fixed1 &rest fixed) fixed
+              (if (null fixed)
+                  #'(lambda (&rest args) (multiple-value-call f (values-list args) fixed0 fixed1))
+                  (destructuring-bind (fixed2 &rest fixed) fixed
+                    (if (null fixed)
+                        #'(lambda (&rest args) (multiple-value-call f (values-list args) fixed0 fixed1 fixed2))
+                        #'(lambda (&rest args)
+                            (multiple-value-call f (values-list args) fixed0 fixed1 fixed2 (values-list fixed)))) )))) )))
+
+;; (defun partial*** (f &rest fixed)
+;;   "Create a partial function that calls F with 0+ fixed arguments following the remaining arguments supplied when the function is called."
+;;   (if (null fixed)
+;;       f
+;;       (destructuring-bind (fixed0 &rest fixed) fixed
+;;         (if (null fixed)
+;;             #'(lambda (&rest args)
+;;                 (if (null args)
+;;                     (funcall f fixed0)
+;;                     (destructuring-bind (arg0 &rest args) args
+;;                       (if (null args)
+;;                           (funcall f arg0 fixed0)
+;;                           (destructuring-bind (arg1 &rest args) args
+;;                             (if (null args)
+;;                                 (funcall f arg0 arg1 fixed0)
+;;                                 (destructuring-bind (arg2 &rest args) args
+;;                                   (if (null args)
+;;                                       (funcall f arg0 arg1 arg2 fixed0)
+;;                                       (multiple-value-call f arg0 arg1 arg2 (values-list args) fixed0)))) )))) )
+;;             (destructuring-bind (fixed1 &rest fixed) fixed
+;;               (if (null fixed)
+;;                   #'(lambda (&rest args)
+;;                       (if (null args)
+;;                           (funcall f fixed0 fixed1)
+;;                           (destructuring-bind (arg0 &rest args) args
+;;                             (if (null args)
+;;                                 (funcall f arg0 fixed0 fixed1)
+;;                                 (destructuring-bind (arg1 &rest args) args
+;;                                   (if (null args)
+;;                                       (funcall f arg0 arg1 fixed0 fixed1)
+;;                                       (destructuring-bind (arg2 &rest args) args
+;;                                         (if (null args)
+;;                                             (funcall f arg0 arg1 arg2 fixed0 fixed1)
+;;                                             (multiple-value-call f arg0 arg1 arg2 (values-list args) fixed0 fixed1)))) )))) )
+;;                   (destructuring-bind (fixed2 &rest fixed) fixed
+;;                     (if (null fixed)
+;;                         #'(lambda (&rest args)
+;;                             (if (null args)
+;;                                 (funcall f fixed0 fixed1 fixed2)
+;;                                 (destructuring-bind (arg0 &rest args) args
+;;                                   (if (null args)
+;;                                       (funcall f arg0 fixed0 fixed1 fixed2)
+;;                                       (destructuring-bind (arg1 &rest args) args
+;;                                         (if (null args)
+;;                                             (funcall f arg0 arg1 fixed0 fixed1 fixed2)
+;;                                             (destructuring-bind (arg2 &rest args) args
+;;                                               (if (null args)
+;;                                                   (funcall f arg0 arg1 arg2 fixed0 fixed1 fixed2)
+;;                                                   (multiple-value-call f arg0 arg1 arg2 (values-list args) fixed0 fixed1 fixed2)))) )))) )
+;;                         #'(lambda (&rest args)
+;;                             (if (null args)
+;;                                 (multiple-value-call f fixed0 fixed1 fixed2 (values-list fixed))
+;;                                 (destructuring-bind (arg0 &rest args) args
+;;                                   (if (null args)
+;;                                       (multiple-value-call f arg0 fixed0 fixed1 fixed2 (values-list fixed))
+;;                                       (destructuring-bind (arg1 &rest args) args
+;;                                         (if (null args)
+;;                                             (multiple-value-call f arg0 arg1 fixed0 fixed1 fixed2 (values-list fixed))
+;;                                             (destructuring-bind (arg2 &rest args) args
+;;                                               (if (null args)
+;;                                                   (multiple-value-call f arg0 arg1 arg2 fixed0 fixed1 fixed2 (values-list fixed))
+;;                                                   (multiple-value-call f arg0 arg1 arg2 (values-list args) fixed0 fixed1 fixed2 (values-list fixed)))) )))) )))) )))) ))
+                            
+
 
 ;; (defmacro defcurry (name (param &rest params) &body body)
 ;;   (if (null params)
@@ -1998,7 +2087,8 @@ starting with X or the index of the position of X in the sequence."))
 ;; 	      (funcall then x)
 ;;               nil))))
 
-(defun iffn (if then &optional (else (constantly nil)))
+;(defun iffn (if then &optional (else (constantly nil)))
+(defun iffn (if then &optional (else #'identity))
   #'(lambda (x)
       (if (funcall if x)
 	  (funcall then x)
@@ -2011,6 +2101,23 @@ starting with X or the index of the position of X in the sequence."))
 ;;;    That's easy enough to replicate with Graham's simpler version which only directly handles 1 arg:
 ;;;    (every (every-pred #'integerp #'oddp #'plusp #'(lambda (x) (zerop (mod x 7)))) '(7 21 35))
 ;;;    
+
+;;;
+;;;    These invert the typical sense of EVERY/SOME -- predicates as sequence
+;;;
+;;;    These function slightly change the semantics of using AND/OR directly:
+;;;    • CONJOIN strictly returns boolean value (T/NIL) rather than possibly
+;;;      multiple values of final "true" form
+;;;    • DISJOIN only returns primary value even in cases where OR would return
+;;;      multiple values.
+;;;      
+(defun conjoin (&rest ps)
+  #'(lambda (&rest args)
+      (every #'(lambda (p) (apply p args)) ps)))
+
+(defun disjoin (&rest ps)
+  #'(lambda (&rest args)
+      (some #'(lambda (p) (apply p args)) ps)))
 
 ;; (defun fint (fn &rest fns)
 ;;   (if (null fns)
@@ -2046,11 +2153,11 @@ starting with X or the index of the position of X in the sequence."))
 ;;;
 ;;;    Back to Graham's way.
 ;;;    
-(defun every-pred (p &rest ps)
-  (if (null ps)
-      p
-      (let ((chain (apply #'every-pred ps)))
-        #'(lambda (x) (and (funcall p x) (funcall chain x)))) ))
+;; (defun every-pred (p &rest ps)
+;;   (if (null ps)
+;;       p
+;;       (let ((chain (apply #'every-pred ps)))
+;;         #'(lambda (x) (and (funcall p x) (funcall chain x)))) ))
 
 ;;;
 ;;;    Graham's does appear to be slightly faster:
@@ -2091,70 +2198,31 @@ starting with X or the index of the position of X in the sequence."))
 ;;             #'(lambda (x) (or (funcall p x) (funcall p1 x)))
 ;;             (reduce #'some-pred ps :initial-value p)))) )
 
-(defun some-pred (p &rest ps)
-  (if (null ps)
-      p
-      (let ((chain (apply #'some-pred ps)))
-        #'(lambda (x) (or (funcall p x) (funcall chain x)))) ))
+;; (defun some-pred (p &rest ps)
+;;   (if (null ps)
+;;       p
+;;       (let ((chain (apply #'some-pred ps)))
+;;         #'(lambda (x) (or (funcall p x) (funcall chain x)))) ))
 
-;;;
-;;;    Not sold on these three...Seems like forced refactoring.
-;;;    Refactor simply because there is a pattern.
-;;;    -Produces inherently non tail recursive functions (LREC).
-;;;    -A lot of boilerplate!
-;;;    -Functions such as EVERY already exist!
-;;;    
-;; (defun lrec (f &optional (base nil base-provided-p))
-;;   (labels ((no-base (l)
-;;              (unless (null l)
-;;                (funcall f (first l) #'(lambda () (no-base (rest l)))) ))
-;;            (value-base (l)
-;;              (if (null l)
-;;                  base
-;;                  (funcall f (first l) #'(lambda () (value-base (rest l)))) ))
-;;            (function-base (l)
-;;              (if (null l)
-;;                  (funcall base)
-;;                  (funcall f (first l) #'(lambda () (function-base (rest l)))) )))
-;;     (cond ((not base-provided-p) #'no-base)
-;;           ((functionp base) #'function-base)
-;;           (t #'value-base))))
+(defun wrap (f g)
+  #'(lambda (&rest args)
+      (apply (funcall f g) args)))
 
-;; (defun ttrav (f &optional (base #'identity))
-;;   (labels ((value-base (tree)
-;;              (if (atom tree)
-;;                  base
-;;                  (funcall f 
-;;                           (value-base (car tree))
-;;                           (when (cdr tree)
-;;                             (value-base (cdr tree)))) ))
-;;            (function-base (tree)
-;;              (if (atom tree)
-;;                  (funcall base tree)
-;;                  (funcall f
-;;                           (function-base (car tree))
-;;                           (when (cdr tree)
-;;                             (function-base (cdr tree)))) )))
-;;     (cond ((functionp base) #'function-base)
-;;           (t #'value-base))))
+;; (defun rectify (f) #'(lambda (&rest args) (max (apply f args) 0)))
 
-;; (defun trec (f &optional (base #'identity))
-;;   (labels ((value-base (tree)
-;;              (if (atom tree)
-;;                  base
-;;                  (funcall f tree
-;;                           #'(lambda () (value-base (car tree)))
-;;                           #'(lambda () (when (cdr tree)
-;;                                          (value-base (cdr tree)))) )))
-;;            (function-base (tree)
-;;              (if (atom tree)
-;;                  (funcall base tree)
-;;                  (funcall f tree
-;;                           #'(lambda () (function-base (car tree)))
-;;                           #'(lambda () (when (cdr tree)
-;;                                          (function-base (cdr tree)))) ))))
-;;     (cond ((functionp base) #'function-base)
-;;           (t #'value-base))))
+;; (defun f (x w b) (+ (* w x) b))
+
+;; (f 3 0.5d0 1) => 2.5d0
+;; (f -3 0.5d0 1) => -0.5d0
+;; (funcall (wrap #'rectify #'f) 3 0.5d0 1) => 2.5d0
+;; (funcall (wrap #'rectify #'f) -3 0.5d0 1) => 0
+
+;; (defun upper-bound (u) #'(lambda (f) #'(lambda (&rest args) (min (apply f args) u))))
+;; (funcall (wrap #'rectify (wrap (upper-bound 1) #'f)) 3 0.5d0 1) => 1
+;; (funcall (wrap #'rectify (wrap (upper-bound 1) #'f)) -3 0.5d0 1) => 0
+
+
+
 
 ;;;
 ;;;    Why???
@@ -2503,29 +2571,13 @@ starting with X or the index of the position of X in the sequence."))
   (loop for elt in seq
         when (funcall f elt) collect elt into trues
         else collect elt into falses
-        finally (return (list trues falses))))
+        finally (return (values trues falses))))
 (defmethod filter-split (f (seq vector))
   (loop for elt across seq
         when (funcall f elt) collect elt into trues
         else collect elt into falses
-        finally (return (list (coerce trues 'vector)
-                              (coerce falses 'vector)))) )
-
-;;;
-;;;    I wrote these without realizing I already had FIRSTS-RESTS...
-;; (defun strip-trees (trees)
-;;   (labels ((strip (trees cars cdrs)
-;;              (if (endp trees)
-;;                  (values (nreverse cars) (nreverse cdrs))
-;;                  (strip (rest trees) (cons (first (first trees)) cars) (cons (rest (first trees)) cdrs)))) )
-;;     (strip trees '() '())))
-
-(defun strip-trees (trees)
-  (loop for cons in trees ; Not necessarily CONS! If unequal lengths...
-        collect (car cons) into cars
-        collect (cdr cons) into cdrs
-        finally (return (values cars cdrs))))
-
+        finally (return (values (coerce trues 'vector)
+                                (coerce falses 'vector)))) )
 
 ;; (defun firsts-rests (lol)
 ;;   "Traverse a list of lists and collect the first elements of each as well as the tails of each."
@@ -2534,6 +2586,15 @@ starting with X or the index of the position of X in the sequence."))
 ;;         collect (first list) into firsts
 ;;         collect (rest list) into rests
 ;;         finally (return (values firsts rests))))
+
+;;;
+;;;    Assumes that no list is empty (on this pass).
+;;;    
+(defun firsts-rests* (lol)
+  (loop for list in lol
+        collect (first list) into firsts
+        collect (rest list) into rests
+        finally (return (values firsts rests))))
 
 ;;;
 ;;;    Behavior is similar to MAPCAR. Stops collecting tails as soon as any sublist is exhausted.
@@ -2858,7 +2919,7 @@ starting with X or the index of the position of X in the sequence."))
 (defun horners (x coefficients)
   (reduce #'(lambda (a b) (+ (* a x) b)) coefficients :initial-value 0))
 
-(defun binary-search (a target &key (key #'identity) (test #'<))
+(defun binary-search (a target test &key (key #'identity))
   "Locate index of TARGET within A. Return -(i + 1) if not present, where i is the index at which the TARGET would be found if present."
   (labels ((search (low high)
              (if (< high low)
@@ -2875,17 +2936,17 @@ starting with X or the index of the position of X in the sequence."))
 Each criterion specifies a comparison TEST or a pair of a TEST and a KEY. The key function is used to extract
 information from each object prior to applying the comparison function to both A and B. The compound comparison predicate
 specified by these criteria is appropriate for use by SORT-BY to sort or BINARY-SEARCH to search."
-  (flet ((analyze (criterion)
-           (if (listp criterion)
-               criterion
-               (list criterion #'identity))))
-    (if (endp criteria)
-        nil
-        (destructuring-bind (criterion . more) criteria
-          (destructuring-bind (test key) (analyze criterion)
-            (cond ((funcall test (funcall key a) (funcall key b)) t)
-                  ((funcall test (funcall key b) (funcall key a)) nil)
-                  (t (compound-compare a b more)))) ))))
+  (if (endp criteria)
+      nil
+      (destructuring-bind (criterion . more) criteria
+          (if (listp criterion)
+              (destructuring-bind (test key) criterion
+                (cond ((funcall test (funcall key a) (funcall key b)) t)
+                      ((funcall test (funcall key b) (funcall key a)) nil)
+                      (t (compound-compare a b more))))
+              (cond ((funcall criterion a b) t)
+                    ((funcall criterion b a) nil)
+                    (t (compound-compare a b more)))) )))
 
 (defun sort-by (seq criteria)
   (sort seq (partial* #'compound-compare criteria)))

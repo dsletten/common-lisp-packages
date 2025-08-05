@@ -24,7 +24,41 @@
 ;;;;   Example:
 ;;;;
 ;;;;   Notes:
+;;;;   fold.pdf
+;;;;   A tutorial on the universality and expressiveness of fold GRAHAM HUTTON
 ;;;;
+;;;;   In functional programming, fold (also known as foldr) is a standard recursion
+;;;;   operator that encapsulates a common pattern of recursion for processing lists.
+;;;;   (Right fold!)
+;;;;   fold :: (α → β → β) → β → ([α] → β)
+;;;;   fold f v [] = v
+;;;;   fold f v (x : xs) = f x (fold f v xs)
+;;;;
+;;;;   length :: [α] → Int
+;;;;   length = fold (λx n → 1 + n) 0
+;;;;
+;;;;   reverse :: [α] → [α]
+;;;;   reverse = fold (λx xs → xs ++ [x]) []
+;;;;
+;;;;   map :: (α → β) → ([α] → [β])
+;;;;   map f = fold (λx xs → f x : xs) []
+;;;;
+;;;;   filter (α → Bool) → ([α] → [α])
+;;;;   filter p = fold (λx xs → if p x then x : xs else xs) []
+;;;;
+;;;;   By contrast:
+;;;;   foldl :: (β → α → β) → β → ([α] → β)
+;;;;   foldl f v [] = v
+;;;;   foldl f v (x : xs) = foldl f (f v x) xs
+;;;;
+;;;;   redefine the function foldl in terms of fold:
+;;;;   foldl f v xs = fold (λx g → (λa → g (f a x))) id xs v
+;;;;
+;;;;   In contrast, it is not possible to redefine fold in terms of foldl , due to the fact that
+;;;;   foldl is strict in the tail of its list argument but fold is not.
+;;;;
+;;;;   reverse :: [α] → [α]
+;;;;   reverse = foldl (λxs x → x : xs) []
 ;;;;
 (load "/home/slytobias/lisp/packages/test.lisp")
 
@@ -163,3 +197,15 @@
 
 (defun fold-right* (op initial sequence)
   (fold-left #'(lambda (x y) (funcall op y x)) initial (reverse sequence)))
+
+;;;
+;;;    250728 月
+;;;    Not short-circuiting!
+;;;
+(defun conjoin (&rest ps)
+  #'(lambda (&rest args)
+      (reduce #'(lambda (b p) (and b (apply p args))) ps :initial-value t)))
+
+(defun disjoin (&rest ps)
+  #'(lambda (&rest args)
+      (reduce #'(lambda (b p) (or b (apply p args))) ps :initial-value nil)))

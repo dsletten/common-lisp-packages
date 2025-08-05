@@ -33,8 +33,12 @@
   #+ :sbcl (load "/home/slytobias/lisp/packages/core" :verbose nil)
   #- :sbcl (load "/home/slytobias/lisp/packages/core.lisp" :verbose nil))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  #+ :sbcl (load "/home/slytobias/lisp/packages/strings" :verbose nil)
+  #- :sbcl (load "/home/slytobias/lisp/packages/strings.lisp" :verbose nil))
+
 (defpackage :io
-  (:use :common-lisp :core)
+  (:use :common-lisp :core :strings)
   (:export :add-column :atime
 	   :break-loop
            :confirm
@@ -323,13 +327,13 @@
         until (string= word "")
         collect word))
 
-(defun get-num (prompt &key test (precision 'double-float))
-  (let ((num (read-num (prompt-read prompt) :test test :precision precision)))
+(defun get-num (prompt &key test (precision 'double-float) error)
+  (let ((num (read-num (prompt-read prompt) :test test :precision precision :error error)))
     (if (null num)
         (get-num prompt :test test :precision precision)
         num)))
 
-(defun read-num (s &key test (precision 'double-float) (verbose t))
+(defun read-num (s &key test (precision 'double-float) (verbose t) error)
   "Attempt to read a number from string S. Apply the TEST validity function if provided. Return NIL if value is not valid."
   (let* ((*read-default-float-format* precision)
          (*read-eval* nil)
@@ -337,9 +341,10 @@
                 (error (e)
                   (when verbose (format *error-output* "Your input is not so good: ~A~%" e))
                   (return-from read-num nil)))) )
-    (if (valid-num-p num test)
-        num
-        nil)))
+    (cond ((valid-num-p num test) num)
+          (t (when error
+               (funcall error num))
+             nil))))
 
 (defun valid-num-p (obj &optional test)
   (if (numberp obj)
@@ -349,9 +354,11 @@
       nil))
 
 (defun read-list (&rest args)
-  (let ((*read-eval* nil))
-    (values (read-from-string
-             (concatenate 'string "(" (apply #'read-line args) ")")))) )
+  (handler-case (let ((*read-eval* nil))
+                  (values (read-from-string
+                           (concatenate 'string "(" (apply #'read-line args) ")"))))
+    (error ()
+      (format *error-output* "Naughty.~%"))))
 
 (defun prompt (&rest args)
   (apply #'format *query-io* args)
@@ -417,23 +424,6 @@
 ;; 		   ((eq ,var ,eof))
 ;; 		 ,@body)))) ))
 
-(defun readlist (&rest args)
-  (values (read-from-string (concatenate 'string
-					 "("
-					 (apply #'read-line args)
-					 ")"))))
-
-(defun prompt (&rest args)
-  (apply #'format *query-io* args)
-  (read *query-io*))
-
-(defun break-loop (fn quit &rest args)
-  (format *query-io* "Entering break-loop.~%")
-  (loop
-   (let ((in (apply #'prompt args)))
-     (if (funcall quit in)
-	 (return)
-	 (format *query-io* "~A~%" (funcall fn in)))) ))
 |#
 
 #|

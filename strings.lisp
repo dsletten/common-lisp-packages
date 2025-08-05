@@ -34,13 +34,14 @@
 (defpackage :strings
   (:use :common-lisp :core)
   (:export :center :commify :commify-list
-           :elide :english-and-list :english-or-list :expand
+           :elide :english-and-list :english-or-list :expand :explode
            :get-article
            :irregular-plural :join
            :ljust
+           :mkstr
            :rjust
            :short-ordinal :space-char-p :split
-           :squeeze :string-split :string-substitute
+           :squeeze :string-split :string-substitute :symb
            :translate))
 
 (in-package :strings)
@@ -587,4 +588,15 @@
 			  (coerce (expand out) 'list))
 		  (coerce target 'list))
 	  'string))
+
+(defun mkstr (&rest args)
+  (with-output-to-string (s)
+    (loop for arg in args do (princ arg s))))
+
+(defun symb (&rest args)
+  (values (intern (apply #'mkstr args))))
+
+(defun explode (sym)
+  "Return a list of single-letter symbols from the characters in the symbol name of SYM."
+  (loop for ch across (symbol-name sym) collect (intern (string ch))))
 

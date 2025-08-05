@@ -33,18 +33,23 @@
   #+ :sbcl (load "/home/slytobias/lisp/packages/core" :verbose nil)
   #- :sbcl (load "/home/slytobias/lisp/packages/core.lisp" :verbose nil))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  #+ :sbcl (load "/home/slytobias/lisp/packages/strings" :verbose nil)
+  #- :sbcl (load "/home/slytobias/lisp/packages/strings.lisp" :verbose nil))
+
 ;(load "/home/slytobias/lisp/packages/collections.lisp")
 
 (defpackage :cards
   (:shadowing-import-from :collections :intersection :set :subsetp :union)
-  (:use :common-lisp :core :collections)
-  (:export :rank :suit :face-up :label :turn :turn-up :turn-down
-           :emptyp :remaining :shuffle :deal :hit :add :nth :cards :count :insert
-           :discard :presentp :remove :classify :pprint :first :last
+  (:use :common-lisp :core :collections :strings)
+  (:export :rank :suit :face-up :label :turn :turn-up :turn-down :short-rank :short-suit :short-name :value
+           :emptyp :remaining :shuffle :deal :hit :add :nth :cards :count :insert :refill
+           :discard :presentp :remove :classify :pprint :first :last :clear
+           :some :every :notevery :notany
            :clubs :diamonds :hearts :spades
-           :card :hand :deck :ranks :suits
+           :card :hand :deck :standard-deck :ranks :suits
            :jack :queen :king :ace)
-  (:shadow :shuffle :count :emptyp :remove :pprint :sort :nth :first :last))
+  (:shadow :shuffle :count :emptyp :remove :pprint :sort :nth :first :last :some :every :notevery :notany))
 
 (in-package :cards)
 
@@ -54,12 +59,12 @@
 ;;;    CARD class
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;(defconstant ranks #(2 3 4 5 6 7 8 9 10 jack queen king ace))
-(defconstant ranks #(ace 2 3 4 5 6 7 8 9 10 jack queen king))
-(defconstant suits #(clubs diamonds hearts spades))
-(defconstant suit-labels '((spades ."♠")
-                           (hearts . "♡")
-                           (diamonds . "♢")
-                           (clubs . "♣")))
+(defconstant ranks #(:ace 2 3 4 5 6 7 8 9 10 :jack :queen :king))
+(defconstant suits #(:clubs :diamonds :hearts :spades)) ; :joker ????
+(defconstant suit-labels '((:spades ."♠")
+                           (:hearts . "♡")
+                           (:diamonds . "♢")
+                           (:clubs . "♣")))
 ;; (defconstant suit-labels '((spades ."♤")
 ;;                            (hearts . "♡")
 ;;                            (diamonds . "♢")
@@ -70,12 +75,11 @@
 ;;                            (clubs . "♣")))
 
 (defun rank+ (card)
-  "Determine the numerical rank for CARD."
+  "Determine the numerical rank for CARD." ; ? See Poker hands below...
   (position (rank card) ranks))
 
 (defun value (card)
   "Determine the numerical value for CARD."
-  (assert (typep card 'rank))
   (1+ (position (rank card) ranks)))
 
 (defun rankp (r)
@@ -114,10 +118,6 @@
 ;;       (call-next-method)
 ;;       (error "No can peek!")))
 
-(defun card-equal (card1 card2)
-  (and (eql (rank card1) (rank card2)) 
-       (eql (suit card1) (suit card2))))
-
 (defmethod initialize-instance :after ((c card) &rest initargs)
   (declare (ignore initargs))
   (assert (typep (rank c) 'rank))
@@ -126,6 +126,34 @@
 (defgeneric label (card))
 (defmethod label ((c card))
   (cdr (assoc (suit c) suit-labels)))
+
+(defmethod print-object ((c card) stream)
+  (print-unreadable-object (c stream :type t)
+    (format stream "~A of ~A" (rank c) (label c))))
+
+(defgeneric short-rank (card)
+  (:documentation "An abbreviated representation of the card's rank."))
+(defmethod short-rank ((c card))
+  (with-slots (rank) c
+    (if (numberp rank)
+        rank
+        (char (symbol-name rank) 0))))
+
+(defgeneric short-suit (card)
+  (:documentation "An abbreviated representation of the card's suit."))
+(defmethod short-suit ((c card))
+  (label c))
+
+(defgeneric short-name (card)
+  (:documentation "An abbreviated representation of the card's rank and suit."))
+(defmethod short-name ((c card))
+  (if (face-up c)
+      (format nil "~A~A" (short-rank c) (short-suit c))
+      "XX"))
+
+(defun card-equal (card1 card2)
+  (and (eql (rank card1) (rank card2)) 
+       (eql (suit card1) (suit card2))))
 
 (defgeneric turn (card))
 (defmethod turn ((c card))
@@ -141,14 +169,6 @@
 (defmethod turn-down ((c card))
   (with-slots (face-up) c
     (setf face-up nil)))
-
-(defmethod print-object ((c card) stream)
-  (print-unreadable-object (c stream :type t)
-    (format stream "~A of ~A" (rank c) (label c))))
-
-(defun pprint (cards stream)
-  (format stream "~:{~A~A~:^, ~}" (mapcar #'(lambda (card) (list (rank card) (label card))) cards)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;    HAND class
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -163,6 +183,11 @@
 (defmethod print-object ((h hand) stream)
   (print-unreadable-object (h stream :type t)
     (format stream "~A" (cards h))))
+
+(defgeneric pprint (hand)
+  (:documentation "Pretty print a hand."))
+(defmethod pprint ((h hand))
+  (join (map 'list #'short-name (cards h)) ", "))
 
 (defmethod turn-up ((h hand))
   (loop for card across (cards h)
@@ -245,43 +270,83 @@
 (defmethod last ((h hand))
   (nth h (1- (count h))))
 
-; clear
+(defgeneric clear (hand)
+  (:documentation "Discard all cards in the HAND."))
+(defmethod clear ((h hand))
+  (loop until (emptyp h)
+        do (discard h 0)))
+
+(defgeneric every (f hand &rest args))
+(defmethod every ((f function) (h hand) &rest args)
+  (apply #'cl:every f (cards h) args))
+
+(defgeneric some (f hand &rest args))
+(defmethod some ((f function) (h hand) &rest args)
+  (apply #'cl:some f (cards h) args))
+
+(defgeneric notevery (f hand &rest args))
+(defmethod notevery ((f function) (h hand) &rest args)
+  (apply #'cl:notevery f (cards h) args))
+
+(defgeneric notany (f hand &rest args))
+(defmethod notany ((f function) (h hand) &rest args)
+  (apply #'cl:notany f (cards h) args))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;    DECK class
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ;;;
-;;;    Add hash slot to test for duplicates??
+;;;    REGISTRY can't simply be hashtable of cards due to limitations of :TEST functions.
+;;;    2 cards might be CARD-EQUAL yet fail EQ/EQL/EQUAL/EQUALP.
+;;;    Instead, crate map of suits each containing map of ranks.
 ;;;    
 (defclass deck ()
   ((cards :reader cards :initform (make-linked-queue))
-   (count :reader count :documentation "The number of cards in the full deck.")
+   (registry :initform (make-hash-table :test #'eq) :documentation "Hash of hash tables to ensure uniqueness.")
+   (capacity :reader capacity :initarg :capacity :documentation "The number of cards in the full deck.")
    (random-state :initform (make-random-state t))))
 
 (defmethod initialize-instance :after ((d deck) &rest initargs)
   (declare (ignore initargs))
+  (with-slots (registry) d
+    (loop for suit across suits
+          do (setf (gethash suit registry) (make-hash-table :test #'eq))))
   (populate d)
   (shuffle d))
+
+(defgeneric register-card (deck card)
+  (:documentation "Register CARD as present in DECK."))
+(defmethod register-card ((d deck) (c card))
+  (with-slots (registry) d
+    (setf (gethash (rank c) (gethash (suit c) registry)) t)))
+
+;; REMHASH?
+(defgeneric deregister-card (deck card)
+  (:documentation "Remove CARD from registry of DECK."))
+(defmethod deregister-card ((d deck) (c card))
+  (with-slots (registry) d
+    (setf (gethash (rank c) (gethash (suit c) registry)) nil)))
+
+(defgeneric presentp (deck card)
+  (:documentation "Is the given CARD present in DECK?"))
+(defmethod presentp ((d deck) (c card))
+  (with-slots (registry) d
+    (gethash (rank c) (gethash (suit c) registry))))
 
 (defgeneric populate (deck)
   (:documentation "Fill up a DECK with cards."))
 (defmethod populate :around ((d deck))
   (assert (emptyp d))
   (call-next-method))
-(defmethod populate ((d deck))            
-  (with-slots (cards count) d
-    (loop for suit across suits
-          do (loop for rank across ranks 
-                   do (enqueue cards (make-instance 'card :rank rank :suit suit))))
-    (setf count (size cards))))
 
 (defmethod print-object ((d deck) stream)
-  (with-slots (cards count) d
+  (with-slots (cards capacity) d
     (if (emptyp d)
         (print-unreadable-object (d stream :type t)
-          (format stream "~D (~D) card~P" (remaining d) count (remaining d)))
+          (format stream "~D (~D) card~P" (remaining d) capacity (remaining d)))
         (print-unreadable-object (d stream :type t)
-          (format stream "~D (~D) card~P ~A" (remaining d) count (remaining d) (front cards)))) ))
+          (format stream "~D (~D) card~P ~A" (remaining d) capacity (remaining d) (front cards)))) ))
 
 (defgeneric remaining (deck))
 (defmethod remaining ((d deck))
@@ -290,31 +355,36 @@
 (defmethod emptyp ((d deck))
   (zerop (remaining d)))
 
-(defgeneric shuffle (deck))
+(defgeneric shuffle (deck)) ;;;;;;;;;;;;;;
 (defmethod shuffle ((d deck))
   (with-slots (cards random-state) d
     (let ((shuffled (core:shuffle (coerce (elements cards) 'vector) random-state)))
       (make-empty cards)
       (loop for card across shuffled do (enqueue cards card)))) )
 
-(defgeneric deal (deck count))
-(defmethod deal :around ((d deck) count)
+(defgeneric deal (deck &optional count)
+  (:documentation "Create a HAND of cards. Returns the HAND and the actual number of cards dealt."))
+(defmethod deal :around ((d deck) &optional count)
+  (declare (ignore count))
   (assert (not (emptyp d)))
   (call-next-method))
-(defmethod deal ((d deck) count)
+(defmethod deal ((d deck) &optional (count 0))
   (let ((hand (make-instance 'hand)))
     (with-slots (cards) d
       (loop repeat count
-            do (add hand (dequeue cards))
-            finally (return hand)))) )
+            until (emptyp d)
+            do (hit d hand)
+            finally (return (values hand (count hand)))) )))
 
 (defgeneric hit (deck hand))
 (defmethod hit :around ((d deck) (h hand))
   (assert (not (emptyp d)))
   (call-next-method))
 (defmethod hit ((d deck) (h hand))
-  (with-slots (cards) d
-    (add h (dequeue cards))))
+  (with-slots (cards registry) d
+    (let ((card (dequeue cards)))
+      (deregister-card d card)
+      (add h card))))
 
 (defgeneric refill (deck)
   (:documentation "Refill an empty deck."))
@@ -325,28 +395,39 @@
   (populate d)
   (shuffle d))
 
-(defgeneric presentp (deck card))
-(defmethod presentp ((d deck) (c card))
-  (with-slots (cards) d
-    (contains cards c :test #'card-equal)))
-
 (defmethod add :around ((d deck) (c card))
-  (assert (not (= (remaining d) (count d))) () "Deck is full.")
+  (assert (not (= (remaining d) (capacity d))) () "Deck is full.")
   (assert (not (presentp d c)) () "Card ~A already present in deck." c)
   (call-next-method))
 (defmethod add ((d deck) (c card))
   (with-slots (cards) d
-    (enqueue cards c)))
+    (enqueue cards c)
+    (register-card d c)))
 
 (defgeneric remove (deck card)
   (:documentation "Remove the given CARD from the DECK if present."))
 (defmethod remove ((d deck) (target card))
-  (with-slots (cards) d
-    (loop repeat (remaining d)
-          for card = (dequeue cards)
-          if (card-equal target card) do (return target)
-          else do (enqueue cards card)
-          finally (return nil))))
+  (if (presentp d target)
+      (with-slots (cards) d
+        (loop repeat (remaining d)
+              for card = (dequeue cards)
+              if (card-equal target card) 
+                do (deregister-card d card)
+                   (return card)
+              else 
+                do (enqueue cards card)
+              finally (return nil)))
+      nil))
+
+(defclass standard-deck (deck)
+  ((capacity :initform 52))
+  (:documentation "A standard deck of 52 cards."))
+
+(defmethod populate ((d standard-deck))            
+  (with-slots (cards capacity) d
+    (loop for suit across suits
+          do (loop for rank across ranks 
+                   do (add d (make-instance 'card :rank rank :suit suit)))) ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;    POKER-HAND class
@@ -357,16 +438,16 @@
 
 (defgeneric flushp (hand)
   (:documentation "Is this HAND a flush?"))
-(defmethod flushp ((h hand))
+(defmethod flushp ((h poker-hand))
   (and (= (count h) 5)
        (equalelts (cards h) :key #'suit)))
 
 (defgeneric straightp (hand)
   (:documentation "Is this HAND a straight?"))
-(defmethod straightp ((h hand))
+(defmethod straightp ((h poker-hand))
   "Determines whether HAND is a straight and returns the low card."
   (if (= (count h) 5)
-      (let ((sorted-hand (coerce (cl:sort (copy-seq h) #'< :key #'rank+) 'list)))
+      (let ((sorted-hand (coerce (cl:sort (copy-seq (cards h)) #'< :key #'rank+) 'list)))
         (values (every #'(lambda (a b) (= 1 (- (rank+ a) (rank+ b))))
                        (rest sorted-hand)
                        sorted-hand)
@@ -375,12 +456,12 @@
 
 (defgeneric straight-flush-p (hand)
   (:documentation "Is this HAND a straight flush?"))
-(defmethod straight-flush-p ((h hand))
+(defmethod straight-flush-p ((h poker-hand))
   (and (straightp h) (flushp h)))
 
 (defgeneric royal-flush-p (hand)
   (:documentation "Is this HAND a royal flush?"))
-(defmethod royal-flush-p ((h hand))
+(defmethod royal-flush-p ((h poker-hand))
   (multiple-value-bind (straightp low-card) (straightp h)
     (and straightp
          (flushp h)
@@ -390,7 +471,7 @@
   (:documentation "Group cards in HAND by rank."))
 (defmethod bin ((h hand))
   (loop with bins = (make-hash-table)
-        for card in (cards h)
+        for card across (cards h)
         do (push card (gethash (rank card) bins '()))
         finally (return bins)))
 

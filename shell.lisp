@@ -30,7 +30,7 @@
 
 (defpackage :shell
   (:use :common-lisp)
-  (:export :default-directory :get-args :get-argv :getenv :run-shell-command :set-file-permissions :setenv))
+  (:export :default-directory :get-argc :get-args :get-argv :getenv :run-shell-command :set-file-permissions :setenv))
 
 (in-package :shell)
 
@@ -81,7 +81,8 @@
 
    ;; nil))
 
-
+(defun get-argc ()
+  (length (get-args)))
 
 ;;;
 ;;;    SBCL also POSIX-ENVIRON

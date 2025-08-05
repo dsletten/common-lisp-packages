@@ -25,9 +25,11 @@
 ;;;;
 ;;;;
 (load "/home/slytobias/lisp/packages/core.lisp")
+(load "/home/slytobias/lisp/packages/strings.lisp")
+(load "/home/slytobias/lisp/packages/io.lisp")
 (load "/home/slytobias/lisp/packages/test.lisp")
 
-(defpackage :test-lisp (:use :common-lisp :core :test))
+(defpackage :test-lisp (:use :common-lisp :core :strings :io :test))
 
 (in-package :test-lisp)
 
@@ -245,10 +247,10 @@
    (not (oddp 2.))
    (handler-case (not (oddp 2/3))
      (type-error () t)
-     (:no-error () (error "Only applicable to integers.")))
+     (:no-error (_) (declare (ignore _)) (error "Only applicable to integers.")))
    (handler-case (not (oddp pi))
      (type-error () t)
-     (:no-error () (error "Only applicable to integers.")))) )
+     (:no-error (_) (declare (ignore _)) (error "Only applicable to integers.")))) )
 
 (deftest test-evenp ()
   (check
@@ -258,10 +260,10 @@
    (not (evenp 3.))
    (handler-case (not (evenp 2/3))
      (type-error () t)
-     (:no-error () (error "Only applicable to integers.")))
+     (:no-error (_) (declare (ignore _)) (error "Only applicable to integers.")))
    (handler-case (not (evenp pi))
      (type-error () t)
-     (:no-error () (error "Only applicable to integers.")))) )
+     (:no-error (_) (declare (ignore _)) (error "Only applicable to integers.")))) )
 
 (deftest test-ratios ()
   (check
@@ -277,7 +279,7 @@
    (= 1 (denominator 8))
    (handler-case (denominator 8.0)
      (type-error () t)
-     (:no-error () (error "Only applicable to RATIONAL numbers.")))) ) ; Not specified in CLHS?
+     (:no-error (_) (declare (ignore _)) (error "Only applicable to RATIONAL numbers.")))) ) ; Not specified in CLHS?
 
 ;;;
 ;;;    Cannot haphazardly apply Boolean algebra:
@@ -393,11 +395,11 @@
    (= 0.1l0 (coerce 1/10 'long-float))
    (handler-case (coerce 2 'bignum)
      (type-error () t)
-     (:no-error () (error "Can't make integer something that it's not.")))
+     (:no-error (_) (declare (ignore _)) (error "Can't make integer something that it's not.")))
    (handler-case (coerce (expt 3 9999) 'fixnum) ; caught STYLE-WARNING: Lisp error during constant folding:
                                         ; 5437833951142086247677... can't be converted to type FIXNUM.
      (type-error () t)
-     (:no-error () (error "Can't make integer something that it's not.")))) )
+     (:no-error (_) (declare (ignore _)) (error "Can't make integer something that it's not.")))) )
 
 ;;  TODO: Fix LOOP
 (deftest test-integer-coercion ()
@@ -525,6 +527,8 @@
                      (and (progn (format s pung) t)
                           (format s foo)))) ))
    ;;    Multiple values only from final form
+   (equal '(nil) (and (values nil 8) t))
+   (equal '(nil 8) (and (values nil 8)))
    (equal '(nil 0) (multiple-value-list (and (read-from-string "" nil nil))))
    (equal '(nil) (multiple-value-list (and (read-from-string "" nil nil) t)))) )
 
@@ -571,16 +575,16 @@
   (check
    (handler-case (/ 3 0)
      (division-by-zero () t)
-     (:no-error () (error "Since when is this allowed?")))
+     (:no-error (_) (declare (ignore _)) (error "Since when is this allowed?")))
    (handler-case (/ 3d0 0d0)
      (division-by-zero () t)
-     (:no-error () (error "Since when is this allowed?")))
+     (:no-error (_) (declare (ignore _)) (error "Since when is this allowed?")))
    (handler-case (/ most-positive-double-float least-positive-double-float)
      (floating-point-overflow () t)
-     (:no-error () (error "Less is more.")))
+     (:no-error (_) (declare (ignore _)) (error "Less is more.")))
    (handler-case (* most-positive-double-float 10d0)
      (floating-point-overflow () t)
-     (:no-error () (error "Less is more.")))
+     (:no-error (_) (declare (ignore _)) (error "Less is more.")))
    (zerop (/ least-positive-double-float most-positive-double-float)) ; Underflow???
    (zerop (expt 10d0 -500))))
 
@@ -713,7 +717,7 @@
    (not (endp '(a . b)))
    (handler-case (endp (cdr '(a . b)))
      (type-error () t)
-     (:no-error () (error "Value is not a list.")))) )
+     (:no-error (_) (declare (ignore _)) (error "Value is not a list.")))) )
 
 ;; (deftest test-equality ()
 ;;   (check
@@ -955,7 +959,7 @@
    (not (tree-equal #1# #2='(1d0 (2d0) (3d0 (4d0 5d0) (6d0)))) )
    (handler-case (tree-equal #1# #2# :test #'=)
      (type-error () t)
-     (:no-error () (error "TEST must apply to all leaves of tree!")))
+     (:no-error (_) (declare (ignore _)) (error "TEST must apply to all leaves of tree!")))
    (tree-equal #1# #2# :test #'(lambda (a b) (or (and (null a) (null b)) (= a b))))
    (not (tree-equal #1# #3='(1d0 (2d0) ((3d0) (4d0 5d0) (6d0))) :test #'(lambda (a b) (or (and (null a) (null b)) (= a b)))) )
    ;;
@@ -1216,7 +1220,7 @@
      (setf (rest l2) '(:two))
      (handler-case (setf (nthcdr 1 l3) '(:two))
        (undefined-function () t)
-       (:no-error () (error "#'(SETF NTHCDR) is undefined.")))
+       (:no-error (_) (declare (ignore _)) (error "#'(SETF NTHCDR) is undefined.")))
      (equal l1 l2))))
 
 (deftest test-last ()
@@ -1593,16 +1597,7 @@
    (equal '(1 2 1 3 4) (remove 1 #4# :from-end t :count 1))
    (equal '(1 2 3 4) (remove 1 #4# :from-end t :count 2))))
    
-(deftest test-mapcar ()
-  (check
-   (equal '(2 4 6 8) (mapcar (partial #'* 2) '(1 2 3 4)))
-   (equal '(t nil t nil) (mapcar #'< '(1 2 3 4) '(3 2 5 4)))
-   (equal '(1111 2222 3333 4444) (mapcar #'+ '(1 2 3 4) '(10 20 30 40) '(100 200 300 400) '(1000 2000 3000 4000)))
-   (equal '((a 1) (b 2) (c 3)) (mapcar #'list '(a b c) '(1 2 3)))
-   (equal '((a . 1) (b . 2) (c . 3)) (mapcar #'cons '(a b c) '(1 2 3)))
-   (equal #1='(1 2 3 4 5 6) (mapcar #'identity #1#))
-   (= (length #1#) (length (mapcar #'1+ #1#)))) )
-
+;;;    SUBST-IF/SUBST-IF-NOT, NSUBST/NSUBST-IF/NSUBST-IF-NOT
 (deftest test-subst ()
   (check
    (equal '(b (b c (b))) (subst 'b 'a '(a (b c (a)))) )
@@ -1710,7 +1705,7 @@
    ((lambda (&key) t) :allow-other-keys nil)
    (handler-case ((lambda (&key) t) :allow-other-keys nil :b 9)
      (error () t)
-     (:no-error () (error "Unknown &KEY argument: :B")))) )
+     (:no-error (_) (declare (ignore _)) (error "Unknown &KEY argument: :B")))) )
 
 (deftest test-mix-optional-keyword-parameters ()
   (flet ((f (a &optional b (c 3) &rest d &key e)
@@ -1721,7 +1716,7 @@
             (f 10 :e 13 14 15 16 17 :allow-other-keys t))
      (handler-case (equal '(10 :e 13 (14 15 16) nil) (f 10 :e 13 14 15 16))
        (error () t)
-       (:no-error () (error "Odd number of &KEY arguments")))
+       (:no-error (_) (declare (ignore _)) (error "Odd number of &KEY arguments")))
      (equal '(10 :e 13 (:e 14) 14) (f 10 :e 13 :e 14)))) )
 
 ;;;
@@ -1739,13 +1734,13 @@
 
      (handler-case (pung 2 :foo 8 :bar 9)
        (error () t)
-       (:no-error () (error "Odd number of &KEY arguments")))
+       (:no-error (_) (declare (ignore _)) (error "Odd number of &KEY arguments")))
 
      (equal '(8 nil) (foo :foo 8))
 
      (handler-case (equal '(8 nil) (foo 2 :foo 8))
        (error () t)
-       (:no-error () (error "malformed property list")))) ))
+       (:no-error (_) (declare (ignore _)) (error "malformed property list")))) ))
 
 (deftest test-keywordp ()
   (check
@@ -1872,7 +1867,7 @@
      (check
       (handler-case (setf (assoc 'a alist) 5)
         (undefined-function () t)
-        (:no-error () (error "The function (SETF ASSOC) is undefined.")))
+        (:no-error (_) (declare (ignore _)) (error "The function (SETF ASSOC) is undefined.")))
 
       (= 3 (cdr (assoc 'c alist)))
       (progn
@@ -2011,7 +2006,7 @@
       (null (getf plist2 'd))
       (handler-case (getf plist1 'd) 
         (error () t)
-        (:no-error () (error "malformed property list")))) )
+        (:no-error (_) (declare (ignore _)) (error "malformed property list")))) )
    (let ((plist '(c 9 a 1 b 2 c 3))) ; Duplicate key shadowed
      (check
       (= 9 (getf plist 'c))
@@ -2477,7 +2472,7 @@
    (subsetp '("PUNG" "Bar") #2# :test #'string= :key #'string-downcase)
    (handler-case (subsetp '(d) '(a b . c))
      (type-error () t)
-     (:no-error () (error "Arguments must be proper lists")))) )
+     (:no-error (_) (declare (ignore _)) (error "Arguments must be proper lists")))) )
 
 ;;;
 ;;;    Unusual :TEST functions can lead beyond normal set-theoretic concepts.
@@ -2564,9 +2559,22 @@
 (deftest test-mapcar ()
   (check
    (equal '(2 3 4 5 6) (mapcar #'1+ '(1 2 3 4 5)))
+   (equal '(2 4 6 8) (mapcar (partial #'* 2) '(1 2 3 4)))
+   (equal '(t nil t nil) (mapcar #'< '(1 2 3 4) '(3 2 5 4)))
+   (equal '(1111 2222 3333 4444) (mapcar #'+ '(1 2 3 4) '(10 20 30 40) '(100 200 300 400) '(1000 2000 3000 4000)))
+   (equal '((a 1) (b 2) (c 3)) (mapcar #'list '(a b c) '(1 2 3)))
+   (equal '((a . 1) (b . 2) (c . 3)) (mapcar #'cons '(a b c) '(1 2 3)))
+   (equal #1='(1 2 3 4 5 6) (mapcar #'identity #1#))
+   (= (length #1#) (length (mapcar #'1+ #1#)))
    (equal '(#\A #\B #\C) (mapcar #'char-upcase '(#\a #\b #\c)))
+
    (equals '(#(1 :P) #(2 :Q) #(3 :R) #(4 :S) #(5 :T))
            (mapcar #'vector '(1 2 3 4 5) '(:p :q :r :s :t)))
+   (equals '(#(1 :P) #(2 :Q) #(3 :R) #(4 :S))
+           (mapcar #'vector '(1 2 3 4) '(:p :q :r :s :t)))
+   (equals '(#(1 :P) #(2 :Q) #(3 :R) #(4 :S))
+           (mapcar #'vector '(1 2 3 4 5) '(:p :q :r :s)))
+
    (let ((l '(a b c d e))) ; "Chain" together successive elements
      (equal '((a b) (b c) (c d) (d e))
             (mapcar #'list l (rest l)))) ))
@@ -2737,7 +2745,7 @@
      (and (constantp syzygy)
           (handler-case (makunbound 'syzygy)
             (error () t)
-            (:no-error () (error "Maybe this is implementation-specific?")))) )))
+            (:no-error (_) (declare (ignore _)) (error "Maybe this is implementation-specific?")))) )))
 
 ;;;
 ;;;    (rplaca l obj) ≡ (setf (first l) obj)
@@ -2766,7 +2774,7 @@
    (handler-case (let ((l (list)))
                    (rplaca l :foo))
      (error () t)
-     (:no-error () (error "Argument to RPLACA must be CONS.")))) )
+     (:no-error (_) (declare (ignore _)) (error "Argument to RPLACA must be CONS.")))) )
 
 ;;;
 ;;;    (rplacd l obj) ≡ (setf (rest l) obj)
@@ -2788,7 +2796,7 @@
    (handler-case (let ((l (list)))
                    (rplacd l :foo))
      (error () t)
-     (:no-error () (error "Argument to RPLACD must be CONS.")))) )
+     (:no-error (_) (declare (ignore _)) (error "Argument to RPLACD must be CONS.")))) )
 
 (deftest test-incf ()
   (check
@@ -2963,7 +2971,7 @@
      (null (list-length (circular-list 'a 'b 'c 'd)))
      (handler-case (list-length '(a b c . d))
        (type-error () t)
-       (:no-error () (error "List must either be a proper list or a circular list.")))) ))
+       (:no-error (_) (declare (ignore _)) (error "List must either be a proper list or a circular list.")))) ))
     
 ;;;
 ;;;    CLHS shows this possible implementation. Two pointers traverse the list.
@@ -3384,6 +3392,7 @@
    (let ((s (copy-seq "Is this not pung?")))
      (setf (subseq s 3 7) "that thing over there under the couch")
      (string= "Is that not pung?" s))
+
    (equals #() (subseq (vector 1 2 3 4) 3 3))
    (equals #(2 3 4) (subseq (vector 1 2 3 4) 1))
    (equals #(2 3) (subseq (vector 1 2 3 4) 1 3))
@@ -3393,6 +3402,7 @@
    (let ((v (vector 1 2 3 4)))
      (setf (subseq v 1 3) (list :two))
      (equals #(1 :two 3 4) v))
+
    (null (subseq '(a b c d e) 3 3))
    (equal '(d e) (subseq '(a b c d e) 3))
    (equal '(b c d) (subseq '(a b c d e) 1 4))
@@ -3409,6 +3419,7 @@
    (null (position #\J "Pung Foo"))
    (= 8 (position #\n "Is this not pung?"))
    (= 14 (position #\n "Is this not pung?" :from-end t))
+
    (= 3 (position 'a '(b c d a)))
    (= 2 (position 'd #(b c d a)))
 
@@ -3426,9 +3437,9 @@
    (= 2 (position-if #'(lambda (elt) (zerop (mod elt 3))) #3#))
    (= 2 (position-if (compose #'zerop (partial* #'mod 3)) #3#))
    
-   (= 4 (position-if-not #'minusp '(-3 -7 -1 -2 0 5)))
-   (= 4 (position-if (complement #'minusp) '(-3 -7 -1 -2 0 5)))
-   (null (position-if-not #'minusp '(-3 -7 -1 -2 0 5) :end 3))
+   (= 4 (position-if-not #'minusp #(-3 -7 -1 -2 0 5)))
+   (= 4 (position-if (complement #'minusp) #(-3 -7 -1 -2 0 5)))
+   (null (position-if-not #'minusp #(-3 -7 -1 -2 0 5) :end 3))
 
    (= 3 (position-if #'(lambda (elt) (> elt 3)) #3#))
    (= 3 (position-if-not #'(lambda (elt) (<= elt 3)) #3#))
@@ -3441,6 +3452,7 @@
    (null (find #\N "Is this not pung?"))
    (eql #\N (find #\N "Is this Not pung?"))
    (eql #\n (find #\N "Is this Not pung?" :from-end t :test #'char-equal))
+
    (eq 'a (find 'a '(b c d a)))
    (eq 'd (find 'd #(b c d a)))
 
@@ -3458,9 +3470,9 @@
    (= 3 (find-if #'(lambda (elt) (zerop (mod elt 3))) #3#))
    (= 3 (find-if (compose #'zerop (partial* #'mod 3)) #3#))
    
-   (= 0 (find-if-not #'minusp '(-3 -7 -1 -2 0 5)))
-   (= 0 (find-if (complement #'minusp) '(-3 -7 -1 -2 0 5)))
-   (null (find-if-not #'minusp '(-3 -7 -1 -2 0 5) :end 3))
+   (= 0 (find-if-not #'minusp #(-3 -7 -1 -2 0 5)))
+   (= 0 (find-if (complement #'minusp) #(-3 -7 -1 -2 0 5)))
+   (null (find-if-not #'minusp #(-3 -7 -1 -2 0 5) :end 3))
 
    (= 4 (find-if #'(lambda (elt) (> elt 3)) #3#))
    (= 4 (find-if-not #'(lambda (elt) (<= elt 3)) #3#))
@@ -3513,7 +3525,7 @@
    (string= "a" (coerce '(#\a) 'string))
    (handler-case (coerce #\a 'string)
      (type-error () t)
-     (:no-error () (error "Cannot coerce character to string.")))
+     (:no-error (_) (declare (ignore _)) (error "Cannot coerce character to string.")))
    (equal '(#\p #\u #\n #\g) (coerce "pung" 'list))
    (string= "pung" (coerce '(#\p #\u #\n #\g) 'string))
    (string= "pung" (coerce #(#\p #\u #\n #\g) 'string))
@@ -3547,13 +3559,13 @@
    (eq :oops (read-from-string "   " nil :oops))
    (handler-case (read-from-string "    ")
      (end-of-file () t)
-     (:no-error () (error "End of file reached before object encountered. EOF-ERROR-P is true by default.")))
+     (:no-error (_) (declare (ignore _)) (error "End of file reached before object encountered. EOF-ERROR-P is true by default.")))
    (handler-case (read-from-string ")" nil nil)
      (reader-error () t)
-     (:no-error () (error "Object cannot start with ).")))
+     (:no-error (_) (declare (ignore _)) (error "Object cannot start with ).")))
    (handler-case (read-from-string "(" nil nil)
      (end-of-file () t)
-     (:no-error () (error "End of file reached in middle of parsing object.")))
+     (:no-error (_) (declare (ignore _)) (error "End of file reached in middle of parsing object.")))
 
    (let ((*read-default-float-format* 'single-float))
      (eql 4f0 (read-from-string "4.0")))
@@ -3564,7 +3576,317 @@
    (let ((*read-eval* nil))
      (handler-case (read-from-string "#.(- 9 4)")
        (reader-error () t)
-       (:no-error () (error "Can't read #. while *READ-EVAL* is NIL")))) ))
+       (:no-error (_)
+         (declare (ignore _))
+         (error "Can't read #. while *READ-EVAL* is NIL")))) ))
+
+(deftest test-elt ()
+  (check
+   (let ((s "pung"))
+     (char= (char s 1) (elt s 1) (aref s 1)))
+
+   (let ((l '(a b c d e)))
+     (eq (nth 3 l) (elt l 3)))
+
+   (let ((v #(1/2 1/3 1/4 1/5 1/6)))
+     (= (svref v 4) (elt v 4) (aref v 4)))) )
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_cp_seq.htm
+;;;    (copy-seq x) ≡ (subseq x 0)
+;;;    
+(deftest test-copy-seq ()
+  (check
+   (let* ((s "Is this not pung?") ; No COPY-STRING
+          (s* (copy-seq s)))
+     (and (equalp s s*) (not (eql s s*))))
+   (let* ((l '(a b c d e))
+          (l* (copy-seq l)))
+     (and (equal l l*) (not (eql l l*))))
+   (let* ((v #(1 2 3 4 5))
+          (v* (copy-seq v)))
+     (and (equals v v*) (not (eql v v*)))) ))
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_fill.htm
+;;;    (fill sequence item) ≡ (nsubstitute-if item (constantly t) sequence)
+;;;
+(deftest test-fill ()
+  (check
+   (let ((s (copy-seq "pung")))
+     (fill s #\x)
+     (string= "xxxx" s))
+   (let ((l (list 1 2 3 4 5))
+         (obj '(:a :b)))
+     (fill l obj)
+     (and (equal (list obj obj obj obj obj) l)
+          (equalelts l :test #'eq)))
+   (let ((v (vector 'pung 'foo 'bar 'baz)))
+     (fill v 0d0)
+     (equals #(0d0 0d0 0d0 0d0) v))
+   (let ((v (vector 0 1 2 3 4)))
+     (fill v :n :start 2 :end 4)
+     (equals #(0 1 :n :n 4) v))))
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_mk_seq.htm
+;;;    (make-sequence 'string n) ≡ (make-string n)
+;;;    [CLHS literally says: (make-sequence 'string 5) ≡ (make-string 5) ?!]
+;;;
+(deftest test-make-sequence ()
+  (check
+   (equal '(2 2 2 2) (make-sequence 'list 4 :initial-element 2))
+   (equals #(2 2 2 2) (make-sequence 'vector 4 :initial-element 2))
+   (string= "2222" (make-sequence 'string 4 :initial-element #\2))
+   (null (make-sequence 'null 0))
+   (equal (make-sequence 'cons 5) (make-sequence 'list 5))
+   (handler-case (make-sequence 'cons 0)
+     (type-error () t)
+     (:no-error (_)
+       (declare (ignore _))
+       (error "Can't have no CONSes.")))
+   (equal #*00000000 (make-sequence '(vector bit) 8 :initial-element 0))))
+
+;;;
+;;;    Replaces subsequence of a given sequence.
+;;;    Destructively modifies argument.
+;;;    If target subsequence and replacement are not same length, (min (- end1 start1) (- end2 start2)) elts are replaced.
+;;;    (replace s1 s2) ≈ (setf (subseq s1 0) s2) [Different values returned. Same side effect.]
+;;;    
+(deftest test-replace ()
+  (check
+   (let ((v (vector 1 2 3 4 5)))
+     (replace v (vector :three :four) :start1 2)
+     (equals (vector 1 2 :three :four 5) v))
+   (let ((s (copy-seq ".........|Nothing can harm me here.")))
+     (replace s "--------------------------->" :end1 (position #\| s))
+     (string= "---------|Nothing can harm me here." s))))
+
+;;;
+;;;    Replaces elements of subsequence (Contrast REPLACE above).
+;;;    
+(deftest test-substitute ()
+  (check
+   (string= "Iz thiz not pung?" (substitute #\z #\s "Is this not pung?"))
+   (string= "Iz this not pung?" (substitute #\z #\s "Is this not pung?" :count 1))
+   (string= "Is thiz not pung?" (substitute #\z #\s "Is this not pung?" :count 1 :from-end t))
+   (string= "Is th1s not pung?" (substitute #\1 #\i "Is this not pung?"))
+   (string= "1s th1s not pung?" (substitute #\1 #\i "Is this not pung?" :test #'char-equal))
+
+   (let* ((s1 "Pung")
+          (s2 (copy-seq s1)))
+     (and (string= "Punk" (substitute #\k #\g s2))
+          (string= s1 s2)))
+   (let* ((s1 "Pung")
+          (s2 (copy-seq s1)))
+     (and (string= "Punk" (nsubstitute #\k #\g s2)) ; Destructive
+          (string/= s1 s2)
+          (string= "Punk" s2)))
+
+   (equal '(a (b (b))) (substitute 'a 'b '(b (b (b)))) ) ; Does not descend deeper
+   (equal '(a (a (a))) (subst 'a 'b '(b (b (b)))) )
+
+   (equal '(1 :x 3 :x 5) (substitute-if :x #'evenp '(1 2 3 4 5)))
+   (equal '(1 :x 3 :x 5) (substitute-if-not :x #'oddp '(1 2 3 4 5)))
+
+   (string= "ThX qXXck brXwn fXx jXmps XvXr thX lXzy dXg."
+            (substitute-if #\X (partial* #'find "aeiou") "The quick brown fox jumps over the lazy dog."))))
+
+
+;;;
+;;;    CLHS: https://www.lispworks.com/documentation/HyperSpec/Body/f_rm_dup.htm
+;;;    The elements of sequence are compared pairwise, and if any two match,
+;;;    then the one occurring earlier in sequence is discarded, unless from-end is true,
+;;;    in which case the one later in sequence is discarded.
+;;;
+(deftest test-remove-duplicates ()
+  (check
+   (equal '(1 2 3 0) (remove-duplicates '(0 1 0 2 0 3 0)))
+   (equal '(0 1 2 3) (remove-duplicates '(0 1 0 2 0 3 0) :from-end t))
+
+   (equals #(:f :o :r :b :a :z) (remove-duplicates (vector :f :o :o :b :a :r :b :a :z)))
+
+   (string= "ba" (remove-duplicates "ababa"))
+   (string= "Ihisot pung?" (remove-duplicates "Is this not pung?"))
+   (string= "CDBra" (remove-duplicates "abraCADABra" :test #'char-equal))
+
+   (equal '((bar #\%) (baz #\A))
+          (remove-duplicates '((foo #\a) (bar #\%) (baz #\A)) :test #'char-equal :key #'cadr)) ; CLHS example
+
+   (equal '(9 10) (remove-duplicates (loop for i from 1 to 10 collect i) :key #'oddp)) ; Same parity (even _or_ odd) => duplicate
+   (equal '(8 9 10) (remove-duplicates (loop for i from 1 to 10 collect i) :key (partial* #'mod 3))) ; Single representative of equivalence class
+
+   (let* ((l1 (list :a :b :a :c :d))
+          (l2 (copy-list l1))
+          (l3 (remove-duplicates l1)))
+     (and (equal l1 l2)
+          (not (equal l1 l3))))
+
+   ;;
+   ;;    The following 2 tests are iffy. DELETE-DUPLICATES may have
+   ;;    unexpected effects on original list. The value returned by
+   ;;    DELETE-DUPLICATES should be used. As SBCL advises:
+   ;;    ; caught STYLE-WARNING:                                           
+   ;;    ;   The return value of DELETE-DUPLICATES should not be discarded.
+   ;;
+   (let* ((l1 (list :a :b :a :c :d))
+          (l2 (copy-list l1))
+          (l3 (delete-duplicates l1)))
+     (and (equal l1 l2) ; <----------------
+          (not (equal l1 l3))))
+
+   (let* ((l1 (list :a :b :a :c :a :d))
+          (l2 (copy-list l1))
+          (l3 (delete-duplicates l1)))
+     (and (not (equal l1 l2)) ; <----------------
+          (not (equal l1 l3))))
+
+   (let* ((v1 (vector :a :b :a :c :d))
+          (v2 (copy-seq v1))
+          (v3 (remove-duplicates v1)))
+     (and (equals v1 v2)
+          (not (equals v1 v3))))
+
+   (let* ((v1 (vector :a :b :a :c :d))
+          (v2 (copy-seq v1))
+          (v3 (delete-duplicates v1)))
+     (and (not (equals v1 v2))
+          (not (equals v1 v3)))) ))
+
+;;;
+;;;    CLHS https://www.lispworks.com/documentation/HyperSpec/Body/f_countc.htm says:
+;;;    The from-end has no direct effect on the result. However, if from-end is true,
+;;;    the elements of sequence will be supplied as arguments to the test, test-not,
+;;;    and key in reverse order, which may change the side-effects, if any, of those functions.
+;;;    
+(deftest test-count ()
+  (check
+   (= 2 (count 1 '(0 1 1 2 3 5 8 13)))
+   (zerop (count #\P "pung"))
+   (= 1 (count #\P "pung" :test #'char-equal))
+   (= 1 (count #\P "pung" :key #'char-upcase))
+   (zerop (count 1 #(1 1 1 1 :one :one :one 1 1 1) :start 4 :end 7))
+   ;; CLHS examples
+   (= 2 (count-if-not #'oddp '((1) (2) (3) (4)) :key #'car))
+   (= 2 (count-if #'upper-case-p "The Crying of Lot 49" :start 4))))
+
+(deftest test-mismatch ()
+  (check
+   (not (mismatch "abc" "abc"))
+   (not (mismatch "abc" "ABC" :test #'char-equal))
+   (not (mismatch "abcdef" "cdefg" :start1 2 :end2 4))
+   (= 3 (mismatch "abc" "abcdef"))
+   (= 3 (mismatch "abcdef" "abc"))
+   (= 3 (mismatch "abcxyz" "abcdef"))
+   (= 3 (mismatch "abcxyz" "xyz" :from-end t))
+   (= 0 (mismatch "xyz" "abcxyz" :from-end t))
+
+   (not (equal '(1 3/2 2) '(1d0 1.5d0 2d0)))
+   (equalp '(1 3/2 2) '(1d0 1.5d0 2d0))
+   (not (mismatch '(1 3/2 2) '(1d0 1.5d0 2d0) :test #'=))
+
+   (not (equal #("pung" "foo") #("pung" "foo")))
+   (equalp #("PUNG" "foo") #("pung" "foo")) ; !!
+   (not (mismatch #("pung" "foo") #("pung" "foo") :test #'string=))))
+
+;;;
+;;;    Look for subsequence. Contrast with POSITION above which looks for element.
+;;;    (SEARCH <TARGET> <SEQ>)
+;;;    
+(deftest test-search ()
+  (check
+   (= 1 (search "23" "1234"))
+
+   (= 1 (search '(a b) '(c a b d)))
+   (null (search '(a b) '(a (b) (a b) c)))
+   (= 2 (position '(a b) '(a (b) (a b) c) :test #'equal))
+
+   (= 2 (search '(a b) '(a (b) a b c)))
+   (null (position '(a b) '(a (b) a b c)))
+
+   ;; CLHS example
+   (= 2 (search '(0 1) '(2 4 6 1 3 5) :key #'oddp))
+   ;;             F T    F F F T T T
+   ;;  :KEY applied to elts of both sequences.
+   ;;  Search here for pattern vs. specific values.
+
+   (= 0 (search '() #1='(a b c d e)))
+   (= 0 (search #() #2=#(a b c d e)))
+   (= 0 (search "" #3="Is this not pung?"))
+   (= (length #1#) (search '() #1# :from-end t))
+   (= (length #2#) (search #() #2# :from-end t))
+   (= (length #3#) (search "" #3# :from-end t))))
+
+(deftest test-sort ()
+  (check
+   (let ((l (list 1/2 3 -8 6/7 2 24 17/9)))
+     (equal '(-8 1/2 6/7 17/9 2 3 24) (sort l #'<))) ; Ascending
+   (let ((l (list 1/2 3 -8 6/7 2 24 17/9)))
+     (equal '(24 3 2 17/9 6/7 1/2 -8) (sort l #'>))) ; Descending
+
+   (let ((v (vector 1/2 3 -8 6/7 2 24 17/9)))
+     (equals #(-8 1/2 6/7 17/9 2 3 24) (sort v #'<)))
+   (let ((v (vector 1/2 3 -8 6/7 2 24 17/9)))
+     (equals #(24 3 2 17/9 6/7 1/2 -8) (sort v #'>)))
+
+   (let ((s (copy-seq "Is this not pung?")))
+     (string= "   ?Ighinnopssttu" (sort s #'char<)))
+   (let ((s (copy-seq "Is this not pung?")))
+     (string= "   ?ghiInnopssttu" (sort s #'char-lessp)))
+
+   ;;
+   ;;    Implementation dependent - possible different sorts for list/vector!
+   ;;    Use STABLE-SORT if necessary.
+   ;;
+   (let ((l '((1 a) (2 b) (1 c) (5 d) (1 e) (1 f) (3 g) (2 h))))
+     (equal '((1 A) (1 C) (1 E) (1 F) (2 B) (2 H) (3 G) (5 D))
+            (sort (copy-seq l) #'< :key #'first)))
+   (let ((v #((1 a) (2 b) (1 c) (5 d) (1 e) (1 f) (3 g) (2 h))))
+     (equals #((1 F) (1 A) (1 C) (1 E) (2 H) (2 B) (3 G) (5 D))
+             (sort (copy-seq v) #'< :key #'first)))
+
+   ;;
+   ;;    "Schwartzian Transform" MAP/SORT/MAP
+   ;;                             ^        ^
+   ;;                             |        |
+   ;;                      Extract+        +Prep
+   ;;    https://en.wikipedia.org/wiki/Schwartzian_transform
+   ;;    https://www.perlmonks.org/index.pl?node_id=128722#schwartzian%20transforms
+   ;;    
+   ;;    Example: Sort entries in /etc/passwd based on userid
+   ;;             Don't repeatedly split lines and parse integers!!
+   ;;
+   (let ((sorted (map 'list
+                      (partial* #'svref 0)
+                      (sort (map 'vector
+                                 #'(lambda (line)
+                                     (vector line (parse-integer (third (split line #\:)))) )
+                                 (read-file "/etc/passwd"))
+                            #'<
+                            :key (partial* #'svref 1)))) )
+     (check
+      (string= "root:x:0:0:root:/root:/bin/bash" (first sorted))
+      (string= "nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin" (last1 sorted))))
+
+   ;;
+   ;;    "Orcish Maneuver" (OR cache)
+   ;;    https://www.perlmonks.org/index.pl?node_id=128722#the%20orcish%20maneuver
+   ;;
+   (let ((sorted (let ((cache (make-hash-table :test #'equal)))
+                   (sort (read-file "/etc/passwd")
+                         #'<
+                         :key #'(lambda (line)
+                                  (or (gethash line cache)
+                                      (setf (gethash line cache) (parse-integer (third (split line #\:)))) )))) ))
+     (check
+      (string= "root:x:0:0:root:/root:/bin/bash" (first sorted))
+      (string= "nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin" (last1 sorted))))
+   
+   ;;
+   ;;    CORE:SORT-BY for complex tests
+   ;;
+   (let ((v (shuffle (vector 1 3 5 7 -2 -4 -6 -8))))
+     (equals #(-8 7 -6 5 -4 3 -2 1) (sort-by v (list (list #'> #'abs)))) )))
 
 
 
@@ -3573,4 +3895,32 @@
 ;; (defn reverse [coll]
 ;;   (reduce1 conj () coll))
 
-
+;;;
+;;;    CLHS says that SYMBOL-MACROLET is mechanism to implement WITH-SLOTS
+;;;    https://www.lispworks.com/documentation/HyperSpec/Body/s_symbol.htm
+;;;
+;;;    ~/lisp/programs/implementation/math.lisp
+;;;    On Lisp: ALREC, ATREC, WPLAC-EX
+;;;    
+(deftest test-symbol-macrolet ()
+  (check
+   (let ((a 3d0)
+         (b 8d0)
+         (c 4d0))
+     (symbol-macrolet ((discriminant (- (* b b) (* 4 a c)))) ; Not convincing. Should just be LET???
+       (assert (not (minusp discriminant)) (a b c) "Discriminant must be non-negative.")
+       (equal (list (coerce -2/3 'double-float) -2d0)
+              (list (/ (+ (- b) (sqrt discriminant)) (* 2 a))
+                    (/ (- (- b) (sqrt discriminant)) (* 2 a)))) ))
+   (let ((v (vector 2 1 3 4))
+         (i 0))
+     (let ((low (aref v i))
+           (high (aref v (1+ i))))
+       (rotatef high low) ; Only local variables affected
+       (not (apply #'< (coerce v 'list)))) )
+   (let ((v (vector 2 1 3 4))
+         (i 0))
+     (symbol-macrolet ((low (aref v i))
+                       (high (aref v (1+ i))))
+       (rotatef high low) ; Vector elements swapped
+       (apply #'< (coerce v 'list)))) ))
