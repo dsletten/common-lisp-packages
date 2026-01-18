@@ -959,6 +959,37 @@
                       (make-instance 'dude :name "Jim" :height 73))))
      (equal (mapcar #'name (bestn #'tallerp dudes)) '("Tom" "Jim")))) )
 
+(deftest test-discard-extreme ()
+  (check
+   (null (discard-extreme '()))
+   (null (discard-extreme '(1)))
+   (null (discard-extreme '(1) :test #'>))
+   (equal '(2 4) (discard-extreme '(2 4 1)))
+   (equal '(2 4) (discard-extreme '(2 4 2)))
+   (equal '(3 4) (discard-extreme '(2 4 3)))
+   (equal '(4 4) (discard-extreme '(2 4 4)))
+   (equal '(5 4) (discard-extreme '(2 4 5)))
+   (equal '(2 4) (discard-extreme '(4 2 1)))
+   (equal '(2 4) (discard-extreme '(4 2 2)))
+   (equal '(3 4) (discard-extreme '(4 2 3)))
+   (equal '(4 4) (discard-extreme '(4 2 4)))
+   (equal '(5 4) (discard-extreme '(4 2 5)))
+   (equal '(3 3) (discard-extreme '(3 3 1)))
+   (equal '(3 3) (discard-extreme '(3 3 3)))
+   (equal '(5 3) (discard-extreme '(3 3 5)))
+   (equal '(1 2) (discard-extreme '(2 4 1) :test #'>))
+   (equal '(2 2) (discard-extreme '(2 4 2) :test #'>))
+   (equal '(3 2) (discard-extreme '(2 4 3) :test #'>))
+   (equal '(4 2) (discard-extreme '(2 4 4) :test #'>))
+   (equal '(4 2) (discard-extreme '(2 4 5) :test #'>))
+   (equal '(1 2) (discard-extreme '(4 2 1) :test #'>))
+   (equal '(2 2) (discard-extreme '(4 2 2) :test #'>))
+   (equal '(3 2) (discard-extreme '(4 2 3) :test #'>))
+   (equal '(4 2) (discard-extreme '(4 2 4) :test #'>))
+   (equal '(4 2) (discard-extreme '(4 2 5) :test #'>))
+   (equal '(1 3) (discard-extreme '(3 3 1) :test #'>))
+   (equal '(3 3) (discard-extreme '(3 3 3) :test #'>))
+   (equal '(3 3) (discard-extreme '(3 3 5) :test #'>))))
 
 (deftest test-mapa-b ()
   (check
@@ -1805,14 +1836,15 @@
 
 (deftest test-if-let ()
   (check
-   (equal (if-let (p (evenp 9))
+   (equal :duh
+          (if-let (p (evenp 9))
             (cons p '(b))
-            :duh)
-          :duh)
-   (= (if-let (ns (rest '(1 2 3)))
+            :duh))
+   (= 5
+      (if-let (ns (rest '(1 2 3)))
         (apply #'+ ns)
-        0)
-      5)))
+        0))
+   (null (if-let (p (evenp 9)) :whoa))))
 
 (deftest test-when-let ()
   (check
@@ -1827,14 +1859,14 @@
 
 (deftest test-when-let* ()
   (check
-   (= (when-let* ((x (find-if #'consp '(a (1 2) b)))
+   (= 11
+      (when-let* ((x (find-if #'consp '(a (1 2) b)))
                   (y (find-if #'oddp x)))
-        (+ y 10))
-      11)
-   (= (when-let* ((x (find-if #'consp '(a (1 2) b)))
+        (+ y 10)))
+   (= 12
+      (when-let* ((x (find-if #'consp '(a (1 2) b)))
                   (y (find-if #'evenp x)))
-        (+ y 10))
-      12)
+        (+ y 10)))
    (null (when-let* ((x (find-if #'consp '(a (1 2) b)))
                      (y (find-if #'zerop x)))
            (+ y 10)))) )
@@ -1844,22 +1876,22 @@
              (cond-let (((zerop n) (x :pung) (y "Too small"))
                         ((oddp n) (x :foo) (y "Too odd"))
                         (t (x :bar) (y "Ahh...nice")))
-                       (list x y))))
+              (list x y))))
     (check
-     (equal (cond-let (((= 1 2) (x (princ 'a)) (y (princ 'b)))
+     (equal '(d c nil)
+            (cond-let (((= 1 2) (x (princ 'a)) (y (princ 'b)))
                        ((= 1 1) (y (princ 'c)) (x (princ 'd)))
                        (t (x (princ 'e)) y (z (princ 'f))))
-                      (list x y z))
-            '(d c nil))
-     (equal (cond-let (((= 1 2) (x (princ 'a)) (y (princ 'b)))
+              (list x y z)))
+     (equal '(nil nil nil)
+            (cond-let (((= 1 2) (x (princ 'a)) (y (princ 'b)))
                        ((= 1 3) (y (princ 'c)) (x (princ 'd)))
                        ((= 1 1)) ; Degenerate case...Still functions
                        (t (x (princ 'e))  (z (princ 'f))))
-                      (list x y z))
-            '(nil nil nil))
-     (equal (foo 0) '(:PUNG "Too small"))
-     (equal (foo 9) '(:FOO "Too odd"))
-     (equal (foo 4) '(:BAR "Ahh...nice")))) )
+              (list x y z)))
+     (equal '(:PUNG "Too small") (foo 0))
+     (equal '(:FOO "Too odd") (foo 9))
+     (equal '(:BAR "Ahh...nice") (foo 4)))) )
 
 (deftest test-if3 ()
   (check
@@ -2136,6 +2168,20 @@
    (as-if '(nil))
    (as-if '(nil nil nil nil))
    (not (as-if '(nil t nil)))) )
+
+
+
+
+(deftest test-defchain ()
+  (check
+   (labels ((nerdus (state)
+              (defchain state (sleeping eating waiting-for-a-computer programming debugging)))) ; Touretzky 184 页
+     (check
+      (eq (nerdus 'sleeping) 'eating)
+      (eq (nerdus 'eating) 'waiting-for-a-computer)
+      (eq (nerdus 'waiting-for-a-computer) 'programming)
+      (eq (nerdus 'programming) 'debugging)
+      (eq (nerdus 'debugging) 'sleeping)))) )
 
 (deftest test-binary-search ()
   (check

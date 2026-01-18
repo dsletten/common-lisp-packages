@@ -52,7 +52,7 @@
 ;;;;   foldl f v (x : xs) = foldl f (f v x) xs
 ;;;;
 ;;;;   redefine the function foldl in terms of fold:
-;;;;   foldl f v xs = fold (λx g → (λa → g (f a x))) id xs v
+;;;;   foldl f v xs = fold (λx g → (λa → g (f a x))) id xs v   ?? What does this mean??
 ;;;;
 ;;;;   In contrast, it is not possible to redefine fold in terms of foldl , due to the fact that
 ;;;;   foldl is strict in the tail of its list argument but fold is not.
@@ -60,9 +60,10 @@
 ;;;;   reverse :: [α] → [α]
 ;;;;   reverse = foldl (λxs x → x : xs) []
 ;;;;
+(load "/home/slytobias/lisp/packages/core.lisp")
 (load "/home/slytobias/lisp/packages/test.lisp")
 
-(defpackage :fp (:use :common-lisp :test) (:shadow :map :length :append :max))
+(defpackage :fp (:use :common-lisp :core :test) (:shadow :map :length :append :max :filter :conjoin :disjoin :compose :last1))
 
 (in-package :fp)
 
@@ -147,6 +148,12 @@
    (equal (append #5# #6#) (fold-right #'cons #6# #5#))))
    
 ;;;
+;;;    Learn you a Haskell 77 页
+;;;    
+(defun last1 (l)
+  (reduce #'(lambda (_ x) (declare (ignore _)) x) l))
+
+;;;
 ;;;    SICP pg. 116
 ;;;    Very close to the conventional definition of APPEND!
 ;;;    (fold-right #'cons l2 l1)
@@ -158,13 +165,13 @@
 
 (deftest test-fold-right ()
   (check
-   (= (fold-right #'+ 0 #1='(1 2 3 4 5)) 15)
-   (= (fold-right #'* 1 #1#) 120)
-   (= (fold-right #'- 9 '(5 6 7 8)) 7)
-   (= (fold-right #'/ 1 #1#) 15/8)
-   (= (fold-right #'- 0 '(1 2 3)) 2)
-   (equal (fold-right #'cons '() #1#) #1#)
-   (equal (fold-right #'list '() '(1 2 3)) '(1 (2 (3 NIL)))) ))
+   (= 15 (fold-right #'+ 0 #1='(1 2 3 4 5)))
+   (= 120 (fold-right #'* 1 #1#))
+   (= 7 (fold-right #'- 9 '(5 6 7 8)))
+   (= 15/8 (fold-right #'/ 1 #1#))
+   (= 2 (fold-right #'- 0 '(1 2 3)))
+   (equal #1# (fold-right #'cons '() #1#))
+   (equal '(1 (2 (3 NIL))) (fold-right #'list '() '(1 2 3)))) )
 
 ;;;
 ;;;    SICP pg. 121
@@ -178,17 +185,93 @@
 
 (deftest test-fold-left ()
   (check
-   (= (fold-left #'+ 0 #1='(1 2 3 4 5)) 15)
-   (= (fold-left #'* 1 #1#) 120)
-   (= (fold-left #'- 5 '(6 7 8 9)) -25)
-   (= (fold-left #'/ 1 #1#) (/ (fold-left #'* 1 #1#)) 1/120)
-   (= (fold-left #'- 0 '(1 2 3)) -6)
-   (equal (fold-left #'cons '() #1#) '(((((NIL . 1) . 2) . 3) . 4). 5))
-   (equal (fold-left #'(lambda (cdr car) (cons car cdr)) '() #1#) (reverse #1#))
-   (equal (fold-left #'(lambda (cdr car) (cons car cdr)) '() (reverse #1#)) #1#)
-   (equal (fold-left #'list '() '(1 2 3)) '(((NIL 1) 2) 3))
+   (= 15 (fold-left #'+ 0 #1='(1 2 3 4 5)))
+   (= 120 (fold-left #'* 1 #1#))
+   (= -25 (fold-left #'- 5 '(6 7 8 9)))
+   (= (fold-left #'/ 1 #1#) 1/120 (/ (fold-left #'* 1 #1#)))
+   (= -6 (fold-left #'- 0 '(1 2 3)))
+   (equal '(((((NIL . 1) . 2) . 3) . 4). 5) (fold-left #'cons '() #1#))
+   (equal (reverse #1#) (fold-left #'(lambda (cdr car) (cons car cdr)) '() #1#))
+   (equal #1# (fold-left #'(lambda (cdr car) (cons car cdr)) '() (reverse #1#)))
+   (equal '(((NIL 1) 2) 3) (fold-left #'list '() '(1 2 3)))
    (= (fold-left #'(lambda (x y) (- y x)) 9 '(8 7 6 5)) (fold-right #'- 9 '(5 6 7 8)))) )
    
+;;;
+;;;    Haskell
+;;;
+;; (defun foldl1 (f xs)
+;;   (labels ((fold (acc xs)
+;;              (if (null xs)
+;;                  acc
+;;                  (fold (funcall f acc (first xs)) (rest xs)))) )
+;;     (if (null xs)
+;;         (error "Empty list")
+;;         (fold (first xs) (rest xs)))) )
+
+(defun foldl (f acc xs)
+  (if (null xs)
+      acc
+      (foldl f (funcall f acc (first xs)) (rest xs))))
+
+(defun foldl1 (f xs)
+  (if (null xs)
+      (error "Empty list")
+      (foldl f (first xs) (rest xs))))
+
+;;;
+;;;    SICP definition above is cleaner for FOLDR.
+;;;    This version of FOLDR1 simply avoids calling BUTLAST/LAST.
+;;;
+;;;    In other words, there is a beautiful symmetry/clarity with
+;;;    FOLDL and FOLDR, but FOLDR1 mucks things up...
+;;;    
+;; (defun foldr1 (f xs)
+;;   (labels ((fold (xs) ; Not tail-recursive!
+;;              (if (singlep xs)
+;;                  (first xs)
+;;                  (funcall f (first xs) (fold (rest xs)))) ))
+;;     (if (null xs)
+;;         (error "Empty list")
+;;         (fold xs))))
+
+(defun foldr (f acc xs)
+  (if (null xs)
+      acc
+      (funcall f (first xs) (foldr f acc (rest xs)))) )
+
+(defun foldr1 (f xs)
+  (if (null xs)
+      (error "Empty list")
+      (foldr f (last1 xs) (butlast xs)))) ; Ugh...
+
+(deftest test-foldl1 ()
+  (check
+   (= 8 (foldl1 #'+ '(8)))
+   (= 20 (foldl1 #'+ '(8 12)))
+   (= 15 (foldl1 #'+ (cons 0 #1='(1 2 3 4 5))))
+   (= 120 (foldl1 #'* #1#))
+   (= -25 (foldl1 #'- '(5 6 7 8 9)))
+   (= (foldl1 #'/ #1#) 1/120 (/ (foldl1 #'* #1#)))
+   (= -6 (foldl1 #'- '(0 1 2 3)))
+   (equal '((((1 . 2) . 3) . 4) . 5) (foldl1 #'cons #1#))
+   (equal '(5 4 3 2 . 1) (foldl1 #'(lambda (cdr car) (cons car cdr)) #1#))
+   (equal '(1 2 3 4 . 5) (foldl1 #'(lambda (cdr car) (cons car cdr)) (reverse #1#)))
+   (equal '((1 2) 3) (foldl1 #'list '(1 2 3)))
+   (= (foldl1 #'(lambda (x y) (- y x)) '(9 8 7 6 5)) (foldr1 #'- '(5 6 7 8 9)))) )
+
+(deftest test-foldr1 ()
+  (check
+   (= 8 (foldr1 #'+ '(8)))
+   (= 20 (foldr1 #'+ '(8 12)))
+   (= 15 (foldr1 #'+ (cons 0 #1='(1 2 3 4 5))))
+   (= 120 (foldr1 #'* #1#))
+   (= 7 (foldr1 #'- '(5 6 7 8 9)))
+   (= 15/8 (foldr1 #'/ #1#))
+   (= 2 (foldr1 #'- '(1 2 3 0)))
+   (= -2 (foldr1 #'- '(0 1 2 3)))
+   (equal '(1 2 3 4 . 5) (foldr1 #'cons #1#))
+   (equal '(1 (2 3)) (foldr1 #'list '(1 2 3)))) )
+
 (defun map (f list)
   (fold-right #'(lambda (elt rest)
                   (cons (funcall f elt) rest))
@@ -209,3 +292,34 @@
 (defun disjoin (&rest ps)
   #'(lambda (&rest args)
       (reduce #'(lambda (b p) (or b (apply p args))) ps :initial-value nil)))
+
+;;;
+;;;    Lisp vs. Haskell
+;;;
+;; Common Lisp and Haskell both provide support for the operation of folding a list with a binary operator
+;; Generalize operator
+
+;; L vs. R
+
+;; Initial value vs. purely list elts
+;; A X B                A X A
+
+;; REDUCE does it all
+
+;; Lisp edge case!
+;; A X B -> A
+;; (reduce #'(lambda (max s) (max max (length s))) '("Is" "this" "not" "pung?") :initial-value 0) => 5
+;; vs. heterogeneous list (only first elt!)
+;; (reduce #'(lambda (max s) (max max (length s))) '(0 "Is" "this" "not" "pung?")) => 5
+
+;; -Traverse list backwards vs. recursive calls vs.
+;; reverse foldl -> foldr
+
+;; x₁⊕x₂⊕x₃⊕x₄⊕...⊕xₙ
+;; (...((((x₁⊕x₂)⊕x₃)⊕x₄)⊕)...)⊕xₙ
+;; x₁⊕(x₂⊕(x₃⊕(x₄⊕(...⊕xₙ)))...)
+
+;; Associative operator:
+;; 7+4+3+2+9 = (((7+4)+3)+2)+9 = 7+(4+(3+(2+9)))
+
+;; 7-4-3-2-9 ? (((7-4)-3)-2)-9 ≠ 7-(4-(3-(2-9)))

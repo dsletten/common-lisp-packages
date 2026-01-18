@@ -220,9 +220,12 @@
   (apply #'english-list 'or items))
 
 (defun english-list (conjunction &rest items)
-  (ecase conjunction  ; Lame! fix this...
-    (and (apply #'format nil "~#[~;~A~;~A and ~A~:;~@{~#[~;and ~]~A~^, ~}~]" items))
-    (or (apply #'format nil "~#[~;~A~;~A or ~A~:;~@{~#[~;or ~]~A~^, ~}~]" items))))
+  (ecase conjunction
+    ((and or) (apply #'format nil (make-english-list-control-string conjunction) items))))
+
+(defun make-english-list-control-string (conjunction)
+  (let ((conj (string-downcase (symbol-name conjunction))))
+    (concatenate 'string "~#[~;~A~;~A " conj " ~A~:;~@{~#[~;" conj " ~]~A~^, ~}~]")))
 
 ;;;
 ;;;    Adapted from Perl Cookbook

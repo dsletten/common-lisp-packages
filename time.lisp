@@ -34,7 +34,7 @@
            :get-year :get-day-of-week :get-day-of-week-name
            :get-short-day-of-week-name :get-daylight-savings-p :get-time-zone
            :leap-year-p :legal-date :localtime :localtime-list
-           :month :month-length :month-names
+           :max-month-length :month :month-length :month-names
            :precedesp
            :short-day-names :short-month-names
            :valid-day-p
@@ -126,6 +126,12 @@
   (ccase month
     ((4 6 9 11) 30)
     (2 (if (leap-year-p year) 29 28))
+    ((1 3 5 7 8 10 12) 31)))
+
+(defun max-month-length (&optional (month (get-month)))
+  (ccase month
+    ((4 6 9 11) 30)
+    (2 29)
     ((1 3 5 7 8 10 12) 31)))
 
 (defgeneric leap-year-p (year))

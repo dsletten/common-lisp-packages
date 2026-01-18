@@ -37,7 +37,8 @@
            :before :best :best-index :best-worst :best-worst-n :bestn
            :binary-search :build-prefix :build-tree
            :>case :class-template :comment :compose :conc1 :conjoin :copy-array :cycle
-           :defchain :destructure :disjoin :dohash :doset :dostring :dotuples :dovector
+           :defchain :destructure :discard-extreme :disjoin
+           :dohash :doset :dostring :dotuples :dovector
            :drop :drop-until :drop-while :duplicatep
            :empty :emptyp :ends-with :equalelts :equals :eqls
            :filter :filter-split :find-some-if :find-subtree :firsts-rests :for :flatten
@@ -867,13 +868,9 @@
 (defgeneric filter (f seq)
   (:documentation "Retain non-nil values obtained by applying F to elts of SEQ."))
 (defmethod filter (f (seq list))
-  (loop for elt in seq
-        for val = (funcall f elt)
-        when val collect val))
+  (loop for elt in seq when (funcall f elt) collect it))
 (defmethod filter (f (seq sequence))
-  (loop for elt across seq
-        for val = (funcall f elt)
-        when val collect val))
+  (loop for elt across seq when (funcall f elt) collect it))
 (defmethod filter (f (seq vector))
   (declare (ignore f seq))
   (coerce (call-next-method) 'vector))
@@ -1339,6 +1336,21 @@ starting with X or the index of the position of X in the sequence."))
     (declare (ignore winners))
     losers))
 
+;;;
+;;;    No point in trying to preserve original order as it may not be possible
+;;;    to determine that an early extremum is followed later by the true absolute
+;;;    extremum: (discard-extreme '(1 2 0 3))
+;;;    In other words, LOOP/COLLECT doesn't buy anything here.
+;;;    
+(defun discard-extreme (xs &key (test #'<))
+  "Remove the extreme value (min/max) from list."
+  (labels ((discard (target l result)
+             (cond ((endp l) result)
+                   ((funcall test (first l) target) (discard (first l) (rest l) (cons target result)))
+                   (t (discard target (rest l) (cons (first l) result)))) ))
+    (if (null xs)
+        '()
+        (discard (first xs) (rest xs) '()))) )
 
 ;;; ????
 (defun best-index (f seq)
@@ -1465,10 +1477,10 @@ starting with X or the index of the position of X in the sequence."))
 ;; (defun transition (l)
 ;;   (transition-aux l l))
 
-(defun transition-aux (l tail)
-  (cond ((endp tail) (list (list l '())))
-        (t (cons (list (build-prefix l tail) tail)
-                 (transition-aux l (rest tail)))) ))
+;; (defun transition-aux (l tail)
+;;   (cond ((endp tail) (list (list l '())))
+;;         (t (cons (list (build-prefix l tail) tail)
+;;                  (transition-aux l (rest tail)))) ))
 
 (defun transition (l)
   (do ((result (make-linked-queue))
@@ -2249,7 +2261,7 @@ starting with X or the index of the position of X in the sequence."))
 ;;;    Based on Clojure's `if-let`.
 ;;;    Binding only created in case where test succeeds.
 ;;;    
-(defmacro if-let ((var test) then else)
+(defmacro if-let ((var test) then &optional else)
   (with-gensyms (result)
     `(let ((,result ,test))
        (if ,result
@@ -2278,9 +2290,9 @@ starting with X or the index of the position of X in the sequence."))
 ;;;    Not all variables may be named in all clauses, and there will be duplicates among the clauses.
 ;;;
 ;;;    Example:
-;;;    (condlet (((= 1 2) (x (princ 'a)) (y (princ 'b))) --> X, Y
-;;;              ((= 1 1) (y (princ 'c)) (x (princ 'd))) --> Y, X
-;;;              (t (x (princ 'e)) y (z (princ 'f))))    --> X, Y, Z
+;;;    (cond-let (((= 1 2) (x (princ 'a)) (y (princ 'b))) --> X, Y
+;;;               ((= 1 1) (y (princ 'c)) (x (princ 'd))) --> Y, X
+;;;               (t (x (princ 'e)) y (z (princ 'f))))    --> X, Y, Z
 ;;;      (list x y z)))
 ;;;
 ;;;    As with LET, the binding clauses may take 3 forms:
@@ -2694,7 +2706,12 @@ starting with X or the index of the position of X in the sequence."))
 ;;;    In any case, reader returns an expression, which when evaluated yields a list:
 ;;;    (macroexpand-1 '#[1 5]) => '(1 2 3 4 5)
 ;;;    (macroexpand-1 '#[1 (1+ 4)]) => (CORE:MAKE-RANGE 1 (1+ 4))
-;;;    
+;;;
+;;;    Problem???
+;;;    (mapcar #'rest '(#[1 5] #[3 6] #[1 7])) => (((1 2 3 4 5)) ((3 4 5 6)) ((1 2 3 4 5 6 7)))
+;;;    (mapcar #'rest (list #[1 5] #[3 6] #[1 7])) => ((2 3 4 5) (4 5 6) (2 3 4 5 6 7))
+;;;    '(#[1 5] #[3 6] #[1 7]) => ('(1 2 3 4 5) '(3 4 5 6) '(1 2 3 4 5 6 7))
+;;;
 (set-dispatch-macro-character #\# #\[
   #'(lambda (stream ch arg)
       (declare (ignore ch arg))
@@ -2786,11 +2803,6 @@ starting with X or the index of the position of X in the sequence."))
 (defmacro defchain (var vals)
   (let ((chain (mapcar #'(lambda (key val) `(,key ',val)) vals (append (rest vals) (list (first vals)))) ))
     `(case ,var ,@chain)))
-
-;; (defmacro defchain (var vals)
-;;   (let ((chain (mapcar #'list vals (append (rest vals) (list (first vals)))) ))
-;;     `(case ,var ,@chain)))
-
 
 (defun array-indices (a row-major-index)
   (assert (typep row-major-index `(integer 0 (,(array-total-size a))))
@@ -2919,7 +2931,7 @@ starting with X or the index of the position of X in the sequence."))
 (defun horners (x coefficients)
   (reduce #'(lambda (a b) (+ (* a x) b)) coefficients :initial-value 0))
 
-(defun binary-search (a target test &key (key #'identity))
+(defun binary-search (a target test &key (key #'identity) (start 0) (end (1- (length a))))
   "Locate index of TARGET within A. Return -(i + 1) if not present, where i is the index at which the TARGET would be found if present."
   (labels ((search (low high)
              (if (< high low)
@@ -2929,7 +2941,7 @@ starting with X or the index of the position of X in the sequence."))
                    (cond ((funcall test current target) (search (1+ mid) high))
                          ((funcall test target current) (search low (1- mid)))
                          (t mid)))) ))
-    (search 0 (1- (length a)))) )
+    (search start end)))
 
 (defun compound-compare (a b criteria)
   "Consider comparison CRITERIA of decreasing priority until one distinguishes A and B as not being equal in some sense.
@@ -2951,3 +2963,19 @@ specified by these criteria is appropriate for use by SORT-BY to sort or BINARY-
 (defun sort-by (seq criteria)
   (sort seq (partial* #'compound-compare criteria)))
 
+
+
+
+;; (defun product0 (as bs) (loop for a in as nconc (loop for b in bs collect (list a b))))
+
+;; (defun cartesian (&rest lists) (reduce #'(lambda (as bs) (loop for a in as nconc (loop for b in bs collect (cons a b)))) (butlast lists 2) :from-end t :initial-value (apply #'product0 (last lists 2))))
+
+;; (defun cartesian (&rest lists)
+;;   (destructuring-bind (l . more) (reverse lists)
+;;     (let ((product0 (mapcar #'list l)))
+;;       (cond ((null more) product0)
+;;             (t (reduce #'(lambda (bs as)
+;;                            (loop for a in as
+;;                                  nconc (loop for b in bs collect (cons a b))))
+;;                        more
+;;                        :initial-value product0)))) ))
