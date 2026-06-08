@@ -29,19 +29,25 @@
   #+ :sbcl (load "/home/slytobias/lisp/packages/collections" :verbose nil)
   #- :sbcl (load "/home/slytobias/lisp/packages/collections.lisp" :verbose nil))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  #+ :sbcl (load "/home/slytobias/lisp/packages/generators" :verbose nil)
+  #- :sbcl (load "/home/slytobias/lisp/packages/generators.lisp" :verbose nil))
+
 (defpackage :core
+  (:use :common-lisp :collections :generators)
   (:shadowing-import-from :collections :intersection :set :subsetp :union)
-  (:use :common-lisp :collections)
+  (:shadowing-import-from :generators :next)
   (:export :after :analyze-tree :append1
            :compound-compare :approximately= :array-indices :as-if
            :before :best :best-index :best-worst :best-worst-n :bestn
            :binary-search :build-prefix :build-tree
            :>case :class-template :comment :compose :conc1 :conjoin :copy-array :cycle
+           :degrees->radians
            :defchain :destructure :discard-extreme :disjoin
            :dohash :doset :dostring :dotuples :dovector
            :drop :drop-until :drop-while :duplicatep
            :empty :emptyp :ends-with :equalelts :equals :eqls
-           :filter :filter-split :find-some-if :find-subtree :firsts-rests :for :flatten
+           :filter :filter-split :find-some-if :find-subtree :firsts-rests :for :flatten :frequencies
            :group :group-until :horners
 	   :if-let :if3 :iffn :in :in-if :inq :integralp :iterate
            :juxtapose
@@ -51,6 +57,7 @@
            :memoize :mklist :most :mostn :most-least :most-least-n :nif
            :partial :partial* :partition :ppmx
            :prefix-generator :prefixp :prune :prune-if :prune-if-not
+           :radians->degrees
            :range :repeat :rmapcar 
            :rotate0 :rotate-list0 :rotate1 :rotate-list1
            :same-shape-tree-p
@@ -63,7 +70,7 @@
            :transition :transition-1 :transition-n :transition-stream :traverse :tree-find-if :tree-map
            :until
            :when-let :when-let* :while :with-gensyms :worst :worstn)
-  (:shadow :emptyp :next :search))
+  (:shadow :emptyp :search))
 ;  (:shadow :while :until :prefixp :dovector :macroexpand-all)) ; ????
 
 (in-package :core)
@@ -490,7 +497,7 @@
 ;;;    
 
 (defgeneric suffixp (s1 s2 &key test)
-  (:documentation "Is sequence S1 and suffix of S2?"))
+  (:documentation "Is sequence S1 a suffix of S2?"))
 (defmethod suffixp ((v1 vector) (v2 vector) &key (test #'eql))
   (if (>= (length v2) (length v1))
       (let ((index (mismatch v1 v2 :test test :from-end t)))
@@ -1204,53 +1211,6 @@ starting with X or the index of the position of X in the sequence."))
 ;;                   nil
 ;;                   (most-vector 1 (elt seq 0) (funcall f (elt seq 0)))) ))))
 
-(defclass generator () ())
-(defclass list-generator (generator)
-  ((contents :initarg :contents)))
-(defclass vector-generator (generator)
-  ((contents :initarg :contents)
-   (index :initform 0 :initarg :index)))
-
-(defun make-generator (seq)
-  (etypecase seq
-    (list (make-instance 'list-generator :contents seq))
-    (vector (make-instance 'vector-generator :contents seq))))
-
-(defgeneric exhaustedp (generator)
-  (:documentation "Has every element of a generator's sequence been consumed?"))
-(defmethod exhaustedp ((g list-generator))
-  (with-slots (contents) g
-    (null contents)))
-(defmethod exhaustedp ((g vector-generator))
-  (with-slots (contents index) g
-    (= index (length contents))))
-
-(defgeneric current (generator)
-  (:documentation "Retrieve current element of the generator's sequence."))
-(defmethod current :around ((g generator))
-  (if (exhaustedp g)
-      (error "The generator has been exhausted.")
-      (call-next-method)))
-(defmethod current ((g list-generator))
-  (with-slots (contents) g
-    (first contents)))
-(defmethod current ((g vector-generator))
-  (with-slots (contents index) g
-    (elt contents index)))
-
-(defgeneric next (generator)
-  (:documentation "Return new generator advanced to next element."))
-(defmethod next :around ((g generator))
-  (if (exhaustedp g)
-      (error "The generator has been exhausted.")
-      (call-next-method)))
-(defmethod next ((g list-generator))
-  (with-slots (contents) g
-    (make-instance 'list-generator :contents (rest contents))))
-(defmethod next ((g vector-generator))
-  (with-slots (contents index) g
-    (make-instance 'vector-generator :contents contents :index (1+ index))))
-
 (defun extrema (seq &key (test #'>) (key #'identity))
   (if (emptyp seq)
       (values nil nil nil nil)
@@ -1777,13 +1737,13 @@ starting with X or the index of the position of X in the sequence."))
   (or (emptyp seq)
       (call-next-method)))
 (defmethod equalelts ((seq list) &key (test #'equal) (key #'identity))
-  (loop for elt in seq
-        with exemplar = (funcall key (elt seq 0))
+  (loop with exemplar = (funcall key (first seq))
+        for elt in (rest seq)
         always (funcall test exemplar (funcall key elt))))
 (defmethod equalelts ((seq vector) &key (test #'equal) (key #'identity))
-  (loop for elt across seq
-        with exemplar = (funcall key (elt seq 0))
-        always (funcall test exemplar (funcall key elt))))
+  (loop with exemplar = (funcall key (elt seq 0))
+        for i from 1 below (length seq)
+        always (funcall test exemplar (funcall key (elt seq i)))) )
 
 (defun totally (seq) (notany #'not seq))
 
@@ -2918,7 +2878,9 @@ starting with X or the index of the position of X in the sequence."))
       (partition l))))
 
 (defun approximately= (a b &optional (epsilon 1d-6))
-  (<= (abs (- a b)) (* epsilon (abs a))))
+  (cond ((and (zerop a) (zerop b)) t)
+        ((or (zerop a) (zerop b)) nil)
+        (t (<= (abs (- a b)) (* epsilon (abs a)))) ))
 
 ;;;
 ;;;    See programs/horners.lisp
@@ -2974,3 +2936,30 @@ specified by these criteria is appropriate for use by SORT-BY to sort or BINARY-
 ;;                                  nconc (loop for b in bs collect (cons a b))))
 ;;                        more
 ;;                        :initial-value product0)))) ))
+
+;;;
+;;;   The conversion from degrees to radians is (mildly) sensitive to the order of
+;;;   operations:
+;;;   (* θ (/ pi 180d0)) ≡ (* pi θ (/ 180d0))
+;;;   vs.
+;;;   (/ (* θ pi) 180d0)
+;;;
+;;;   Examples:
+;;;   (degrees->radians  3) => 0.05235987755982989d0
+;;;   (degrees->radians* 3) => 0.05235987755982988d0
+;;;   (degrees->radians  39.12890482835249d0) => 0.6829282219542576d0
+;;;   (degrees->radians* 39.12890482835249d0) => 0.6829282219542575d0
+;;;
+;;;   见 ~/lisp/books/Sedgewick/IntroToProgramming/2025/python/ch01/mercator-projection.lisp
+;;;   
+(defun degrees->radians (θ)
+  (* θ (/ pi 180)))
+
+(defun radians->degrees (θ)
+  (* θ (/ 180 pi)))
+
+(defun frequencies (seq &key (test #'eql))
+  "Generate a map from elements of SEQ to the number of times they appear."
+  (let ((frequencies (make-hash-table :test test)))
+    (map nil #'(lambda (elt) (incf (gethash elt frequencies 0))) seq)
+    frequencies))

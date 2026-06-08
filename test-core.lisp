@@ -481,6 +481,13 @@
 
 (deftest test-approximately= ()
   (check
+   (approximately= 0 0)
+   (approximately= 0d0 0)
+   (approximately= 0 0d0)
+   (approximately= 0d0 0d0)
+   (approximately= 0d0 -0d0)
+   (approximately= -0d0 0d0)
+   (not (approximately= 0d0 0d-200))
    (approximately= 0.001d0 0.0010000002d0)
    (not (approximately= 0.001d0 0.001000002d0))
    (approximately= 0.001d0 0.001000002d0 1d-4)))
@@ -1459,6 +1466,30 @@
    (equal '(("IS THIS NOT PUNG?") ("is this not pung?") ("Is This Not Pung?"))
           (multiple-value-list (funcall (juxtapose #'string-upcase #'string-downcase #'string-capitalize) "Is this not pung?")))) )
 
+;;;
+;;;    PARTIAL removes 1+ degree(s) of freedom. It could reasonably be called CUSTOMIZE:
+;;;    
+;;;    #'< - Is first arg less than second?
+;;;    (partial #'< 3) - Is 3 less than (second) arg?
+;;;    #'CHAR - return Ith character of string S
+;;;    (partial #'char "Is this not pung?") - return Ith character of world-famous string.
+;;;
+;;;    PARTIAL is more flexible than corresponding LAMBDA:
+;;;
+;;;    * (funcall (partial #'= 5))
+;;;    T
+;;;    * (funcall (partial #'= 5) 5.0)
+;;;    T
+;;;    * (funcall (partial #'= 5) 5.0 10/2)
+;;;    T
+;;;    * (funcall (partial #'= 5) 5.0 10/2 (1+ 4))
+;;;    T
+;;;    
+;;;    * (funcall #'(lambda (x) (= 5 x)))
+;;;      invalid number of arguments: 0
+;;;    * (funcall #'(lambda (x) (= 5 x)) 5.0)
+;;;    T
+;;;    
 (deftest test-partial ()
   (check
    (= 6 (funcall (partial #'reduce #'+) '(1 2 3)))
@@ -1484,7 +1515,16 @@
      (= 126
         (funcall (partial #'multiply-three 9) 7 2)
         (funcall (partial (partial #'multiply-three 9) 7) 2)
-        (funcall (partial (partial (partial #'multiply-three 9) 7) 2)))) ))
+        (funcall (partial (partial (partial #'multiply-three 9) 7) 2))))
+   ;;
+   ;;    PARTIAL will not create a closure over its fixed args!
+   ;;
+   (let ((f (let ((x 2))
+              (prog1 (partial #'* x) (incf x)))) )
+     (= (funcall (partial #'* 2) 9) (funcall f 9)))
+   (let ((f (let ((x 2))
+              (prog1 #'(lambda (y) (* x y)) (incf x)))) )
+     (= (funcall (partial #'* 3) 9) (funcall f 9)))) )
 
 (deftest test-partial* ()
   (check
@@ -2276,8 +2316,9 @@
 (deftest test-sort-by ()
   (check
    (let ((v (shuffle (coerce '((c . 1) (c . 5) (a . 1) (b . 3) (b . 2)) 'vector))))
-     (equals #((A . 1) (B . 2) (B . 3) (C . 1) (C . 5))
-             (sort-by v (list (list #'string< (compose #'symbol-name #'car)) (list #'< #'cdr)))) )
+     (check
+      (equals #((A . 1) (B . 2) (B . 3) (C . 1) (C . 5))
+              (sort-by v (list (list #'string< (compose #'symbol-name #'car)) (list #'< #'cdr)))) ))
    (let ((l (list "baz" "pung" "foo" "bar" "academic"))) ;; Sort by length, then lexicographical order.
      (check
       (equals '("bar" "baz" "foo" "pung" "academic") (sort-by l (list (list #'< #'length) #'string<)))) )
@@ -2298,7 +2339,8 @@
         (equals '((2 22 1996) (5 13 1996) (3 23 1997) (2 17 1999) (8 1 1999) (8 7 1999) (4 18 2000))
                 (sort-by dates (list (list #'< #'get-year) (list #'< #'get-month) (list #'< #'get-day)))) )))
    (let ((v (shuffle (vector 1 3 5 7 -2 -4 -6 -8))))
-     (equals #(-8 7 -6 5 -4 3 -2 1) (sort-by v (list (list #'> #'abs)))) )
+     (check
+      (equals #(-8 7 -6 5 -4 3 -2 1) (sort-by v (list (list #'> #'abs)))) ))
    (let ((bob (make-instance 'person-with-age :first "Bob" :last "Smith" :age 30))
          (mike (make-instance 'person-with-age :first "Mike" :last "Smith" :age 35))
          (larry (make-instance 'person-with-age :first "Larry" :last "Jones" :age 41))
@@ -2308,4 +2350,25 @@
       (equals (vector darryl1 darryl2 larry bob mike)
               (sort-by (vector bob mike larry darryl1 darryl2) (list (list #'string< #'last-name) (list #'string< #'first-name) (list #'< #'age)))) ))))
 
-
+(deftest test-frequencies ()
+  (check
+   (let ((frequencies (frequencies '(1 2 3 4 5))))
+     (check
+      (= 1 (gethash 1 frequencies))
+      (= 1 (gethash 5 frequencies))
+      (null (gethash 6 frequencies))))
+   (let ((frequencies (frequencies '(1 2 1 3 4 1 2 5 1))))
+     (check
+      (= 4 (gethash 1 frequencies))
+      (= 2 (gethash 2 frequencies))))
+   (let ((frequencies (frequencies '("foo" "Foo" "FOO" "fOo"))))
+     (check
+      (null (gethash "foo" frequencies))
+      (null (gethash "FOO" frequencies))))
+   (let ((frequencies (frequencies '("foo" "Foo" "FOO" "fOo") :test #'equal)))
+     (check
+      (= 1 (gethash "foo" frequencies))
+      (= 1 (gethash "FOO" frequencies))))
+   (let ((frequencies (frequencies '("foo" "Foo" "FOO" "fOo") :test #'equalp)))
+     (check
+      (= 4 (gethash "foo" frequencies) (gethash "Foo" frequencies) (gethash "FOO" frequencies)))) ))
