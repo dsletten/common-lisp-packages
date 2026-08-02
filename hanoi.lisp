@@ -24,8 +24,11 @@
 ;;;;   Notes:
 ;;;;
 ;;;;
-(load "/home/slytobias/lisp/packages/core.lisp")
 (load "/home/slytobias/lisp/books/Concise/concise.lisp")
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  #+ :sbcl (load "/home/slytobias/lisp/packages/core" :verbose nil)
+  #- :sbcl (load "/home/slytobias/lisp/packages/core.lisp" :verbose nil))
 
 (defpackage :hanoi
   (:use :common-lisp :core)

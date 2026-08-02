@@ -34,14 +34,14 @@
 (defpackage :sql
   (:use :common-lisp :strings)
   (:export :insert :select :delete :update :where
-           :connect :create-table
+           :case :connect :create-table
            :execute-query
            :default :auto-increment :pk
            :format-field :format-fields
            :not-null
            :null
            :like :is :between :in :<> :!=)
-  (:shadow :delete :null))
+  (:shadow :delete :null :case))
 
 (in-package :sql)
 
@@ -49,6 +49,9 @@
 
 (defgeneric format-field (field)
   (:documentation "Format Lisp value as string for SQL value."))
+
+;(qmynd:mysql-query *connection* "insert into characters values ('\\\\')")  ???
+
 (defmethod format-field ((value string)) (format nil "'~A'" (string-substitute "\\'" "'" value)))
 ;(defmethod format-field ((value symbol)) (format-field (symbol-name value)))
 (defmethod format-field ((value symbol)) value)
@@ -119,6 +122,36 @@
         (values (qmynd:mysql-query conn (format nil "update ~A set ~A where ~A" table (process fields) (funcall selector-fn))))
         (values (qmynd:mysql-query conn (format nil "update ~A set ~A" table (process fields)))) ))) ; Warn?!?
 
+(defun parse-clause (clause)
+  (cl:case (first clause)
+    (and `(format nil "(~A)" (join (list ,@(mapcar #'parse-clause (rest clause))) " and ")))
+    (or `(format nil "(~A)" (join (list ,@(mapcar #'parse-clause (rest clause))) " or ")))
+    (not `(format nil "not ~A" ,(apply #'parse-clause (rest clause))))
+    (otherwise (destructuring-bind (column operator &rest more) clause
+                 (cl:case operator
+;                              ((= <> != < <= > >= like) `((lambda (more) (format nil "~A ~A ~A" ,column ',operator more)) (format-field ,@more)))
+;                              ((= <> != < <= > >= like) `(format nil "~A ~A ~A" ,column ',operator (format-field ,@more)))
+                   ((= <> != < <= > >= like) `(format nil ,(format nil "~A ~A ~~A" column operator) (format-field ,@more)))
+                   (not (assert (member (first more) '(like in))) (parse-clause (list operator (list* column more))))
+                   (is `(format nil ,(format nil "~A ~A ~~A" column operator) (format-field ,@more)))
+                   (between `(apply ,#'format nil ,(format nil "~A ~A ~~A and ~~A" column operator) (mapcar ,#'format-field (list ,@more))))
+;                              (in `(format nil ,(format nil "~A ~A (~~A)" column operator) (format-fields (list ,@more)))) )))) ))
+                   (in `(format nil ,(format nil "~A ~A (~~A)" column operator) (format-fields (list ,@(first more))) )))) )))
+
+(defun parse-clause (clause)
+  (cl:case (first clause)
+    (and (format nil "(~A)" (join (mapcar #'parse-clause (rest clause)) " and ")))
+    (or (format nil "(~A)" (join (mapcar #'parse-clause (rest clause)) " or ")))
+    (not (format nil "not ~A" (apply #'parse-clause (rest clause))))
+    (otherwise (destructuring-bind (column operator &rest more) clause
+                 (cl:case operator
+                   ((= <> != < <= > >= like) (format nil (format nil "~A ~A ~~A" column operator) (apply #'format-field more)))
+                   (not (assert (member (first more) '(like in))) (parse-clause (list operator (list* column more))))
+                   (is (format nil (format nil "~A ~A ~~A" column operator) (apply #'format-field more)))
+                   (between (apply #'format nil (format nil "~A ~A ~~A and ~~A" column operator) (mapcar #'format-field more)))
+;                              (in `(format nil ,(format nil "~A ~A (~~A)" column operator) (format-fields (list ,@more)))) )))) ))
+                   (in (format nil (format nil "~A ~A (~~A)" column operator) (format-fields (first more))) )))) ))
+
 ;; (defmacro where (clause)
 ;;   (labels ((parse-clause (clause)
 ;;              (case (first clause)
@@ -138,22 +171,7 @@
 ;; (funcall (where (right(email 4) = ".net"))) => NIL
 ;; (funcall (where ("right(email 4)" = ".net"))) => "right(email 4) = '.net'"
 (defmacro where (clause)
-  (labels ((parse-clause (clause)
-             (case (first clause)
-               (and `(format nil "(~A)" (join (list ,@(mapcar #'parse-clause (rest clause))) " and ")))
-               (or `(format nil "(~A)" (join (list ,@(mapcar #'parse-clause (rest clause))) " or ")))
-               (not `(format nil "not ~A" ,(apply #'parse-clause (rest clause))))
-               (otherwise (destructuring-bind (column operator &rest more) clause
-                            (case operator
-;                              ((= <> != < <= > >= like) `((lambda (more) (format nil "~A ~A ~A" ,column ',operator more)) (format-field ,@more)))
-;                              ((= <> != < <= > >= like) `(format nil "~A ~A ~A" ,column ',operator (format-field ,@more)))
-                              ((= <> != < <= > >= like) `(format nil ,(format nil "~A ~A ~~A" column operator) (format-field ,@more)))
-                              (not (assert (member (first more) '(like in))) (parse-clause (list operator (list* column more))))
-                              (is `(format nil ,(format nil "~A ~A ~~A" column operator) (format-field ,@more)))
-                              (between `(apply ,#'format nil ,(format nil "~A ~A ~~A and ~~A" column operator) (mapcar ,#'format-field (list ,@more))))
-;                              (in `(format nil ,(format nil "~A ~A (~~A)" column operator) (format-fields (list ,@more)))) )))) ))
-                              (in `(format nil ,(format nil "~A ~A (~~A)" column operator) (format-fields (list ,@(first more))) )))) ))))
-    `#'(lambda () ,(parse-clause clause))))
+  `#'(lambda () ,(parse-clause clause)))
 
 ;; (where (foo = bar))
 ;; #'(lambda () (format nil "foo = ~A" (format-field bar)))
@@ -185,3 +203,17 @@
 ;; "MAIN IN ('soda', 'iced tea')"
 ;; (let ((s "iced tea")) (funcall (where (main in "soda" s))))
 ;; "MAIN IN ('soda', 'iced tea')"
+
+(defun parse-case-clause (clause)
+  (destructuring-bind (when then) clause
+    (if (listp when)
+        (format nil "when ~A then ~A " (parse-clause when) (format-field then))
+        (format nil "else ~A " (format-field then)))) )
+
+(defmacro case (&body clauses)
+  (let ((body (with-output-to-string (result)
+                (format result "case ")
+                (loop for clause in clauses
+                      do (write-string (parse-case-clause clause) result))
+                (format result "end"))))
+    `#'(lambda () ,body)))

@@ -195,6 +195,19 @@
    (equal #1# (fold-left #'(lambda (cdr car) (cons car cdr)) '() (reverse #1#)))
    (equal '(((NIL 1) 2) 3) (fold-left #'list '() '(1 2 3)))
    (= (fold-left #'(lambda (x y) (- y x)) 9 '(8 7 6 5)) (fold-right #'- 9 '(5 6 7 8)))) )
+
+;;;
+;;;    Clojure Brave 67 页
+;;;    clojure.core uses more voodoo...
+;;;
+;; (defn reduce
+;;   ([f [head & tail]] (reduce f head tail))
+;;   ([f initial coll]
+;;    (loop [result initial
+;;           remaining coll]
+;;      (if (empty? remaining)
+;;        result
+;;        (recur (f result (first remaining)) (rest remaining)))) ))
    
 ;;;
 ;;;    Haskell

@@ -487,7 +487,11 @@
    (approximately= 0d0 0d0)
    (approximately= 0d0 -0d0)
    (approximately= -0d0 0d0)
-   (not (approximately= 0d0 0d-200))
+   (approximately= 0d0 1d-8)
+   (not (approximately= 0d0 1d-8 1d-10))
+   (not (approximately= pi 3.14d0))
+   (approximately= pi 3.14d0 1d-2)
+   (approximately= pi 3.14159d0)
    (approximately= 0.001d0 0.0010000002d0)
    (not (approximately= 0.001d0 0.001000002d0))
    (approximately= 0.001d0 0.001000002d0 1d-4)))
@@ -556,7 +560,9 @@
    (longerp (loop for i upto 100000 collect i) "yep")
    (not (longerp "nope" (loop for i upto 100000 collect i)))
    (longerp '(a b c d) [4 5])
-   (longerp ["Is" "this" "not" "pung?"] '(:nope))))
+   (longerp ["Is" "this" "not" "pung?"] '(:nope))
+   (not (longerp '(a b c) [4 5 6]))
+   (not (longerp [4 5 6] '(a b c)))))
 
 ;; (flet ((f (x) (if (numberp x) (1+ x) nil))) (mapcar #'f (remove-if-not #'f '(a 1 2 b 3 c d 4)))) => (2 3 4 5)
 ;; (flet ((f (x) (if (numberp x) (1+ x) nil))) (map 'vector #'f (remove-if-not #'f '[a 1 2 b 3 c d 4]))) => #(2 3 4 5)
@@ -571,10 +577,10 @@
    ;;;
    ;;;    Different semantics for CONJOIN (previously EVERY-PRED) now
    ;;;    
-   ;; (string= "STHISNOTPUNG" (filter #'(lambda (ch) (and (alpha-char-p ch) (lower-case-p ch) (char-upcase ch))) "Is this not pung?"))
+   (string= "STHISNOTPUNG" (filter #'(lambda (ch) (and (alpha-char-p ch) (lower-case-p ch) (char-upcase ch))) "Is this not pung?"))
    ;; (string= "STHISNOTPUNG" (filter (conjoin #'alpha-char-p #'lower-case-p #'char-upcase) "Is this not pung?"))
-   ;; (equal '(#\S #\T #\H #\I #\S #\N #\O #\T #\P #\U #\N #\G)
-   ;;        (filter #'(lambda (ch) (and (alpha-char-p ch) (lower-case-p ch) (char-upcase ch))) (coerce "Is this not pung?" 'list)))
+   (equal '(#\S #\T #\H #\I #\S #\N #\O #\T #\P #\U #\N #\G)
+          (filter #'(lambda (ch) (and (alpha-char-p ch) (lower-case-p ch) (char-upcase ch))) (coerce "Is this not pung?" 'list)))
    ;; (equal '(#\S #\T #\H #\I #\S #\N #\O #\T #\P #\U #\N #\G)
    ;;        (filter (conjoin #'alpha-char-p #'lower-case-p #'char-upcase) (coerce "Is this not pung?" 'list)))) )
 ))
@@ -689,7 +695,11 @@
    (same-shape-tree-p '(((a) a (a) (a) ((a (a (a (a a) a)) a) a) a) a a)
                       '(((b) b (b) (b) ((b (b (b (b b) b)) b) b) b) b b))
    (not (same-shape-tree-p '(((a) a (a) (a) (((a (a (a a) a)) a) a) a) a a)
-                           '(((b) b (b) (b) ((b (b (b (b b) b)) b) b) b) b b)))) )
+                           '(((b) b (b) (b) ((b (b (b (b b) b)) b) b) b) b b)))
+   ;;    Tanimoto ch. 3
+   (same-shape-tree-p '(a (b) c) '(x (y) nil))
+   (not (same-shape-tree-p '(a (b) c) '(a b c)))
+   (same-shape-tree-p 8 "Sure, why not?")))
 
 (deftest test-before ()
   (check
@@ -1443,7 +1453,7 @@
    (let ((s "foo"))
      (eq s (funcall (compose) s)))
    (eq #'length (compose #'length))
-   (equal (mapcar #'(lambda (x) (+ x 2)) #2=(loop for i from 1 to 10 collect i)) (mapcar (compose #'1+ #'1+) #2#))
+   (equal (mapcar (partial #'+ 2) #2=(loop for i from 1 to 10 collect i)) (mapcar (compose #'1+ #'1+) #2#))
    ;; IDENTITY!
    (equal #2# (mapcar (compose #'1+ #'1-) #2#))
    (equal (mapcar #'(lambda (x) (list (* x 2))) #2#) (mapcar (compose #'list (partial #'* 2)) #2#))
@@ -1455,7 +1465,9 @@
    (equal (mapcar (complement #'evenp) #2#) (mapcar (compose #'not #'evenp) #2#))
    (equal (fifth #1='(a b c d e f)) (funcall (compose #'first #'rest #'rest #'rest #'rest) #1#))
    (= (sqrt 15) (funcall (compose #'sqrt #'abs #'+) -1 -2 -3 -4 -5))
-   (= (sqrt 15d0) (funcall (compose #'sqrt (partial* #'coerce 'double-float) #'abs #'+) -1 -2 -3 -4 -5))))
+   (= (sqrt 15d0) (funcall (compose #'sqrt (partial* #'coerce 'double-float) #'abs #'+) -1 -2 -3 -4 -5))
+   (= (sqrt 15d0) (funcall (compose (compose #'sqrt (partial* #'coerce 'double-float)) (compose #'abs #'+)) -1 -2 -3 -4 -5))
+   (funcall (compose (compose #'evenp #'1+) (compose (partial* #'mod 2) #'isqrt (compose #'length #'make-list))) 9 :initial-element :foo)))
 
 (deftest test-juxtapose ()
   (check

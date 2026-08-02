@@ -801,40 +801,6 @@
 ;; (defmethod mklist (obj) (list obj))
 ;; (defmethod mklist ((l list)) l)
 
-;;;
-;;;    Graham calls this LONGER. I believe this is inappropriate since this
-;;;    function does not return the 'longer' of the two sequences. Rather, it
-;;;    simply tests whether SEQ1 is longer than SEQ2.
-;;;    
-;; (defun longerp (seq1 seq2)
-;;   "Is SEQ1 strictly longer than SEQ2?"
-;;   (labels ((compare (seq1 seq2)
-;;              (cond ((endp seq1) nil)
-;;                    ((endp seq2) t)
-;;                    (t (compare (rest seq1) (rest seq2)))) ))
-;;     (if (and (listp seq1) (listp seq2))
-;;         (compare seq1 seq2)
-;;         (> (length seq1) (length seq2)))) )
-
-;; (defun longerp (seq1 seq2)
-;;   "Is SEQ1 strictly longer than SEQ2?"
-;;   (labels ((compare-ll (seq1 seq2)
-;;              (cond ((endp seq1) nil)
-;;                    ((endp seq2) t)
-;;                    (t (compare-ll (rest seq1) (rest seq2)))) )
-;;            (compare-ln (seq n)
-;;              (cond ((endp seq) nil)
-;;                    ((zerop n) t)
-;;                    (t (compare-ln (rest seq) (1- n)))) )
-;;            (compare-nl (n seq)
-;;              (cond ((zerop n) nil)
-;;                    ((endp seq) t)
-;;                    (t (compare-nl (1- n) (rest seq)))) ))
-;;     (cond ((and (listp seq1) (listp seq2)) (compare-ll seq1 seq2))
-;;           ((listp seq1) (compare-ln seq1 (length seq2)))
-;;           ((listp seq2) (compare-nl (length seq1) seq2))
-;;           (t (> (length seq1) (length seq2)))) ))
-
 (defgeneric longerp (seq1 seq2)
   (:documentation "Is SEQ1 strictly longer than SEQ2?"))
 (defmethod longerp ((seq1 list) (seq2 list))
@@ -847,6 +813,10 @@
                    ((zerop n) t)
                    (t (compare (rest seq) (1- n)))) ))
     (compare seq1 (length seq2))))
+;;
+;;     Can't simply flip this around: (not (longerp seq2 seq1))
+;;     Could both be same length!
+;;     
 (defmethod longerp ((seq1 sequence) (seq2 list))
   (labels ((compare (n seq)
              (cond ((zerop n) nil)
@@ -1081,13 +1051,13 @@
 
 (defun prune-if (pred tree)
   "Remove all leaves of TREE for which PRED is true."
-  (labels ((prune-aux (tree result)
+  (labels ((trim (tree result)
 	     (cond ((null tree) (nreverse result))
                    (t (destructuring-bind (car . cdr) tree
-                        (cond ((consp car) (prune-aux cdr (cons (prune-aux car '()) result)))
-                              ((funcall pred car) (prune-aux cdr result))
-                              (t (prune-aux cdr (cons car result)))) )))) )
-    (prune-aux tree '())))
+                        (cond ((consp car) (trim cdr (cons (trim car '()) result)))
+                              ((funcall pred car) (trim cdr result))
+                              (t (trim cdr (cons car result)))) )))) )
+    (trim tree '())))
 
 ;;;
 ;;;    Like REMOVE-IF-NOT for trees.
@@ -1745,9 +1715,13 @@ starting with X or the index of the position of X in the sequence."))
         for i from 1 below (length seq)
         always (funcall test exemplar (funcall key (elt seq i)))) )
 
-(defun totally (seq) (notany #'not seq))
+(defun totally (seq)
+  "Are all elements of SEQ true?"
+  (notany #'not seq))
 
-(defun as-if (seq) (every #'not seq))
+(defun as-if (seq)
+  "Are all elements of SEQ false?"
+  (every #'not seq))
 
 ;;;
 ;;;    TODO:
@@ -1807,39 +1781,23 @@ starting with X or the index of the position of X in the sequence."))
 ;;;    sees the ARGS.
 ;;;    
 
-;; (defun compose (&rest fs)
-;;   (if (null fs)
-;;       #'identity
-;;       (reduce #'(lambda (f g)
-;;                   #'(lambda (&rest args)
-;;                       (funcall f (apply g args))))
-;;               fs)))
-
 (defun compose (&rest fs)
-  (cond ((null fs) #'identity)
-        ((singlep fs) (first fs))
-        (t (let ((chain (reduce #'(lambda (f g)
-                                    #'(lambda (x)
-                                        (funcall f (funcall g x))))
-                                (butlast fs)))
-                 (g (last1 fs)))
-             #'(lambda (&rest args)
-                 (funcall chain (apply g args)))) )))
+  (labels ((build (f g) #'(lambda (x) (funcall f (funcall g x))))
+           (build-inner (f g) #'(lambda (&rest args) (funcall f (apply g args)))) )
+    (if (null fs)
+        #'identity
+        (destructuring-bind (f . more) fs
+          (if (null more)
+              f
+              (destructuring-bind (g . more) more
+                (if (null more)
+                    (build-inner f g)
+                    (build-inner (reduce #'build (butlast fs)) (last1 fs)))) )))) )                    
+
 ;;;
 ;;;    What is the use case?
 ;;;    (apply #'expt (multiple-value-list (truncate 4.5)))
 ;;;    
-;; (defun multiple-value-compose (&rest fs)
-;;   (if (null fs)
-;;       #'identity
-;;       (destructuring-bind (f . more) fs
-;;         (if (null more)
-;;             f
-;;             (destructuring-bind (g . more) more
-;;               (if (null more)
-;;                   #'(lambda (&rest args) (apply f (multiple-value-list (apply g args))))
-;;                   (reduce #'multiple-value-compose more :initial-value (multiple-value-compose f g)))) ))))
-
 (defun multiple-value-compose (&rest fs)
   (if (null fs)
       #'identity
@@ -2878,8 +2836,8 @@ starting with X or the index of the position of X in the sequence."))
       (partition l))))
 
 (defun approximately= (a b &optional (epsilon 1d-6))
-  (cond ((and (zerop a) (zerop b)) t)
-        ((or (zerop a) (zerop b)) nil)
+  (cond ((zerop a) (<= (abs b) epsilon))
+        ((zerop b) (<= (abs a) epsilon))
         (t (<= (abs (- a b)) (* epsilon (abs a)))) ))
 
 ;;;

@@ -575,7 +575,7 @@
 ;;;    - Secondary value: boolean indicating whether any duplicates were added
 ;;;    
 (defgeneric add-all (set elts))
-(defmethod add-all ((s set) elts)
+(defmethod add-all ((s set) (elts list))
   (let ((duplicatep nil))
     (with-slots (elements) s
       (dolist (elt elts)
@@ -583,6 +583,13 @@
           (setf duplicatep t))
         (setf (gethash elt elements) t)))
     (values s duplicatep)))
+(defmethod add-all ((s set) (elts vector))
+  (with-slots (elements) s
+    (loop with duplicatep = nil
+          for elt across elts
+          when (contains s elt) do (setf duplicatep t)
+          do (setf (gethash elt elements) t)
+          finally (return (values s duplicatep)))) )
 
 (defgeneric add-elt (set elt))
 (defmethod add-elt ((s set) elt)
