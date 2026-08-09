@@ -64,7 +64,6 @@
            :shift0 :shift-list0 :shift1 :shift-list1
            :show-symbols :shuffle :singlep
            :sort-by :sort-symbol-list :splice
-;           :split-if
            :stable-partition :starts-with :stream-partition :suffixp
            :take :take-drop :take-while :take-until :totally :transfer
            :transition :transition-1 :transition-n :transition-stream :traverse :tree-find-if :tree-map
@@ -1186,34 +1185,36 @@ starting with X or the index of the position of X in the sequence."))
       (values nil nil nil nil)
       (labels ((beats (a b)
                  (funcall test a b))
-               (compute-score (elt)
-                 (funcall key elt))
+               (current-elt-score (generator)
+                 (let ((elt (current generator)))
+                   (values elt (funcall key elt))))
+               (start-new-queue (value)
+                 (enqueue (make-persistent-queue) value))
+               (collect-elt (queue elt)
+                 (enqueue queue elt))
                (find-extrema (generator winners max losers min)
                  (if (exhaustedp generator)
                      (values (elements winners) max (elements losers) min)
-                     (let* ((elt (current generator))
-                            (score (compute-score elt)))
+                     (multiple-value-bind (elt score) (current-elt-score generator)
                        (multiple-value-call #'find-extrema
                                             (next generator)
                                             (update-winners elt score winners max)
                                             (update-losers elt score losers min)))) )
                (update-winners (elt score winners max)
-                 (cond ((beats score max) (values (enqueue (make-persistent-queue) elt) score))
+                 (cond ((beats score max) (values (start-new-queue elt) score))
                        ((beats max score) (values winners max))
-                       (t (values (enqueue winners elt) max))))
+                       (t (values (collect-elt winners elt) max))))
                (update-losers (elt score losers min)
-                 (cond ((beats min score) (values (enqueue (make-persistent-queue) elt) score))
+                 (cond ((beats min score) (values (start-new-queue elt) score))
                        ((beats score min) (values losers min))
-                       (t (values (enqueue losers elt) min)))) )
-        (let* ((generator (make-generator seq))
-               (elt (current generator))
-               (max (compute-score elt))
-               (min max))
-          (find-extrema (next generator)
-                        (enqueue (make-persistent-queue) elt)
-                        max
-                        (enqueue (make-persistent-queue) elt)
-                        min)))) )
+                       (t (values (collect-elt losers elt) min)))) )
+        (let ((generator (make-generator seq)))
+          (multiple-value-bind (elt score) (current-elt-score generator)
+            (find-extrema (next generator)
+                          (start-new-queue elt)
+                          score
+                          (start-new-queue elt)
+                          score)))) ))
 
 (defun most-least-n (f seq)
   (extrema seq :key f))
@@ -1488,16 +1489,24 @@ starting with X or the index of the position of X in the sequence."))
   (error "Mismatched input types."))
 (defmethod make-range ((start number) (end number) (step number))
   (mapa-b #'identity start end step))
+;; (defmethod make-range ((start number) (end number) (step function))
+;;   (if (<= start end)
+;;       (loop with f = (iterate step start)
+;;             for elt = (funcall f)
+;;             until (> elt end)
+;;             collect elt)
+;;       (loop with f = (iterate step start)
+;;             for elt = (funcall f)
+;;             until (< elt end)
+;;             collect elt)))
+;; (defmethod make-range ((start number) (end number) (step function))
+;;   (loop with f = (iterate step start)
+;;         with terminate = (if (<= start end) (partial* #'> end) (partial* #'< end))
+;;         for elt = (funcall f)
+;;         until (funcall terminate elt)
+;;         collect elt))
 (defmethod make-range ((start number) (end number) (step function))
-  (if (<= start end)
-      (loop with f = (iterate step start)
-            for elt = (funcall f)
-            until (> elt end)
-            collect elt)
-      (loop with f = (iterate step start)
-            for elt = (funcall f)
-            until (< elt end)
-            collect elt)))
+  (map-> #'identity start (partial* (if (<= start end) #'> #'<) end) step))
 (defmethod make-range ((start number) (end null) (step number))
   (declare (ignore end))
   (cond ((zerop start) '())
@@ -1528,17 +1537,8 @@ starting with X or the index of the position of X in the sequence."))
 (defun mappend (f &rest lists)
   (apply #'append (apply #'mapcar f lists)))
 
-;;;
-;;;    Map over multiple lists in sequence, accumulating all results.
-;;;    
-;; (defun mapcars (fn &rest lsts)
-;;   (let ((result '()))
-;;     (dolist (l lsts)
-;;       (dolist (obj l)
-;; 	(push (funcall fn obj) result)))
-;;     (nreverse result)))
-
 (defun mapcars (f &rest lists)
+  "Map over multiple lists in sequence, accumulating all results."
   (loop for list in lists
         nconc (loop for elt in list
                     collect (funcall f elt))))
@@ -1739,48 +1739,6 @@ starting with X or the index of the position of X in the sequence."))
 	      (setf (gethash args cache)
 		    (apply fn args)))) )))
 
-;;;
-;;;    This executes REDUCE every time the composed function is called.
-;;;
-;;;    Graham's version (essentially. He forgot to use his LAST1!)
-;;;    - He's right that APPLY is only needed for innermost (rightmost) call.
-;;;    - :FROM-END is kind of gross
-;;;    
-;; (defun compose (&rest fns)
-;;   (if fns
-;;       (let ((fn1 (last1 fns))
-;;             (fns (butlast fns)))
-;;         #'(lambda (&rest args)
-;;             (reduce #'funcall fns
-;;                     :from-end t
-;;                     :initial-value (apply fn1 args))))
-;;       #'identity))
-
-;;;
-;;;    Graham computes f∘(g∘h), whereas Clojure and I generate (f∘g)∘h. But function
-;;;    composition is associative, so f∘g∘h = f∘(g∘h) = (f∘g)∘h
-;;;
-;;;    The more important consideration is that only the innermost function will receive
-;;;    multiple arguments. Each nested function returns a single argument to the next
-;;;    enclosing function. This is straightforward in Clojure but could be otherwise in
-;;;    Common Lisp if multiple values were accounted for. In any case, only the innermost
-;;;    function need consider APPLY. For all others, FUNCALL would suffice:
-;;;    (funcall f (funcall g (apply h args)))
-;;;    However, once composed, g∘h must itself be applicable to multiple values:
-;;;    (funcall f (apply g∘h args))
-;;;    Similarly in the other direction:
-;;;    (f∘g)∘h -> (funcall f∘g (apply h args))
-;;;    Thus, at each level the compose operation must accept arbitrary &REST args and APPLY
-;;;    the inner function to them:
-;;;    #'(lambda (&rest args)
-;;;        (funcall f (apply g args))))
-;;;
-;;;    At no point is it possible to swap FUNCALL for APPLY.
-;;;    
-;;;    Graham gets around this by performing the REDUCE at runtime! Only the innermost (last) function
-;;;    sees the ARGS.
-;;;    
-
 (defun compose (&rest fs)
   (labels ((build (f g) #'(lambda (x) (funcall f (funcall g x))))
            (build-inner (f g) #'(lambda (&rest args) (funcall f (apply g args)))) )
@@ -1820,7 +1778,7 @@ starting with X or the index of the position of X in the sequence."))
 ;;;    Clojure style
 ;;;    
 (defun partial (f &rest fixed)
-  "Create a partial function that calls F with 0+ fixed arguments. The remaining arguments are to be supplied when the function is called."
+  "Create a partially-applied function that calls F with 0+ fixed arguments. The remaining arguments are to be supplied when the function is called."
   (if (null fixed)
       f
       (destructuring-bind (fixed0 &rest fixed) fixed
@@ -1839,15 +1797,8 @@ starting with X or the index of the position of X in the sequence."))
 ;;;
 ;;;    "Right Curry"
 ;;;    
-;; (defun partial* (f &rest fixed)
-;;   "Create a partial function that calls F with 0+ fixed arguments following the remaining arguments supplied when the function is called."
-;;   (if (null fixed)
-;;       f
-;;       #'(lambda (&rest args)
-;;           (apply f (append args fixed)))) )
-
 (defun partial* (f &rest fixed)
-  "Create a partial function that calls F with 0+ fixed arguments following the remaining arguments supplied when the function is called."
+  "Create a partially-applied function that calls F with 0+ fixed arguments following the remaining arguments supplied when the function is called."
   (if (null fixed)
       f
       (destructuring-bind (fixed0 &rest fixed) fixed
@@ -2528,22 +2479,22 @@ starting with X or the index of the position of X in the sequence."))
   "Traverse LOL, a list of lists, and collect the first elements of each as well as the tails of each."
   (labels ((collect-heads-tails (lol heads tails)
              (cond ((null lol) (values (elements heads) (elements tails)))
-                   (t (destructuring-bind (first . rest) lol
-                        (cond ((atom first) (values '() '())) ; No CAR/CDR for this sublist. Results are meaningless. Abort.
-                              (t (destructuring-bind (head . tail) first
+                   (t (destructuring-bind (l . ls) lol
+                        (cond ((atom l) (values '() '())) ; No CAR/CDR for this sublist. Results are meaningless. Abort.
+                              (t (destructuring-bind (head . tail) l
                                    (enqueue heads head)
-                                   (cond ((null tail) (collect-heads rest heads)) ; Encountering a single-elt list anywhere means all tails are discarded.
+                                   (cond ((null tail) (collect-heads ls heads)) ; Encountering a single-elt list anywhere means all tails are discarded.
                                          (t (enqueue tails tail)
-                                            (collect-heads-tails rest heads tails)))) )))) ))
+                                            (collect-heads-tails ls heads tails)))) )))) ))
            (collect-heads (lol heads)
 ;             (cond ((null lol) (values (elements heads) (list '())))
              (cond ((null lol) (values (elements heads) '()))
-                   (t (destructuring-bind (first . rest) lol
-                        (cond ((atom first) (values '() '())) ; No CAR/CDR for this sublist. Results are meaningless. Abort.
-                              (t (destructuring-bind (head . tail) first
+                   (t (destructuring-bind (l . ls) lol
+                        (cond ((atom l) (values '() '())) ; No CAR/CDR for this sublist. Results are meaningless. Abort.
+                              (t (destructuring-bind (head . tail) l
                                    (declare (ignore tail))
                                    (enqueue heads head)
-                                   (collect-heads rest heads)))) )))) )
+                                   (collect-heads ls heads)))) )))) )
     (collect-heads-tails lol (make-linked-queue) (make-linked-queue))))
 
 ;;;

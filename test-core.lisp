@@ -1027,6 +1027,44 @@
    (equal '(NIL T NIL T NIL) (map1-n #'evenp 5))
    (equal '(1 2 0 1 2 0 1 2 0 1) (map1-n (partial* #'mod 3) 10))))
 
+;;;
+;;;    Not exported. Internal test.
+;;;    
+(deftest test-make-range ()
+  (check
+   (equal '(#\a #\b #\c #\d #\e #\f) (make-range #\a #\f 1))
+   (equal '(#\a #\c #\e) (make-range #\a #\f 2))
+   (equal '(#\f #\e #\d #\c #\b #\a) (make-range #\f #\a 1))
+   (equal '(#\f #\d #\b) (make-range #\f #\a 2))
+   (equal '(#\Nul #\Soh #\Stx #\Etx #\Eot #\Enq #\Ack #\Bel #\Backspace #\Tab #\Newline
+            #\Vt #\Page #\Return #\So #\Si #\Dle #\Dc1 #\Dc2 #\Dc3 #\Dc4 #\Nak #\Syn #\Etb
+            #\Can #\Em #\Sub #\Esc #\Fs #\Gs #\Rs #\Us #\  #\! #\" #\#)
+          (make-range (code-char 0) #\# 1))
+   (equal '(1 2 3 4 5 6 7 8 9 10) (make-range 1 10 1))
+   (equal '(1 5 9) (make-range 1 10 4))
+   (equal '(10 9 8 7 6 5 4 3 2 1) (make-range 10 1 1))
+   (equal '(10 7 4 1) (make-range 10 1 3))
+   (equal '(1 8 15 22 29 36 43 50 57 64 71 78 85 92 99) (make-range 1 100 (partial #'+ 7)))
+   (equal '(10 5 5/2 5/4) (make-range 10 1 (partial* #'/ 2)))
+   (equal '(0 1 2 3 4 5 6 7 8 9) (make-range 10 nil 1))
+   (null (make-range 0 nil 1))
+   (equal '(0 2 4 6) (make-range 7 nil 2))
+   (equal '(0 -3 -6) (make-range -8 nil 3))
+   (handler-case (make-range #\J 9 1)
+     (error (e)
+       (declare (ignore e))
+       t)
+     (:no-error (obj)
+       (declare (ignore obj))
+       (error "Can't combine character, integer.")))
+   (handler-case (make-range 2 #\f 1)
+     (error (e)
+       (declare (ignore e))
+       t)
+     (:no-error (obj)
+       (declare (ignore obj))
+       (error "Can't combine integer, character.")))) )
+
 (deftest test-range ()
   (check
    ;;
