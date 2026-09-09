@@ -2478,23 +2478,27 @@ starting with X or the index of the position of X in the sequence."))
 (defun firsts-rests (lol)
   "Traverse LOL, a list of lists, and collect the first elements of each as well as the tails of each."
   (labels ((collect-heads-tails (lol heads tails)
-             (cond ((null lol) (values (elements heads) (elements tails)))
-                   (t (destructuring-bind (l . ls) lol
-                        (cond ((atom l) (values '() '())) ; No CAR/CDR for this sublist. Results are meaningless. Abort.
-                              (t (destructuring-bind (head . tail) l
-                                   (enqueue heads head)
-                                   (cond ((null tail) (collect-heads ls heads)) ; Encountering a single-elt list anywhere means all tails are discarded.
-                                         (t (enqueue tails tail)
-                                            (collect-heads-tails ls heads tails)))) )))) ))
+             (if (null lol)
+                 (values (elements heads) (elements tails))
+                 (destructuring-bind (l . ls) lol
+                   (if (atom l)
+                       (values '() '()) ; No CAR/CDR for this sublist. Results are meaningless. Abort.
+                       (destructuring-bind (head . tail) l
+                         (enqueue heads head)
+                         (if (null tail)
+                             (collect-heads ls heads) ; Encountering a single-elt list anywhere means all tails are discarded.
+                             (progn (enqueue tails tail)
+                                    (collect-heads-tails ls heads tails)))) ))))
            (collect-heads (lol heads)
-;             (cond ((null lol) (values (elements heads) (list '())))
-             (cond ((null lol) (values (elements heads) '()))
-                   (t (destructuring-bind (l . ls) lol
-                        (cond ((atom l) (values '() '())) ; No CAR/CDR for this sublist. Results are meaningless. Abort.
-                              (t (destructuring-bind (head . tail) l
-                                   (declare (ignore tail))
-                                   (enqueue heads head)
-                                   (collect-heads ls heads)))) )))) )
+             (if (null lol)
+                 (values (elements heads) '())
+                 (destructuring-bind (l . ls) lol
+                   (if (atom l)
+                       (values '() '()) ; No CAR/CDR for this sublist. Results are meaningless. Abort.
+                       (destructuring-bind (head . tail) l
+                         (declare (ignore tail))
+                         (enqueue heads head)
+                         (collect-heads ls heads)))) )))
     (collect-heads-tails lol (make-linked-queue) (make-linked-queue))))
 
 ;;;
