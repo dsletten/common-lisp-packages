@@ -60,8 +60,8 @@
 ;;;;   reverse :: [α] → [α]
 ;;;;   reverse = foldl (λxs x → x : xs) []
 ;;;;
-(load "/home/slytobias/lisp/packages/core.lisp")
-(load "/home/slytobias/lisp/packages/test.lisp")
+(load "/home/slytobias/lisp/packages/core")
+(load "/home/slytobias/lisp/packages/test")
 
 (defpackage :fp (:use :common-lisp :core :test) (:shadow :map :length :append :max :filter :conjoin :disjoin :compose :last1))
 

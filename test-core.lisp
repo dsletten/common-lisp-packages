@@ -472,6 +472,47 @@
 
 (deftest test-flatten ()
   (check
+   (equal 'a (flatten 'a))
+   (equal '() (flatten '()))
+   (equal #2='(a b c d) (flatten #2#))
+   (equal '(1 2 3 4) (flatten #1='((1 2) (3 4))))
+   ;; (sdraw '((1 . 2) (3 . 4)))
+   ;; [*|*]------->[*|*]--->NIL
+   ;;  |            |
+   ;;  v            v
+   ;; [*|*]--->2   [*|*]--->4
+   ;;  |            |
+   ;;  v            v
+   ;;  1            3
+   (equal '(1 2 3 4) (flatten '((1 . 2) (3 . 4))))
+   ;; (sdraw '(1 2 3 . 4))
+   ;; [*|*]--->[*|*]--->[*|*]--->4
+   ;;  |        |        |
+   ;;  v        v        v
+   ;;  1        2        3
+   (handler-case (flatten '(1 2 3 . 4))
+     (error (e)
+       (declare (ignore e))
+       t)
+     (:no-error (obj)
+       (declare (ignore obj))
+       (error "Can't handle top-level dotted list."))) ; ???????
+   ;; (sdraw '((1 . 2) . (3 . 4)))
+   ;; [*|*]------->[*|*]--->4
+   ;;  |            |
+   ;;  v            v
+   ;; [*|*]--->2    3
+   ;;  |
+   ;;  v
+   ;;  1
+   (handler-case (flatten '((1 . 2) . (3 . 4)))
+     (error (e)
+       (declare (ignore e))
+       t)
+     (:no-error (obj)
+       (declare (ignore obj))
+       (error "Can't handle top-level dotted list.")))
+   (equal '(1 2 3 4 1 2 3 4) (flatten (list #1# #1#)))
    (equal '(0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15)
           (flatten '(((0) (1) (2) 3) ((4) (5) ((6) ((7) (8) (9) 10) (11) 12) 13) (14) 15)))
    (equal '(0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23)
@@ -1421,6 +1462,15 @@
           (tree-map #'(lambda (&rest strings)
                         (apply #'concatenate 'string strings))
                     '("Is" ("this" ("not" ())))
+                    '("Ça" ("plane" ("pour" ("moi"))))
+                    '("a" ("b" ("c" ("d")))) ))
+   (equal '("IsÇa" ("thisplane" ("notpour" ("pung?moi"))))
+          (tree-map (partial #'concatenate 'string)
+                    '("Is" ("this" ("not" ("pung?"))))
+                    '("Ça" ("plane" ("pour" ("moi")))) ))
+   (equal '("IsÇaa" ("thisplaneb" ("notpourc" ("pung?moid"))))
+          (tree-map (partial #'concatenate 'string)
+                    '("Is" ("this" ("not" ("pung?"))))
                     '("Ça" ("plane" ("pour" ("moi"))))
                     '("a" ("b" ("c" ("d")))) ))
    ;;
@@ -2424,3 +2474,42 @@
    (let ((frequencies (frequencies '("foo" "Foo" "FOO" "fOo") :test #'equalp)))
      (check
       (= 4 (gethash "foo" frequencies) (gethash "Foo" frequencies) (gethash "FOO" frequencies)))) ))
+
+(deftest test-horners ()
+  (check
+   (= 2348 (horners 10 '(2 3 4 8))) ;  Represent an integer as a list of digits:
+   (= 255 (horners 8 '(3 7 7)))
+   (= 235 (horners 2 '(1 1 1 0 1 0 1 1)))
+   (= 335 (horners 8 '(5 3 -9))) ;  Evaluate polynomial: 5x² + 3x - 9
+   (= 747 (horners 12 '(5 3 -9)))
+   (= -8.65 (horners 0.1 '(5 3 -9)))
+   (= -173/20 (horners 1/10 '(5 3 -9)))) )
+
+(deftest test-cartesian ()
+  (check
+   (null (cartesian '(1 2) '()))
+   (null (cartesian '() '(a b c)))
+   (equal '((1 A) (1 B) (1 C) (2 A) (2 B) (2 C)) (cartesian '(1 2) '(a b c)))) )
+
+(deftest test-always ()
+  (check
+   (= 8 (first (always 8)))
+   (= 8 (second (always 8)))
+   (= 8 (nth 0 (always 8)))
+   (= 8 (nth 20 (always 8)))
+   (equal '(11 12 13) (mapcar #'+ '(1 2 3) (always 10)))
+   (equal '(2 2 2 2 2) (loop repeat 5 for elt in (always 2) collect elt))
+   (equal '(:FOO :FOO :FOO :FOO) (take 4 (always :foo)))
+   (equal '(6 9) (mapcar (partial #'reduce #'+) '((1 2 3) (4 5)) (always :from-end) '(t nil)))) )
+
+(deftest test-with-stashed-vars ()
+  (check
+   (let* ((a (list :pung :foo :bar))
+          (b 92d0)
+          (x a)
+          (y b))
+     (with-stashed-vars (x)
+       (setf x "Is this not pung?"
+             y :bye))
+     (eq a x)
+     (not (equal b y)))) )

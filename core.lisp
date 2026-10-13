@@ -37,18 +37,20 @@
   (:use :common-lisp :collections :generators)
   (:shadowing-import-from :collections :intersection :set :subsetp :union)
   (:shadowing-import-from :generators :next)
-  (:export :after :analyze-tree :append1
-           :compound-compare :approximately= :array-indices :as-if
+  (:export :after :always :analyze-tree :append1
+           :approximately= :array-indices :as-if
            :before :best :best-index :best-worst :best-worst-n :bestn
            :binary-search :build-prefix :build-tree
-           :>case :class-template :comment :compose :conc1 :conjoin :copy-array :cycle
+           :cartesian
+           :>case :class-template :comment :compose :compound-compare :conc1 :conjoin :copy-array :cycle
            :degrees->radians
            :defchain :destructure :discard-extreme :disjoin
            :dohash :doset :dostring :dotuples :dovector
            :drop :drop-until :drop-while :duplicatep
            :empty :emptyp :ends-with :equalelts :equals :eqls
            :filter :filter-split :find-some-if :find-subtree :firsts-rests :for :flatten :frequencies
-           :group :group-until :horners
+           :group :group-until
+           :hash-keys :hash-keys-values :hash-values :horners
 	   :if-let :if3 :iffn :in :in-if :inq :integralp :iterate
            :juxtapose
            :last1 :least :leastn :list-to-string :longerp
@@ -68,8 +70,9 @@
            :take :take-drop :take-while :take-until :totally :transfer
            :transition :transition-1 :transition-n :transition-stream :traverse :tree-find-if :tree-map
            :until
-           :when-let :when-let* :while :with-gensyms :worst :worstn)
-  (:shadow :emptyp :search))
+           :when-let :when-let* :while :with-gensyms :with-stashed-vars
+           :worst :worstn)
+  (:shadow :emptyp :search :hash-keys :hash-keys-values :hash-values))
 ;  (:shadow :while :until :prefixp :dovector :macroexpand-all)) ; ????
 
 (in-package :core)
@@ -109,6 +112,16 @@
   `(let ,(loop for n in names
                collect `(,n ',(make-symbol (symbol-name n)))) ; ??
      ,@body))
+
+(defmacro with-stashed-vars ((&rest vars) &body body)
+  (let ((stash (loop for v in vars collect (make-symbol (symbol-name v)))) )
+    `(let ,(loop for v in vars
+                 for v* in stash
+                 collect `(,v* ,v))
+       ,@body
+       (setf ,@(loop for v in vars
+                     for v* in stash
+                     nconc `(,v ,v*)))) ))
 
 ;;;
 ;;;    Splice a new sequence into another.
@@ -213,7 +226,7 @@
                 unless (= i j) collect elt into remainder
                 when (= i j) collect elt into removed
                 finally (return (values (first removed) remainder))))
-    (string (let ((result (make-string (1- (length seq)))))
+    (string (let ((result (make-string (1- (length seq)))) )
               (setf (subseq result 0 i) (subseq seq 0 i)
                     (subseq result i) (subseq seq (1+ i)))
               (values (elt seq i) result)))
@@ -230,7 +243,7 @@
 ;;                 unless (= i j) collect elt into remainder
 ;;                 when (= i j) collect elt into removed
 ;;                 finally (return (values (first removed) remainder))))
-;;     (vector (let ((result (make-sequence (type-of seq) (1- (length seq)))))    ; <---- Doesn't work. Shorter vector is different type...
+;;     (vector (let ((result (make-sequence (type-of seq) (1- (length seq)))) )    ; <---- Doesn't work. Shorter vector is different type...
 ;;               (setf (subseq result 0 i) (subseq seq 0 i)
 ;;                     (subseq result (1+ i)) (subseq seq (1+ i)))
 ;;               (values (elt seq i) result)))) )
@@ -688,7 +701,7 @@
                    (,bodfn ,@(map1-n #'(lambda (n)
                                          `(nth ,(1- n) 
                                                ,rest))
-                                     len))))))))))
+                                     len)))) )))) ))
  
 (defun dt-args (len rest src)
   (map0-n #'(lambda (m)
@@ -1004,16 +1017,17 @@
 ;;         (flatten-aux tree '()))) )
 
 (defun flatten (tree)
-  (labels ((flatten-aux (tree result)
-             (cond ((null tree) (nreverse result))
-                   ((null (car tree)) (flatten-aux (cdr tree) result))
-                   ((atom (car tree)) (flatten-aux (cdr tree) (cons (car tree) result)))
-                   (t (destructuring-bind ((head . tail1) . tail2) tree
-                        (flatten-aux (list* head tail1 tail2) result)))) ))
+  (labels ((squash (tree result)
+             (if (null tree)
+                 (nreverse result)
+                 (destructuring-bind (head . tail) tree
+                   (cond ((null head) (squash tail result))
+                         ((atom head) (squash tail (cons head result)))
+                         (t (destructuring-bind (head1 . tail1) head
+                            (squash (list* head1 tail1 tail) result)))) ))))
     (if (atom tree)
         tree
-        (flatten-aux tree '()))) )
-
+        (squash tree '()))) )
 
 ;; (defun flatten-q (tree)
 ;;   (labels ((flatten-aux (tree result)
@@ -1640,8 +1654,8 @@ starting with X or the index of the position of X in the sequence."))
 ;;                    (apply #'tree-map-b f cdrs)))) ))
 
 ;; (tree-map #'1+ '(1 2 (3 4 (5) 6) 7 (8 9))) => (2 3 (4 5 (6) 7) 8 (9 10))
-;; (tree-map #'(lambda (s1 s2) (concatenate 'string s1 s2)) '("Is" ("this" ("not" ("pung?")))) '("Ça" ("plane" ("pour" ("moi"))))) => ("IsÇa" ("thisplane" ("notpour" ("pung?moi"))))
-;; (tree-map #'(lambda (&rest strings) (apply #'concatenate 'string strings)) '("Is" ("this" ("not" ("pung?")))) '("Ça" ("plane" ("pour" ("moi")))) '("a" ("b" ("c" ("d"))))) => ("IsÇaa" ("thisplaneb" ("notpourc" ("pung?moid"))))
+;; (tree-map #'(lambda (s1 s2) (concatenate 'string s1 s2)) '("Is" ("this" ("not" ("pung?")))) '("Ça" ("plane" ("pour" ("moi")))) ) => ("IsÇa" ("thisplane" ("notpour" ("pung?moi"))))
+;; (tree-map #'(lambda (&rest strings) (apply #'concatenate 'string strings)) '("Is" ("this" ("not" ("pung?")))) '("Ça" ("plane" ("pour" ("moi")))) '("a" ("b" ("c" ("d")))) ) => ("IsÇaa" ("thisplaneb" ("notpourc" ("pung?moid"))))
 
 ;;;
 ;;;    It is similar in behavior to Graham's RMAPCAR when the trees are compatible. This appears to mean that depths can vary, but
@@ -1655,7 +1669,7 @@ starting with X or the index of the position of X in the sequence."))
 ;;;
 ;;;    The behavior is wrong, however, when the lengths don't match up:
 ;;;
-;; (tree-map #'(lambda (s1 s2) (concatenate 'string s1 s2)) '("Is" ("this" ("not" ("pung?")))) '("Ça" ("plane" ("pour" ("moi" "Plastic" "Bertrand")))))
+;; (tree-map #'(lambda (s1 s2) (concatenate 'string s1 s2)) '("Is" ("this" ("not" ("pung?")))) '("Ça" ("plane" ("pour" ("moi" "Plastic" "Bertrand")))) )
 
 ;; debugger invoked on a TYPE-ERROR in thread
 ;; #<THREAD "main thread" RUNNING {10005204C3}>:
@@ -1681,7 +1695,7 @@ starting with X or the index of the position of X in the sequence."))
   (cond ((null obj) obj)
         ((atom obj) (funcall f obj))
         (t (cons (build-tree f (car obj))
-                 (build-tree f (cdr obj))))) )
+                 (build-tree f (cdr obj)))) ))
 
 ;; (defun equalelts (seq &key (test #'equal) (key #'identity))
 ;;   "Are all elements of SEQ equal with respect to TEST after applying KEY?"
@@ -1722,6 +1736,11 @@ starting with X or the index of the position of X in the sequence."))
 (defun as-if (seq)
   "Are all elements of SEQ false?"
   (every #'not seq))
+
+(defun always (obj)
+  (let ((cons (list obj)))
+    (setf (rest cons) cons)
+    cons))
 
 ;;;
 ;;;    TODO:
@@ -2206,17 +2225,17 @@ starting with X or the index of the position of X in the sequence."))
 ;;         (vars (mapcar #'(lambda (v) (cons v (gensym)))
 ;;                       (remove-duplicates
 ;;                         (mapcar #'car 
-;;                                 (mappend #'cdr clauses))))))
+;;                                 (mappend #'cdr clauses)))) ))
 ;;     `(labels ((,bodfn ,(mapcar #'car vars)
 ;;                  ,@body))
 ;;        (cond ,@(mapcar #'(lambda (cl)
 ;;                            (condlet-clause vars cl bodfn))
-;;                        clauses)))))
+;;                        clauses)))) )
 
 ;; (defun condlet-clause (vars cl bodfn)
 ;;   `(,(car cl) (let ,(mapcar #'cdr vars)
 ;;                 (let ,(condlet-binds vars cl)
-;;                   (,bodfn ,@(mapcar #'cdr vars))))))
+;;                   (,bodfn ,@(mapcar #'cdr vars)))) ))
 
 ;; (defun condlet-binds (vars cl)
 ;;   (mapcar #'(lambda (bindform)
@@ -2746,7 +2765,7 @@ starting with X or the index of the position of X in the sequence."))
   (labels ((partition-aux (l odds evens)
              (if (endp l)
                  (values (elements odds) (elements evens))
-                 (partition-aux (rest l) evens (enqueue odds (first l))))) )
+                 (partition-aux (rest l) evens (enqueue odds (first l)))) ))
     (partition-aux l (make-linked-queue) (make-linked-queue))))
 
 (defun stable-partition (l)
@@ -2758,7 +2777,7 @@ starting with X or the index of the position of X in the sequence."))
            (partition-even (l odds evens)
              (if (endp l)
                  (values (elements odds) (elements evens))
-                 (partition-odd (rest l) odds (enqueue evens (first l))))) )
+                 (partition-odd (rest l) odds (enqueue evens (first l)))) ))
     (partition-odd l (make-linked-queue) (make-linked-queue))))
 
 (defun stable-stream-partition (stream)
@@ -2851,6 +2870,13 @@ specified by these criteria is appropriate for use by SORT-BY to sort or BINARY-
 ;;                        :initial-value product0)))) ))
 
 ;;;
+;;;    Simple binary case. A×B
+;;;    
+(defun cartesian (as bs)
+  (loop for a in as
+        nconc (loop for b in bs collect (list a b))))
+
+;;;
 ;;;   The conversion from degrees to radians is (mildly) sensitive to the order of
 ;;;   operations:
 ;;;   (* θ (/ pi 180d0)) ≡ (* pi θ (/ 180d0))
@@ -2876,3 +2902,15 @@ specified by these criteria is appropriate for use by SORT-BY to sort or BINARY-
   (let ((frequencies (make-hash-table :test test)))
     (map nil #'(lambda (elt) (incf (gethash elt frequencies 0))) seq)
     frequencies))
+
+(defun hash-keys (h)
+  (loop for k being each hash-key in h collect k))
+
+(defun hash-values (h)
+  (loop for v being each hash-value in h collect v))
+
+(defun hash-keys-values (h)
+  (loop for k being each hash-key in h using (hash-value v)
+        collect k into keys
+        collect v into values
+        finally (return (values keys values))))
