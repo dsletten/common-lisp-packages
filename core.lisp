@@ -1548,8 +1548,8 @@ starting with X or the index of the position of X in the sequence."))
 ;;;
 ;;;    Non-destructive alternative to MAPCAN.
 ;;;    
-(defun mappend (f &rest lists)
-  (apply #'append (apply #'mapcar f lists)))
+(defun mappend (f list &rest lists)
+  (apply #'append (apply #'mapcar f list lists)))
 
 (defun mapcars (f &rest lists)
   "Map over multiple lists in sequence, accumulating all results."

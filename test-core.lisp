@@ -2164,6 +2164,7 @@
    (equal '(() ()) (multiple-value-list (firsts-rests '(() (a)))) )
    (equal '(() ()) (multiple-value-list (firsts-rests '((a) ()))) )
    (equal '(() ()) (multiple-value-list (firsts-rests '((a b) ()))) )
+   (equal '(() ()) (multiple-value-list (firsts-rests '((a) (b) c (d)))) ) ; Not list of lists
    (equal '((a) ((b c)))
           (multiple-value-list (firsts-rests '((a b c)))) )
    (equal '((a 1) ((b c) (2 3)))
@@ -2180,8 +2181,12 @@
           (multiple-value-list (firsts-rests (nth-value 1 (firsts-rests '((a b c) (1 2) (:x :y :z)))) )))
    (equal '(() ())
           (multiple-value-list (firsts-rests (nth-value 1 (firsts-rests '((a b) (1 2) (:x)))) )))
+   (equal '((a c) ((b) (d)))
+          (multiple-value-list (firsts-rests '((a b) (c d)))) )
    (equal '((a c) (b d))
           (multiple-value-list (firsts-rests '((a . b) (c . d)))) )
+   (equal '(() ())
+          (multiple-value-list (firsts-rests (nth-value 1 (firsts-rests '((a . b) (c . d)))) ))) ; Not list of proper lists
    (equal '((a c e) (b d f))
           (multiple-value-list (firsts-rests '((a . b) (c . d) (e . f)))) )
    (equal '(((a . b) (1 . 2) (:p . :q)) (((c . d)) ((3 . 4)) ((:r . :s))))
