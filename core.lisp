@@ -2300,13 +2300,13 @@ starting with X or the index of the position of X in the sequence."))
 ;;      ((0 0d0) ,zero)
 ;;      ((-1 -1d0) ,neg)))
 
-(defmacro nif (expr pos zero neg)
+(defmacro nif (expr neg zero pos)
   "Conditional evaluation based on sign of EXPR."
   (with-gensyms (v)
     `(let ((,v ,expr))
-       (cond ((plusp ,v) ,pos)
+       (cond ((minusp ,v) ,neg)
              ((zerop ,v) ,zero)
-             (t ,neg)))) )
+             (t ,pos)))) )
 
 (defmacro in (expr choices)
   (with-gensyms (target)

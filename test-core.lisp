@@ -2044,7 +2044,7 @@
 
 (deftest test-nif ()
   (check
-   (equal (mapcar #'(lambda (x) (nif x 'p 'z 'n)) '(0.0 1d0 -1)) '(z p n))))
+   (equal (mapcar #'(lambda (x) (nif x 'n 'z 'p)) '(0.0 1d0 -1)) '(z p n))))
 
 (deftest test-in ()
   (check
@@ -2165,6 +2165,7 @@
    (equal '(() ()) (multiple-value-list (firsts-rests '((a) ()))) )
    (equal '(() ()) (multiple-value-list (firsts-rests '((a b) ()))) )
    (equal '(() ()) (multiple-value-list (firsts-rests '((a) (b) c (d)))) ) ; Not list of lists
+   (equal '((a b c) ()) (multiple-value-list (firsts-rests '((a) (b) (c)))) )
    (equal '((a) ((b c)))
           (multiple-value-list (firsts-rests '((a b c)))) )
    (equal '((a 1) ((b c) (2 3)))
