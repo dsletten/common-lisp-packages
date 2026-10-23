@@ -2308,12 +2308,11 @@ starting with X or the index of the position of X in the sequence."))
              ((zerop ,v) ,zero)
              (t ,pos)))) )
 
-(defmacro in (expr choices)
-  (with-gensyms (target)
-    `(let ((,target ,expr))
-       (or ,@(mapcar #'(lambda (choice)
-                         `(eql ,target ,choice))
-                     choices)))) )
+(defmacro in (expr choices &key (test '#'eql))
+  (with-gensyms (target f)
+    `(let ((,target ,expr)
+           (,f ,test))
+       (or ,@(loop for choice in choices collect `(funcall ,f ,target ,choice)))) ))
 
 ;;;
 ;;;    Suppress evaluation

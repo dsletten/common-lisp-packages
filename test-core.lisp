@@ -2050,6 +2050,7 @@
   (check
    (in (mod 11 4) (3 (+ 2 2) (/ 2 0)))
    (in (mod 11 7) (3 (+ 2 2) (/ 2 0)))
+   (in (mod 11 4) (3d0 (+ 2 2) (/ 2 0)) :test #'=)
    (handler-case (in (mod 11 1) (3 (+ 2 2) (/ 2 0)))
      (error (e)
        (declare (ignore e))
@@ -2072,6 +2073,8 @@
 (deftest test-in-if ()
   (check
    (in-if #'oddp (2 (/ 6 2) (/ 2 0)))
+   (in-if (partial #'eql (mod 11 4)) (3 (+ 2 2) (/ 2 0))) ; Equivalent to IN above
+   (in-if (partial #'= (mod 11 4)) (3d0 (+ 2 2) (/ 2 0)))
    (handler-case (in-if #'zerop (2 (/ 6 2) (/ 2 0)))
      (error (e)
        (declare (ignore e))
