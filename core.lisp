@@ -2494,31 +2494,31 @@ starting with X or the index of the position of X in the sequence."))
 ;;;
 ;;;    Behavior is similar to MAPCAR. Stops collecting tails as soon as any sublist is exhausted.
 ;;;    
-(defun firsts-rests (lol)
-  "Traverse LOL, a list of lists, and collect the first elements of each as well as the tails of each."
-  (labels ((collect-heads-tails (lol heads tails)
-             (if (null lol)
+(defun firsts-rests (ls)
+  "Traverse LS, a list of lists, and collect the first elements of each as well as the tails of each."
+  (labels ((collect-heads-tails (ls heads tails)
+             (if (null ls)
                  (values (elements heads) (elements tails))
-                 (destructuring-bind (l . ls) lol
+                 (destructuring-bind (l . lr) ls
                    (if (atom l)
                        (values '() '()) ; No CAR/CDR for this sublist. Results are meaningless. Abort.
                        (destructuring-bind (head . tail) l
                          (enqueue heads head)
                          (if (null tail)
-                             (collect-heads ls heads) ; Encountering a single-elt list anywhere means all tails are discarded.
+                             (collect-heads lr heads) ; Encountering a single-elt list anywhere means all tails are discarded.
                              (progn (enqueue tails tail)
-                                    (collect-heads-tails ls heads tails)))) ))))
-           (collect-heads (lol heads)
-             (if (null lol)
+                                    (collect-heads-tails lr heads tails)))) ))))
+           (collect-heads (ls heads)
+             (if (null ls)
                  (values (elements heads) '())
-                 (destructuring-bind (l . ls) lol
+                 (destructuring-bind (l . lr) ls
                    (if (atom l)
                        (values '() '()) ; No CAR/CDR for this sublist. Results are meaningless. Abort.
                        (destructuring-bind (head . tail) l
                          (declare (ignore tail))
                          (enqueue heads head)
-                         (collect-heads ls heads)))) )))
-    (collect-heads-tails lol (make-linked-queue) (make-linked-queue))))
+                         (collect-heads lr heads)))) )))
+    (collect-heads-tails ls (make-linked-queue) (make-linked-queue))))
 
 ;;;
 ;;;    See ~/lisp/programs/mapping.lisp
