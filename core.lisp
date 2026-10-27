@@ -2310,9 +2310,14 @@ starting with X or the index of the position of X in the sequence."))
 
 (defmacro in (expr choices &key (test '#'eql))
   (with-gensyms (target f)
-    `(let ((,target ,expr)
-           (,f ,test))
-       (or ,@(loop for choice in choices collect `(funcall ,f ,target ,choice)))) ))
+    (labels ((package-choice (choice)
+               `(funcall ,f ,target ,choice)))
+      `(let ((,target ,expr)
+             (,f ,test))
+         ,(if (singlep choices)
+              (package-choice (first choices))
+              `(or ,@(loop for choice in choices
+                           collect (package-choice choice)))) ))))
 
 ;;;
 ;;;    Suppress evaluation
@@ -2333,15 +2338,14 @@ starting with X or the index of the position of X in the sequence."))
 ;;;    Variant of CASE. Key forms are evaluated.
 ;;;    
 (defmacro >case (expr &rest clauses)
-  (with-gensyms (v)
-    `(let ((,v ,expr))
-       (cond ,@(mapcar #'(lambda (clause) (>casex v clause)) clauses)))) )
-
-(defun >casex (valsym clause)
-  (destructuring-bind (key . forms) clause
-    (cond ((consp key) `((in ,valsym ,key) ,@forms))
-          ((inq key (t otherwise)) `(t ,@forms))
-          (t (error "Bad >case clause")))) )
+  (labels ((>casex (valsym clause)
+             (destructuring-bind (key . forms) clause
+               (cond ((consp key) `((in ,valsym ,key) ,@forms))
+                     ((inq key (t otherwise)) `(t ,@forms))
+                     (t (error "Bad >case clause")))) ))
+    (with-gensyms (v)
+      `(let ((,v ,expr))
+         (cond ,@(loop for clause in clauses collect (>casex v clause)))) )))
 
 (defun shuffle (v &optional (random-state *random-state*))
   "Randomize vector V using Fisher-Yates algorithm."
