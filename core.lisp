@@ -79,6 +79,28 @@
 
 (proclaim '(inline last1 singlep append1 conc1 mklist))
 
+;---------------Graham On Lisp------------------------
+(defun last1 (l)
+  (first (last l)))
+
+(defun singlep (l)
+  (and (consp l) (null (rest l))))
+
+(defun append1 (l obj)
+  (append l (list obj)))
+
+(defun conc1 (l obj)
+  (nconc l (list obj)))
+
+(defun mklist (obj)
+  (if (listp obj)
+      obj
+      (list obj)))
+
+;; (defgeneric mklist (obj))
+;; (defmethod mklist (obj) (list obj))
+;; (defmethod mklist ((l list)) l)
+
 (defun integralp (x)
   (and (realp x) (zerop (rem x 1))))
 
@@ -541,33 +563,9 @@
 (defun ends-with (s1 s2 &key (test #'eql))
   (suffixp s2 s1 :test test))
 
-;---------------Macros------------------------
-;; (defmacro while (test &body body)
-;;   `(do ()
-;;        ((not ,test))
-;;      ,@body) )
-
 (defmacro while (test &body body)
   `(loop (unless ,test (return))
       ,@body))
-
-;; (defmacro while (test &body body)
-;;   `(loop while ,test
-;;          do ,@body))
-
-;; (defmacro while (test &body body)
-;;   (let ((tag (gensym)))
-;;     `(block nil
-;;        (tagbody
-;;           ,tag
-;;           (unless ,test (return))
-;;           ,@body
-;;           (go ,tag)))) )
-
-;; (defmacro until (test &body body)
-;;   `(do ()
-;;        (,test)
-;;      ,@body) )
 
 (defmacro until (test &body body)
   `(loop (when ,test (return))
@@ -581,16 +579,6 @@
   (with-gensyms (i)
     `(dotimes (,i ,count)
        ,@body)))
-
-;; (defmacro repeat (count &body body)
-;;   (if (null body)
-;;       nil
-;;       `(loop repeat ,count
-;;              do ,@body)))
-
-;; (defmacro repeat (count &body body)
-;;   `(loop repeat ,count
-;;          do ,@body))
 
 ;; (defmacro dovector ((var vector &optional result) &body body)
 ;;   (let ((v (gensym))
@@ -790,28 +778,6 @@
 	     (pprint exp)))
     (format t "~2%")
     (values)))
-
-;---------------Graham On Lisp------------------------
-(defun last1 (l)
-  (first (last l)))
-
-(defun singlep (l)
-  (and (consp l) (null (rest l))))
-
-(defun append1 (l obj)
-  (append l (list obj)))
-
-(defun conc1 (l obj)
-  (nconc l (list obj)))
-
-(defun mklist (obj)
-  (if (listp obj)
-      obj
-      (list obj)))
-
-;; (defgeneric mklist (obj))
-;; (defmethod mklist (obj) (list obj))
-;; (defmethod mklist ((l list)) l)
 
 (defgeneric longerp (seq1 seq2)
   (:documentation "Is SEQ1 strictly longer than SEQ2?"))
