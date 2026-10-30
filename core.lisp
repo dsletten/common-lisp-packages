@@ -601,24 +601,11 @@
        (let ((,var (aref ,v ,i)))
          ,@body))))
 
-;;;
-;;;    Disallow crosstalk w/ LOOP keywords in BODY?
-;;;    Binding of VARS should be available in RESULT... This is consistent with DOLIST but not very useful?
-;;;    
-;; (defmacro dotuples ((vars l &optional result) &body body)
-;;   (with-gensyms (list rest)
-;;     `(do ((,list ,l))
-;;          ((endp ,list) ,result)
-;;        (destructuring-bind (,@vars . ,rest) ,list
-;;          ,@body
-;;          (setf ,list ,rest)))) )
-
 (defmacro dotuples ((vars l &optional result) &body body)
   "Iterate over list L consuming VARS variables on each iteration. The bindings of these variables are visible in BODY."
-  `(loop for ,vars on ,l by #'(lambda (l) (nthcdr ,(length vars) l))
+  `(loop for ,vars on ,l by ,(partial #'nthcdr (length vars))
          do ,@body
          finally (return ,result)))
-
 ;;;
 ;;;    Kind of weird? VARS specifies variable bindings, but there is no body in which they are visible...
 ;;;    
@@ -833,6 +820,13 @@
   (declare (ignore f seq))
   (coerce (call-next-method) 'string))
 
+(defgeneric emptyp (seq)
+  (:documentation "Is SEQ empty?"))
+(defmethod emptyp ((seq list))
+  (null seq))
+(defmethod emptyp ((seq vector))
+  (zerop (length seq)))
+
 ;;;
 ;;;    See matrix::list-to-rows-fill-rows
 ;;;    
@@ -847,13 +841,6 @@
 ;;         (group-aux source '())
 ;;         '())))
 
-(defgeneric emptyp (seq)
-  (:documentation "Is SEQ empty?"))
-(defmethod emptyp ((seq list))
-  (null seq))
-(defmethod emptyp ((seq vector))
-  (zerop (length seq)))
-  
 ;;;
 ;;;    See Clojure partition-all
 ;;;    

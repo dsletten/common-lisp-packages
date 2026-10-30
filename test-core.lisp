@@ -2126,7 +2126,19 @@
      (route 'nancy 'dudweiler graph))))
                                        
 
-;DOTUPLES
+(deftest test-dotuples ()
+  (check
+   (let ((sum 0))
+     (= (reduce #'+ #1='(5 1 7 4 9 2))
+        (dotuples ((x) #1# sum) (incf sum x))))
+   (let ((sum 0))
+     (= 51 (dotuples ((x y) #1# sum) (incf sum (* x y)))) )
+   (let ((sum 0))
+     (= 107 (dotuples ((x y z) #1# sum) (incf sum (* x y z)))) )
+   (let ((result '()))
+     (equal '((6 nil) (9 2) (7 4) (5 1))
+            (dotuples ((x y) '(5 1 7 4 9 2 6) result) (push (list x y) result)))) ))
+
 ;PARTITION-N
 ;MAPTUPLES
 
